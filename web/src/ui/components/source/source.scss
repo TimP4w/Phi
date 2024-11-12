@@ -1,0 +1,9 @@
+@import "../../shared/colors.scss";
+
+.source {
+  &__link {
+    color: $font;
+    text-decoration: none;
+    font-weight: bold;
+  }
+}

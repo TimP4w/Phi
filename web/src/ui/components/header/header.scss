@@ -1,0 +1,27 @@
+@import "../../shared/colors.scss";
+@import "../../shared/mixins.scss";
+
+.header {
+  @include flex-center(row, 2);
+  justify-content: space-between;
+  padding: 1.5rem;
+  height: 2rem;
+  overflow: hidden;
+  background-color: $main;
+
+  &__logo {
+    font-size: 3.5rem;
+  }
+
+  &__events-icon {
+    cursor: pointer;
+
+    &:hover {
+      color: darken($font, 10%);
+    }
+
+    &:active {
+      color: darken($font, 20%);
+    }
+  }
+}

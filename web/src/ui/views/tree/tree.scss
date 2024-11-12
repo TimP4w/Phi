@@ -1,0 +1,49 @@
+@import "../../shared/colors.scss";
+@import "../../shared/mixins.scss";
+
+
+.tree-view {
+  @include flex-center(column);
+
+  &__header {
+    @include flex-center(row, 1, wrap);
+  }
+
+  &__apps {
+    width: 100%;
+    height: 75vh;
+  }
+
+  &__node-name {
+    @include font-big;
+  }
+
+  &__node-conditions {
+    @include flex-center(row);
+    align-items: flex-start;
+    margin: $pr;
+  }
+
+  &__node-conditions-condition {
+    @include flex-center(column);
+    @include words-wrap;
+
+    height: 6em;
+    padding: 0 $pr;
+    border-right: 1px solid $accent;
+  }
+
+  &__node-conditions-condition-status {
+    padding-bottom: $pr;
+  }
+  
+  &__node-conditions-condition-reason {
+    @include font-normal($bold);
+    color: darken($font, 20%);
+  }
+
+  &__node-conditions-condition-message {
+    @include font-small;
+    color: darken($font, 20%);
+  }
+}

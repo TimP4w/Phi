@@ -1,0 +1,60 @@
+@import "../../shared/colors.scss";
+@import "../../shared/mixins.scss";
+
+.apps-view {
+  @include flex-center(column);
+
+  &__apps {
+    @include flex-center(row, 1, wrap);
+    width: 120rem;
+    height: 100vh;
+
+    @include media($xxl) {
+      width: 90rem;
+    }
+    @include media($lg) {
+      width: 60rem;
+    }
+    @include media($md) {
+      width: 16rem;
+    }
+    @include media($sm) {
+      width: 12rem;
+    }
+  }
+
+  &__system-pods {
+    @include flex-center(row, 1, wrap);
+    margin-top: 2rem;
+
+    @include media($xxl) {
+      width: 72rem;
+    }
+    @include media($lg) {
+      width: 60rem;
+    }
+    @include media($md) {
+      width: 16rem;
+    }
+    @include media($sm) {
+      width: 12rem;
+    }
+  }
+
+  &__search-bar {
+    overflow: hidden;
+    padding: 2rem;
+    width: 95rem;
+
+    @include media($xxl) {
+      width: 72rem;
+    }
+    @include media($xl) {
+      width: 90vw;
+    }
+  }
+
+  a {
+    text-decoration: none;
+  }
+}

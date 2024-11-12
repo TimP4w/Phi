@@ -1,0 +1,17 @@
+@import "../../shared/colors.scss";
+@import "../../shared/mixins.scss";
+
+.condition-tag {
+  @include flex-center(row, 0.25);
+  @include border;
+  padding: 0.25rem 0.5rem; 
+  height: 2rem;
+  min-width: 5rem;
+  position: relative; // Needed for tooltip
+
+  &__type { 
+    margin: .3rem;
+    font-weight: $bold;
+  }
+
+}

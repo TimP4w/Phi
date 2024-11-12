@@ -1,0 +1,51 @@
+@import "./ui/shared/colors.scss";
+@import "./ui/shared/mixins.scss";
+
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans",
+    "Droid Sans", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: $background;
+  color: $font;
+  font-size: 1rem; //calc(10px + 2vmin);
+
+  &,
+  div {
+    &::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+
+    &::-webkit-scrollbar-track {
+      background: $main;
+      border-radius: .5rem;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: $accent; 
+      border-radius: .5rem;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+      background: $accent;
+    }
+  }
+}
+
+span {
+  color: $font;
+  font-size: 1rem;
+}
+
+a {
+  color: $font;
+  text-decoration: none;
+  font-size: 1rem;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+}

@@ -1,0 +1,42 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend - Local - DEV",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "backend/cmd/phi/main.go",
+      "env": {
+        "PHI_DEV": "true",
+        "PHI_KUBE_CONFIG_PATH": "/home/timp4w/.kube/config"
+      }
+    },
+    {
+      "name": "Frontend - Debugger",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/web",
+      "runtimeExecutable": "/home/timp4w/.nix-profile/bin/brave"
+    },
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Frontend - Local - DEV",
+      "runtimeExecutable": "yarn",
+      "cwd": "${workspaceFolder}/web",
+      "runtimeArgs": ["dev"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Local Dev Suite",
+      "configurations": [
+        "Frontend - Local - DEV",
+        "Frontend - Debugger",
+        "Backend - Local - DEV"
+      ]
+    }
+  ]
+}

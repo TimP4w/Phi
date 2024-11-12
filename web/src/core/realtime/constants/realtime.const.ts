@@ -1,0 +1,10 @@
+export enum REALTIME_CONST {
+  CONNECTED = "CONNECTED",
+  PONG = "PONG",
+  PING = "PING",
+  TREE = "TREE",
+  EVENT = "EVENT",
+  LOG = "LOG",
+  START_WATCH_LOGS = "START_WATCH_LOGS"
+
+}

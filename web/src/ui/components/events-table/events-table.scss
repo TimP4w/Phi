@@ -1,0 +1,86 @@
+@import "../../shared/colors.scss";
+@import "../../shared/mixins.scss";
+
+.events-table {
+  width: 100%;
+  height: 100vh;
+
+  overflow-y: auto;
+  & > table {
+    width: 100%;
+    table-layout: fixed;
+    border-spacing: 0;
+    font-size: 1rem;
+    margin-bottom: 4rem;
+
+    thead {
+      background-color: $background;
+     & > tr {
+        & > th {
+          padding: .5rem;
+          &:first-child {
+            border-top-left-radius: .5rem;
+            border-bottom-left-radius: .5rem;
+          }
+          &:last-child {
+            border-top-right-radius: .5rem;
+            border-bottom-right-radius: .5rem;
+          }
+        }
+      }
+    }
+
+    td {
+      padding: .5rem; // TODO less padding on smaller screens
+      text-wrap: wrap;
+      word-wrap: break-word;
+      overflow-wrap: break-word;
+      word-break: break-all;
+    }
+
+    tbody {
+      & > tr {
+        &:nth-child(even) {
+          background-color: lighten($main, 5%);
+  
+          &:hover {
+            background-color: lighten($main, 10%);
+          }
+        }
+  
+        &:nth-child(odd) {
+          background-color: $main;
+          &:hover {
+            background-color: lighten($main, 10%);
+          }
+        }
+      }
+
+    }
+  }
+}
+
+.event-reason {
+  @include flex-center(row, 0.25);
+  justify-content: flex-start;
+
+  &__label-container {
+    @include flex-center(column, 0.25);
+    align-items: flex-start;
+  }
+
+  &__icon {
+    margin-right: .5rem;
+  }
+  
+  &__time {
+    @include font-small($regular, 'accent')
+  }
+}
+
+.event-resource {
+  @include flex-center(column, 0.25);
+  &__namespace {
+    @include font-small($regular, 'accent')
+  }
+}

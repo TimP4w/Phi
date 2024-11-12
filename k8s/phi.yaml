@@ -1,0 +1,110 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: phi
+  labels:
+    app: phi
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: phi
+  namespace: phi
+  labels:
+    app: phi
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: phi
+  labels:
+    app: phi
+rules:
+  - apiGroups:
+      - "*" # Allow all API groups
+    resources:
+      - "*" # Allow all resources
+    verbs:
+      - get
+      - watch
+      - list
+      - patch
+      # - create
+      # - update
+      # - delete
+      # - deletecollection
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: phi
+  labels:
+    app: phi
+subjects:
+  - kind: ServiceAccount
+    name: phi
+    namespace: phi
+roleRef:
+  kind: ClusterRole
+  name: phi
+  apiGroup: rbac.authorization.k8s.io
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: phi
+  namespace: phi
+  labels:
+    app: phi
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      name: http
+  selector:
+    app: phi
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: phi
+  namespace: phi
+  labels:
+    app: phi
+spec:
+  serviceName: phi
+  replicas: 1
+  selector:
+    matchLabels:
+      app: phi
+  template:
+    metadata:
+      labels:
+        app: phi
+  spec:
+    serviceAccountName: phi
+    containers:
+      - name: phi
+        image: timp4w/phi:latest
+        ports:
+          - containerPort: 8080
+            name: http
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+            - matchExpressions:
+                - key: "arm"
+                  operator: "NotIn"
+                  values:
+                    - "true"
+    imagePullSecrets:
+      - name: docker-hub-secret

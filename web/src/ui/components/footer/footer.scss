@@ -1,0 +1,18 @@
+@import "../../shared/colors.scss";
+@import "../../shared/mixins.scss";
+
+.footer {
+  @include flex-center(row, 2);
+  position: fixed;
+  bottom: 0;
+  width: 100vw;
+  background-color: $main;
+  height: 1rem;
+  padding: 1.5rem;
+
+  &__git {
+    &:hover {
+      color: darken($font, 10%);
+    }
+  }
+}

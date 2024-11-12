@@ -1,0 +1,47 @@
+@import "../../shared/colors.scss";
+
+.status-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 1rem;
+  height: 2rem; 
+  font-size: 1rem;
+  padding: 1rem;
+  background-color: $main;
+  margin-right: 1rem;
+  margin-left: 1rem;
+  cursor: pointer;
+  color: $font;
+  text-decoration: none;
+  width: 12vw;
+
+
+  @media (max-width: 1600px) {
+    width: 10vw;
+  }
+
+  @media (max-width: 1600px) {
+    width: 20vw;
+  }
+
+  @media (max-width: 992px) {
+    width: 40vw;
+  }
+
+  @media (max-width: 768px) {
+    width: 80vw;
+  }
+
+
+  &:hover {
+    transform: scale(1.05);
+    background-color: $accent-darker;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.2);
+  }
+
+  &__label {
+    margin-right: 1rem;
+  }
+
+}

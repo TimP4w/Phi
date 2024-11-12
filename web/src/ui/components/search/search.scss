@@ -1,0 +1,58 @@
+@import "../../shared/colors.scss";
+@import "../../shared/mixins.scss";
+.search {
+  width: 100%;
+  position: relative;
+
+  &__container {
+    @include flex-center(row, 1);
+  }
+
+  &__bar {
+    width: 100%;
+    height: 4rem;
+
+    margin: 0;
+    padding: 0;
+    padding-left: 1rem;
+
+    border-radius: .5rem; 
+    background-color: $main;
+    border-width: 0;
+    color: $font;
+
+    font-size: 2rem;
+    font-weight: 600;
+    box-sizing: border-box;
+
+    &:focus {
+      outline: none; 
+      border: none;
+    }
+  }
+
+  &__filter-icon {
+    @include flex-center(row, 1);
+    @include card;
+    
+    cursor: pointer;
+    height: 2rem;
+    width: 1rem;
+  }
+
+  &__filter-container {
+    @include flex-center(row, 1);
+    @include card;
+
+    justify-content: flex-start;
+    align-items: flex-start;
+
+    left: 0;
+    margin: 1rem;
+  }
+
+  &__filter-category {
+    @include flex-center(column, 1);
+    align-items: flex-start;
+  }
+}

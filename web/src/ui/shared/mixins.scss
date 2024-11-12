@@ -1,0 +1,89 @@
+@import "./colors.scss";
+
+$xxl: 1600px;
+$xl: 1200px;
+$lg: 992px;
+$md: 768px;
+$sm: 576px;
+
+@mixin media($size) {
+  @media (max-width: $size) {
+    @content;
+  }
+}
+
+@mixin flex($direction: row) {
+  display: flex;
+  flex-direction: $direction;
+}
+
+@mixin flex-center($direction: row, $gap: 0, $wrap: no-wrap) {
+  display: flex;
+  flex-direction: $direction;
+  justify-content: center;
+  align-items: center;
+  gap: $gap * 1rem;
+  flex-wrap: $wrap;
+}
+
+@mixin card {
+  background-color: $main;
+  border-radius: .5rem;
+  box-shadow: 0 0 1rem rgba(0, 0, 0, 0.1);
+  padding: 1rem;
+}
+
+@mixin border {
+  border: 1px solid $accent;
+  border-radius: .5rem;
+}
+
+@mixin rounded {
+  border-radius: .5rem;
+}
+
+@mixin words-wrap {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-all;
+}
+
+$regular: 400;
+$medium: 500;
+$bold: 700;
+
+@mixin font-big($weight: $regular, $color: 'normal') {
+  font-size: 2rem;
+  font-weight: $weight;
+  @if $color == 'accent' {
+    color: $font-grey;
+  }
+}
+
+@mixin font-medium($weight: $regular, $color: 'normal') {
+  font-size: 1.5rem;
+  font-weight: $weight;
+  @if $color == 'accent' {
+    color: $font-grey;
+  }
+}
+
+@mixin font-normal($weight: $regular, $color: 'normal') {
+  font-size: 1rem;
+  font-weight: $weight;
+  @if $color == 'accent' {
+    color: $font-grey;
+  }
+}
+
+@mixin font-small($weight: $regular, $color: 'normal') {
+  font-size: .8rem;
+  font-weight: $weight;
+  @if $color == 'accent' {
+    color: $font-grey;
+  }
+}
+
+$pl: 2rem;
+$pr: 1rem;
+$ps: .5rem;
