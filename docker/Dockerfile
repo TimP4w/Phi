@@ -13,4 +13,4 @@ EXPOSE 8080
 
 USER phi
 
-CMD ["./phi/phi", "-frontend", "/phi/web"]
+CMD ["/phi/phi", "-frontend", "/phi/web"]
