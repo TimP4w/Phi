@@ -13,7 +13,7 @@ DIST_DIR=dist
 
 build-be:
 	mkdir -p $(DIST_DIR)
-	cd $(CMD_DIR) && $(GOBUILD) -o ../../../$(DIST_DIR)/$(BINARY_NAME) -v
+	cd $(CMD_DIR) && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GOBUILD) -o ../../../$(DIST_DIR)/$(BINARY_NAME) -v
 	cd ..
 
 clean-be:
