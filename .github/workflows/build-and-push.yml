@@ -23,6 +23,7 @@ jobs:
         with:
           node-version: "18"
           cache: "yarn"
+          cache-dependency-path: web/yarn.lock
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -38,5 +39,5 @@ jobs:
 
       - name: Build and Push Docker Images
         run: |
-          docker build -t ghcr.io/${{ github.repository }}/phi:latest -f docker/Dockerfile phi
-          docker push ghcr.io/${{ github.repository }}/phi:latest
+          docker build -t ghcr.io/timp4w/phi:latest -f docker/Dockerfile .
+          docker push ghcr.io/timp4w/phi:latest
