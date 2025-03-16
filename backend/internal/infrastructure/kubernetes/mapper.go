@@ -320,6 +320,8 @@ func getDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 			}
 		} else if condition.Type == "Progressing" && condition.Status == "False" && condition.Reason == "ProgressDeadlineExceeded" {
 			el.Status = kube.StatusFailed
+		} else if condition.Type == "StateError" && condition.Status == "True" {
+			el.Status = kube.StatusFailed
 		}
 	}
 
@@ -412,11 +414,11 @@ func getHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 
 		}
 	}
+
 	el.Status = status
 
 	el.HelmReleaseMetadata = kube.HelmReleaseMetadata{
-		ChartName:     helmRelease.Status.History.Latest().ChartName,
-		ChartVersion:  helmRelease.Status.History.Latest().ChartVersion,
+		ChartName:     helmRelease.GetHelmChartName(),
 		IsReconciling: el.FluxMetadata.IsReconciling, // deprecated
 		IsSuspended:   el.FluxMetadata.IsSuspended,   // deprecated
 		SourceRef: kube.SourceRef{
@@ -425,4 +427,11 @@ func getHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 			Namespace: helmRelease.Spec.Chart.Spec.SourceRef.Namespace,
 		},
 	}
+
+	if helmRelease.Status.History.Len() > 0 {
+		el.HelmReleaseMetadata.ChartVersion = helmRelease.Status.History.Latest().ChartVersion
+	} else {
+		el.HelmReleaseMetadata.ChartVersion = "unknown"
+	}
+
 }

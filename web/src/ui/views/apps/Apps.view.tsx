@@ -11,6 +11,7 @@ import Search, { FilterCategory } from "../../components/search/Search";
 import StatusCard from "../../components/status-card/statusCard";
 import { useDebounce } from "use-debounce";
 import { ResourceStatus, TreeNode } from "../../../core/fluxTree/models/tree";
+import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 
 const filterCategories: FilterCategory<TreeNode>[] = [
   {
@@ -18,27 +19,27 @@ const filterCategories: FilterCategory<TreeNode>[] = [
     filters: [
       {
         label: "Kustomizations",
-        filter: (node: TreeNode) => node.kind === "Kustomization",
+        filter: (node: TreeNode) => node.kind === RESOURCE_TYPE.KUSTOMIZATION,
       },
       {
         label: "HelmReleases",
-        filter: (node: TreeNode) => node.kind === "HelmRelease",
+        filter: (node: TreeNode) => node.kind === RESOURCE_TYPE.HELM_RELEASE,
       },
       {
         label: "HelmCharts",
-        filter: (node: TreeNode) => node.kind === "HelmChart",
+        filter: (node: TreeNode) => node.kind === RESOURCE_TYPE.HELM_CHART,
       },
       {
         label: "GitRepositories",
-        filter: (node: TreeNode) => node.kind === "GitRepository",
+        filter: (node: TreeNode) => node.kind === RESOURCE_TYPE.GIT_REPOSITORY,
       },
       {
         label: "OCIRepositories",
-        filter: (node: TreeNode) => node.kind === "OCIRepository",
+        filter: (node: TreeNode) => node.kind === RESOURCE_TYPE.OCI_REPOSITORY,
       },
       {
         label: "Buckets",
-        filter: (node: TreeNode) => node.kind === "Bucket",
+        filter: (node: TreeNode) => node.kind === RESOURCE_TYPE.BUCKET,
       },
     ],
   },
@@ -113,19 +114,19 @@ const AppsView: React.FC = observer(() => {
       </div>
       <div className="apps-view__apps">
         {[...fluxTreeStore.applications, ...fluxTreeStore.repositories]
-          .filter((k) => {
+          .filter((term) => {
             if (debouncedSearchTerm === "") {
-              return filter(k);
+              return filter(term);
             }
             return (
-              filter(k) &&
-              (k.name
+              filter(term) &&
+              (term.name
                 .toLowerCase()
                 .includes(debouncedSearchTerm.toLowerCase()) ||
-                k.kind
+                term.kind
                   .toLowerCase()
                   .includes(debouncedSearchTerm.toLowerCase()) ||
-                k.namespace
+                term.namespace
                   ?.toLowerCase()
                   .includes(debouncedSearchTerm.toLowerCase()))
             );

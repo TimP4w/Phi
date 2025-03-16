@@ -122,6 +122,7 @@ export const Panel = observer(({ isOpen, onClose, node }: PanelProps) => {
         {node?.conditions.map((condition, index) => (
           <ConditionTag
             key={index.toString()}
+            //@ts-expect-error TODO: fix this
             nodeId={node.uid}
             condition={condition}
           />

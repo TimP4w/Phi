@@ -21,12 +21,12 @@ export class Tree {
     return applications;
   }
 
-  public getRepositories(): TreeNode[] {
-    const repositories: TreeNode[] = [];
+  public getRepositories(): Repository[] {
+    const repositories: Repository[] = [];
     const repositoryKinds: string[] = [RESOURCE_TYPE.OCI_REPOSITORY, RESOURCE_TYPE.HELM_REPOSITORY, RESOURCE_TYPE.GIT_REPOSITORY, RESOURCE_TYPE.BUCKET].map((kind) => kind.toString());
     this.traverse(this.root, (node) => {
       if (repositoryKinds.includes(node.kind)) {
-        repositories.push(node);
+        repositories.push(node as Repository);
       }
       return false;
     });
@@ -197,7 +197,7 @@ export class KustomizationNode extends TreeNode {
 
 }
 
-export interface Repository {
+export interface Repository extends TreeNode {
   getURL(): string;
   getCode(): string;
 }

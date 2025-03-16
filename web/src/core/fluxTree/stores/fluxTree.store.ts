@@ -25,7 +25,7 @@ class FluxTreeStore {
     return this.tree.getRepositories().sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  findRepositoryByRef<T extends Repository>(ref: SourceRef): T | null {
+  findRepositoryByRef(ref: SourceRef): Repository | null {
     const found = this.repositories.find((repo) => repo.name === ref.name && repo.kind === ref.kind);
     if (!found) {
       return null;

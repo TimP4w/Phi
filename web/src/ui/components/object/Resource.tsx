@@ -3,7 +3,6 @@ import {
   VizualizationNodeData,
 } from "../../../core/fluxTree/models/tree";
 import FluxLogo from "../../assets/flux-logo";
-import { Spacer } from "../shared/commont.components";
 import StatusCircle from "../status-circle/StatusCircle";
 import Tag from "../tag/Tag";
 import Tooltip from "../tooltip/Tooltip";

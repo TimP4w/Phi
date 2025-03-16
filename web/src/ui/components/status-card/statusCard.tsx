@@ -1,6 +1,10 @@
 import { observer } from "mobx-react-lite";
 import "./statusCard.scss";
-import { ResourceStatus, TreeNode } from "../../../core/fluxTree/models/tree";
+import {
+  DeploymentNode,
+  ResourceStatus,
+  TreeNode,
+} from "../../../core/fluxTree/models/tree";
 import { useMemo } from "react";
 import StatusCircle from "../status-circle/StatusCircle";
 
@@ -12,14 +16,10 @@ type StatusCardProps = {
 const StatusCard: React.FC<StatusCardProps> = observer(
   ({ node, onClick }: StatusCardProps) => {
     const status = useMemo(() => {
-      if (node.children.length === 0) {
-        return ResourceStatus.FAILED;
+      if (node instanceof DeploymentNode) {
+        return node.status;
       }
-      if (node.children[0].children.length === 0) {
-        return ResourceStatus.FAILED;
-      }
-
-      return node.children[0].children[0].status;
+      return ResourceStatus.FAILED;
     }, [node]);
 
     return (

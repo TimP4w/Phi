@@ -75,11 +75,7 @@ const TreeView: React.FC = observer(() => {
           {node.conditions.map((condition, index) => (
             <div className="tree-view__node-conditions-condition">
               <div className="tree-view__node-conditions-condition-status">
-                <ConditionTag
-                  key={index.toString()}
-                  nodeId={node.uid}
-                  condition={condition}
-                />
+                <ConditionTag key={index.toString()} condition={condition} />
               </div>
               <span className="tree-view__node-conditions-condition-reason">
                 {condition.reason}

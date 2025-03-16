@@ -28,7 +28,7 @@ const Source: React.FC<SourceProps> = ({ node }: SourceProps) => {
       return;
     }
     const source: Repository | null =
-      fluxTreeStore.findRepositoryByRef<Repository>(metadata.sourceRef);
+      fluxTreeStore.findRepositoryByRef(metadata.sourceRef);
     if (!source) {
       return;
     }
