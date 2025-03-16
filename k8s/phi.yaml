@@ -97,14 +97,14 @@ spec:
         ports:
           - containerPort: 8080
             name: http
-    affinity:
-      nodeAffinity:
-        requiredDuringSchedulingIgnoredDuringExecution:
-          nodeSelectorTerms:
-            - matchExpressions:
-                - key: "arm"
-                  operator: "NotIn"
-                  values:
-                    - "true"
+    #    affinity:
+    #      nodeAffinity:
+    #        requiredDuringSchedulingIgnoredDuringExecution:
+    #          nodeSelectorTerms:
+    #            - matchExpressions:
+    #                - key: "arm"
+    #                  operator: "NotIn"
+    #                  values:
+    #                    - "true"
     imagePullSecrets:
       - name: docker-hub-secret
