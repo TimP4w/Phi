@@ -38,6 +38,7 @@ jobs:
         id: versioning
         run: |
           latest_tag=$(git tag --list 'v*' | sort -V | tail -n 1)
+          echo "Latest tag: $latest_tag"
           if [[ -z "$latest_tag" ]]; then
             latest_tag="v0.1.0"
           fi
