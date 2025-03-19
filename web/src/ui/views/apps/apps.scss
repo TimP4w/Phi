@@ -6,8 +6,6 @@
 
   &__apps {
     @include flex-center(row, 1, wrap);
-    width: 120rem;
-    height: 100vh;
 
     @include media($xxl) {
       width: 90rem;
@@ -21,6 +19,7 @@
     @include media($sm) {
       width: 12rem;
     }
+  
   }
 
   &__system-pods {
