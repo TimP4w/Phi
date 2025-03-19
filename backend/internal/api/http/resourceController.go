@@ -137,12 +137,12 @@ func (rc *ResourceController) HandleEvents(w http.ResponseWriter, r *http.Reques
 func corsHandler(f func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		headers := w.Header()
-		headers.Add("Access-Control-Allow-Origin", "*")
+		headers.Add("Access-Control-Allow-Origin", "*") // TODO: better allow origin?
 		headers.Add("Vary", "Origin")
 		headers.Add("Vary", "Access-Control-Request-Method")
 		headers.Add("Vary", "Access-Control-Request-Headers")
 		headers.Add("Access-Control-Allow-Headers", "Content-Type, Origin, Accept, token")
-		headers.Add("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS")
+		headers.Add("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS") // TODO: we'll probably use DELETE at some point
 
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
