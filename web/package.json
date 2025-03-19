@@ -1,12 +1,13 @@
 {
-  "name": "vite-project",
+  "name": "phi",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "yarn set-version && tsc -b && vite build",
     "lint": "eslint .",
+    "set-version": "echo REACT_APP_VERSION=$(git describe --tags) > .env",
     "preview": "vite preview"
   },
   "dependencies": {
