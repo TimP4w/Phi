@@ -1,6 +1,9 @@
 @import "./ui/shared/colors.scss";
 @import "./ui/shared/mixins.scss";
 
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 body {
   margin: 0;
@@ -8,9 +11,9 @@ body {
     "Droid Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: $background;
-  color: $font;
-  font-size: 1rem; //calc(10px + 2vmin);
+   background-color: $background;
+   color: $font;
+  // font-size: 1rem; //calc(10px + 2vmin);
 
   &,
   div {

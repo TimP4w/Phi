@@ -1,59 +1,106 @@
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { KubeEvent } from "../../../core/fluxTree/models/kubeEvent";
-import Search, { FilterCategory } from "../search/Search";
-import "./events-table.scss";
 import { formatDistance } from "date-fns";
+import {
+  Link,
+  Table,
+  TableBody,
+  TableCell,
+  TableColumn,
+  TableHeader,
+  TableRow,
+} from "@heroui/react";
+import { useCallback } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { ICONS } from "../../shared/icons";
 import { COLORS } from "../../shared/colors";
-import { useMemo, useState } from "react";
-import Tag from "../tag/Tag";
-import { EventDto } from "../../../core/fluxTree/models/dtos/eventDto";
 
 type EventsTableProps = {
   events: KubeEvent[];
 };
 
-// TODO: this may need a bit of refactoring and renaming.
-// 1. EventResource and EventReason are not the best names for these components.
-// 2. Message needs more space, count and First Observed way less
-
-const EventResource = ({ event }: { event: KubeEvent }) => {
-  return (
-    <div className="event-resource">
-      <span className="event-resource__name">{event.name}</span>
-      <span className="event-resource__namespace">{event.namespace}</span>
-      <span>
-        <Tag>{event.kind}</Tag>
-      </span>
-    </div>
-  );
-};
-
-const EventReason = ({ event }: { event: KubeEvent }) => {
-  return (
-    <div className="event-reason">
-      <div className="event-reason__icon">
-        {event.type === "Normal" && (
-          <FontAwesomeIcon icon="circle-info" color={COLORS.INFO} />
-        )}
-        {event.type === "Warning" && (
-          <FontAwesomeIcon icon="circle-exclamation" color={COLORS.WARNING} />
-        )}
-      </div>
-      <div className="event-reason__label-container">
-        <span className="event-reason__label">{event.reason}</span>
-        <span className="event-reason__time">
-          {formatDistance(event.lastObserved, new Date(), {
-            includeSeconds: true,
-            addSuffix: true,
-          })}
-        </span>
-      </div>
-    </div>
-  );
-};
-
 const EventsTable: React.FC<EventsTableProps> = ({ events }) => {
-  const [searchTerm, setSearchTerm] = useState("");
+  const columns = [
+    {
+      key: "reason",
+      label: "REASON",
+    },
+    {
+      key: "message",
+      label: "MESSAGE",
+    },
+  ];
+
+  const renderCell = useCallback((event: KubeEvent, columnKey: string) => {
+    const cellValue = event[columnKey as keyof KubeEvent];
+
+    const icon = event.type === "Normal" ? ICONS.INFO : ICONS.WARNING;
+    const iconColor = event.type === "Normal" ? COLORS.INFO : COLORS.WARNING;
+    switch (columnKey) {
+      case "reason":
+        return (
+          <div className="flex items-center gap-3">
+            <FontAwesomeIcon
+              icon={icon}
+              size="2x"
+              color={iconColor}
+            ></FontAwesomeIcon>
+            <div className="flex flex-col">
+              <span className="text-bold text-md">
+                {event.reason} ({event.count}x)
+              </span>
+              <p className="text-sm text-default-400">{event.source}</p>
+              {event.resourceUID ? (
+                <Link href={`/tree/${event.resourceUID}`}>
+                  <p className="text-sm">{event.name}</p>
+                </Link>
+              ) : (
+                <p className="text-sm">{event.name}</p>
+              )}
+              <p className="text-sm text-default-400">
+                {formatDistance(event.lastObserved, new Date(), {
+                  includeSeconds: true,
+                  addSuffix: true,
+                })}
+              </p>
+            </div>
+          </div>
+        );
+      case "message":
+        return <p className="text-wrap">{event.message}</p>;
+      default:
+        return String(cellValue);
+    }
+  }, []);
+
+  return (
+    <Table removeWrapper aria-label="Kubernetes events" className="dark">
+      <TableHeader columns={columns}>
+        {(column) => <TableColumn key={column.key}>{column.label}</TableColumn>}
+      </TableHeader>
+      <TableBody
+        items={events.sort(
+          (a, b) => b.lastObserved.getTime() - a.lastObserved.getTime()
+        )}
+        emptyContent={"No rows to display."}
+      >
+        {(item) => (
+          <TableRow key={item.uid}>
+            {(columnKey) => (
+              <TableCell className="max-w-[250px]">
+                {renderCell(item, columnKey)}
+              </TableCell>
+            )}
+          </TableRow>
+        )}
+      </TableBody>
+    </Table>
+  );
+};
+
+export default EventsTable;
+
+/*
+    const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState<(node: EventDto) => boolean>(
     () => () => true
   );
@@ -101,57 +148,4 @@ const EventsTable: React.FC<EventsTableProps> = ({ events }) => {
   const onFilterChange = (filter: (a: never) => boolean) => {
     setFilter(() => filter as (node: KubeEvent) => boolean);
   };
-
-  return (
-    <div className="events-table">
-      <Search
-        onChange={setSearchTerm}
-        onFilterChange={onFilterChange}
-        filters={filters}
-      />
-      <table>
-        <thead>
-          <tr>
-            <th>Reason</th>
-            <th>Source</th>
-            <th>Message</th>
-            <th>Resource</th>
-            <th>Count</th>
-            <th>First Observed</th>
-          </tr>
-        </thead>
-        <tbody>
-          {events
-            .sort((a, b) => b.lastObserved.getTime() - a.lastObserved.getTime())
-            .filter(
-              (event) =>
-                filter(event) &&
-                (event.message
-                  .toLowerCase()
-                  .includes(searchTerm.toLowerCase()) ||
-                  event.name.toLowerCase().includes(searchTerm.toLowerCase()))
-            )
-            .map((event: KubeEvent) => (
-              <tr key={event.uid}>
-                <td>
-                  <EventReason event={event} />
-                </td>
-                <td>{event.source}</td>
-                <td>{event.message}</td>
-                <td>{<EventResource event={event} />}</td>
-                <td>{event.count}</td>
-                <td>
-                  {formatDistance(event.firstObserved, new Date(), {
-                    includeSeconds: true,
-                    addSuffix: true,
-                  })}
-                </td>
-              </tr>
-            ))}
-        </tbody>
-      </table>
-    </div>
-  );
-};
-
-export default EventsTable;
+*/

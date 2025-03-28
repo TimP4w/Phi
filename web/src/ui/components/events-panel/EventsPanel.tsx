@@ -1,41 +1,58 @@
-import { useEffect, useRef } from "react";
-import "./eventsPanel.scss";
 import { useInjection } from "inversify-react";
 import { observer } from "mobx-react-lite";
-import classNames from "classnames";
 import { EventsStore } from "../../../core/fluxTree/stores/events.store";
 import EventsTable from "../events-table/EventsTable";
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerBody,
+  DrawerFooter,
+  useDisclosure,
+  Badge,
+  Button,
+} from "@heroui/react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 export const EventsPanel = observer(() => {
-  const panelRef = useRef<HTMLDivElement | null>(null);
   const eventsStore = useInjection(EventsStore);
-  const isOpen = eventsStore.isPanelOpen;
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
-  useEffect(() => {
-    const handleClickOutside = (event: Event) => {
-      if (
-        panelRef.current &&
-        !panelRef.current.contains(event.target as HTMLDivElement)
-      ) {
-        eventsStore.togglePanel();
-        return;
-      }
-    };
-
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [isOpen, eventsStore]);
-
-  const closePanel = () => {
-    eventsStore.togglePanel();
-  };
-
+  return (
+    <>
+      <Badge
+        shape="circle"
+        isInvisible={!eventsStore.hasNewEvents}
+        color={eventsStore.hasNewWarnings ? "warning" : "default"}
+        content=""
+        className="border-transparent"
+      >
+        <Button isIconOnly radius="full" variant="light">
+          <FontAwesomeIcon icon="bell" size="2x" onClick={onOpen} />
+        </Button>
+      </Badge>
+      <Drawer
+        isOpen={isOpen}
+        size={"5xl"}
+        onOpenChange={() => {
+          onOpenChange();
+          eventsStore.clearEventsHint();
+        }}
+        className="dark"
+      >
+        <DrawerContent>
+          <>
+            <DrawerHeader className="flex flex-col gap-1">Events</DrawerHeader>
+            <DrawerBody>
+              <EventsTable events={eventsStore.events} />
+            </DrawerBody>
+            <DrawerFooter></DrawerFooter>
+          </>
+        </DrawerContent>
+      </Drawer>
+    </>
+  );
+  /*
   return (
     <div
       ref={panelRef}
@@ -56,5 +73,5 @@ export const EventsPanel = observer(() => {
         <EventsTable events={eventsStore.events} />
       </div>
     </div>
-  );
+  );*/
 });

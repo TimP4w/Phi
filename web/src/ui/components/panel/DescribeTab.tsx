@@ -34,28 +34,26 @@ export const DescribeTab = observer(({ describe }: PanelProps) => {
 
   return (
     <div className="describe-tab">
-      <div className="describe-tab__content">
-        <div className="describe-tab__code">
-          {!describe ? (
-            <div>Loading...</div>
-          ) : (
-            <CodeBlock
-              text={yaml}
-              language={"yaml"}
-              showLineNumbers={true}
-              customStyle={{
-                background: COLORS.MAIN,
-              }}
-              codeContainerStyle={{
-                backgroundColor: COLORS.MAIN,
-                padding: 0,
-                margin: 0,
-              }}
-              lineNumberContainerStyle={{}}
-              theme={atomOneDark}
-            />
-          )}
-        </div>
+      <div className="describe-tab__code">
+        {!describe ? (
+          <div>Loading...</div>
+        ) : (
+          <CodeBlock
+            text={yaml}
+            language={"yaml"}
+            showLineNumbers={true}
+            customStyle={{
+              background: COLORS.MAIN,
+            }}
+            codeContainerStyle={{
+              backgroundColor: COLORS.MAIN,
+              padding: 0,
+              margin: 0,
+            }}
+            lineNumberContainerStyle={{}}
+            theme={atomOneDark}
+          />
+        )}
       </div>
     </div>
   );

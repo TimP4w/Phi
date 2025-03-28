@@ -6,7 +6,7 @@ import {
 import Resource from "./Resource";
 import "./resource.scss";
 import { NodeProps, Node } from "@xyflow/react";
-import Tag from "../tag/Tag";
+import { Chip } from "@heroui/react";
 
 type ResourceProps = NodeProps<Node<VizualizationNodeData>>;
 
@@ -18,7 +18,7 @@ function Pod(props: ResourceProps) {
   return (
     <div>
       <div className="resource__extra-tag">
-        <Tag>{`${pod.metadata?.phase}`}</Tag>
+        <Chip className="absolute z-10 -top-9 -right-16">{`${pod.metadata?.phase}`}</Chip>
       </div>
       <Resource {...props}></Resource>
     </div>

@@ -10,6 +10,13 @@ import { useCallback, useEffect, useState } from "react";
 import { resumeUseCase } from "../../../core/resource/usecases/resume.usecase";
 import { suspendUseCase } from "../../../core/resource/usecases/suspend.usecase";
 import classNames from "classnames";
+import {
+  Button,
+  Dropdown,
+  DropdownItem,
+  DropdownMenu,
+  DropdownTrigger,
+} from "@heroui/react";
 type PlayPauseProps = {
   node: TreeNode;
 };
@@ -32,46 +39,82 @@ const PlayPause: React.FC<PlayPauseProps> = ({ node }: PlayPauseProps) => {
     );
   }, [node]);
 
-  const reconcile = useCallback(
-    (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => {
-      e.preventDefault();
-      if (isReconciling) return;
-      setIsReconciling(true);
-      reconcileUseCase.execute(node.uid);
-    },
-    [node, isReconciling]
-  );
+  const reconcile = useCallback(() => {
+    if (isReconciling) return;
+    setIsReconciling(true);
+    reconcileUseCase.execute(node.uid);
+  }, [node, isReconciling]);
 
-  const resume = useCallback(
-    (e: React.MouseEvent<HTMLInputElement, MouseEvent>) => {
-      e.preventDefault();
-      setIsToggling(true);
-      resumeUseCase
-        .execute(node.uid)
-        .then(() => {
-          setIsSuspended(false);
-        })
-        .finally(() => setIsToggling(false));
-    },
-    [node]
-  );
+  const resume = useCallback(() => {
+    setIsToggling(true);
+    resumeUseCase
+      .execute(node.uid)
+      .then(() => {
+        setIsSuspended(false);
+      })
+      .finally(() => setIsToggling(false));
+  }, [node]);
 
-  const suspend = useCallback(
-    (e: React.MouseEvent<HTMLInputElement, MouseEvent>) => {
-      e.preventDefault();
-      setIsToggling(true);
-      suspendUseCase
-        .execute(node.uid)
-        .then(() => {
-          setIsSuspended(true);
-        })
-        .finally(() => setIsToggling(false));
+  const suspend = useCallback(() => {
+    setIsToggling(true);
+    suspendUseCase
+      .execute(node.uid)
+      .then(() => {
+        setIsSuspended(true);
+      })
+      .finally(() => setIsToggling(false));
+  }, [node]);
+
+  const toggle = useCallback(() => {
+    if (isSuspended) {
+      resume();
+    } else {
+      suspend();
+    }
+  }, [isSuspended, resume, suspend]);
+
+  const action = useCallback(
+    (actionKey: string) => {
+      switch (actionKey) {
+        case "toggle":
+          toggle();
+          break;
+        case "reconcile":
+          reconcile();
+          break;
+      }
     },
-    [node]
+    [reconcile, toggle]
   );
 
   return (
-    <div className="play-pause__actions">
+    <div>
+      <Dropdown className="dark">
+        <DropdownTrigger>
+          <Button color="primary" variant="light" isIconOnly>
+            <FontAwesomeIcon icon="ellipsis-vertical" />
+          </Button>
+        </DropdownTrigger>
+        <DropdownMenu
+          aria-label="Pause/Resume or reconcile flux managed resource"
+          disabledKeys={[
+            isReconciling ? "reconcile" : "",
+            isToggling ? "toggle" : "",
+          ]}
+          onAction={(k) => action(k as string)}
+        >
+          <DropdownItem key="toggle">
+            {isSuspended ? "Resume Reconciliation" : "Pause Reconciliation"}
+          </DropdownItem>
+          <DropdownItem key="reconcile">Reconcile</DropdownItem>
+        </DropdownMenu>
+      </Dropdown>
+    </div>
+  );
+};
+
+/*
+<div className="play-pause__actions">
       <div
         id={`reconcile_${node.uid}`}
         className="play-pause__action-reconcile"
@@ -102,7 +145,5 @@ const PlayPause: React.FC<PlayPauseProps> = ({ node }: PlayPauseProps) => {
         )}
       </div>
     </div>
-  );
-};
-
+    */
 export default PlayPause;

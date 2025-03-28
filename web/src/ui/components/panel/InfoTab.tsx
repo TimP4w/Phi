@@ -87,39 +87,35 @@ export const InfoTab = ({ node }: InfoTab) => {
   };
 
   return (
-    <div className="info-tab">
-      <div className="info-tab__content">
-        <table className="info-tab__table">
-          <tbody>
-            <InfoRow name="Name" value={node.name} />
-            <InfoRow name="Namespace" value={node.namespace} />
-            <InfoRow name="Kind" value={node.kind} />
-            <InfoRow name="Resource" value={node.resource} />
-            <InfoRow name="Group" value={node.group} />
-            <InfoRow name="Version" value={node.version} />
-            <InfoRow name="UID" value={node.uid} />
-            <InfoRow
-              name="Is FluxCD Managed"
-              value={node.isFluxManaged.toString()}
-            />
-            <InfoRow name="Status" value={node.status} />
-            <InfoRow name="Children" value={node.children.length.toString()} />
-            <InfoRow name="Events" value={node.events.length.toString()} />
-            <InfoRow
-              name="Is Reconcillable"
-              value={node.isReconcillable.toString()}
-            />
-            <InfoRow name="Created At" value={node.createdAt} />
-            {node.kind === "Kustomization" &&
-              getKustomizationData(node as KustomizationNode)}
-            {node.kind === "Deployment" &&
-              getDeploymentData(node as DeploymentNode)}
-            {node.kind === "Pod" && getPodData(node as PodNode)}
-            {node.kind === "PersistentVolumeClaim" &&
-              getPVCData(node as PersistentVolumeClaimNode)}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <table className="info-tab__table">
+      <tbody>
+        <InfoRow name="Name" value={node.name} />
+        <InfoRow name="Namespace" value={node.namespace} />
+        <InfoRow name="Kind" value={node.kind} />
+        <InfoRow name="Resource" value={node.resource} />
+        <InfoRow name="Group" value={node.group} />
+        <InfoRow name="Version" value={node.version} />
+        <InfoRow name="UID" value={node.uid} />
+        <InfoRow
+          name="Is FluxCD Managed"
+          value={node.isFluxManaged.toString()}
+        />
+        <InfoRow name="Status" value={node.status} />
+        <InfoRow name="Children" value={node.children.length.toString()} />
+        <InfoRow name="Events" value={node.events.length.toString()} />
+        <InfoRow
+          name="Is Reconcillable"
+          value={node.isReconcillable.toString()}
+        />
+        <InfoRow name="Created At" value={node.createdAt} />
+        {node.kind === "Kustomization" &&
+          getKustomizationData(node as KustomizationNode)}
+        {node.kind === "Deployment" &&
+          getDeploymentData(node as DeploymentNode)}
+        {node.kind === "Pod" && getPodData(node as PodNode)}
+        {node.kind === "PersistentVolumeClaim" &&
+          getPVCData(node as PersistentVolumeClaimNode)}
+      </tbody>
+    </table>
   );
 };

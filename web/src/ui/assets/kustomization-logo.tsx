@@ -1,5 +1,11 @@
 const KustomizationLogo: React.FC = () => (
-  <svg viewBox="0 0 151 168" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <svg
+    width="32"
+    height="32"
+    viewBox="0 0 151 168"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+  >
     <g>
       <path
         d="M116.195 0H9.30409C4.1656 0 0 4.1661 0 9.30402V132.894C0 138.031 4.1656 142.198 9.30409 142.198H116.195C121.334 142.198 125.5 138.031 125.5 132.894V9.30402C125.5 4.1661 121.334 0 116.195 0Z"

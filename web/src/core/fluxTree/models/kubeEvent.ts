@@ -28,5 +28,4 @@ export class KubeEvent {
     this.count = dto.count;
     this.resourceUID = dto.resourceUID;
   }
-
 }

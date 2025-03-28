@@ -12,7 +12,7 @@ import { WebSocketService } from "./core/realtime/services/webSocket.service";
 import { TYPES } from "./core/shared/types";
 import { Listener } from "./infrastructure/backend/websocket/services/impl/webSocket.service.impl";
 import { handleWsMessage } from "./core/realtime/usecases/handleWsMessage.usecase";
-import Header from "./ui/components/header/Header";
+import Header from "./ui/components/layout/Header";
 import { ReactFlowProvider } from "@xyflow/react";
 import { fetchTreeUseCase } from "./core/fluxTree/usecases/FetchTree.usecase";
 import { Message } from "./core/realtime/models/message";
@@ -22,6 +22,7 @@ import { library } from "@fortawesome/fontawesome-svg-core";
 import { fab, faGithub } from "@fortawesome/free-brands-svg-icons";
 import {
   faArrowsRotate,
+  faBell,
   faBellSlash,
   faCircleCheck,
   faCircleExclamation,
@@ -37,10 +38,11 @@ import {
   faPlay,
   faFilter,
   faXmark,
+  faEllipsisV,
 } from "@fortawesome/free-solid-svg-icons";
-import Footer from "./ui/components/footer/Footer";
+import Footer from "./ui/components/layout/Footer";
 import { fetchEventsUseCase } from "./core/fluxTree/usecases/FetchEvents.usecase";
-import { EventsPanel } from "./ui/components/events-panel/EventsPanel";
+import { HeroUIProvider } from "@heroui/react";
 
 library.add(
   fab,
@@ -56,16 +58,19 @@ library.add(
   faEnvelope,
   faEnvelopeCircleCheck,
   faBellSlash,
+  faBell,
   faCloud,
   faMap,
   faGithub,
   faFilter,
-  faXmark
+  faXmark,
+  faEllipsisV
 );
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
 );
 
+// TODO: i don't really like this initialization anymore. Maybe make own singleton "InitService"?
 const realtime = container.get<WebSocketService>(TYPES.WebSocket);
 realtime.connect();
 const listener: Listener = {
@@ -77,19 +82,24 @@ const listener: Listener = {
 realtime.addListener(listener);
 fetchEventsUseCase.execute();
 
+// TODO: don't make this dependent on fetching the tree... show something anyway.
+// TODO: show error if tree fetching fails
 fetchTreeUseCase.execute().then(() => {
   root.render(
-    <Provider container={container}>
-      <ReactFlowProvider>
-        <React.StrictMode>
-          <Header />
-          <RouterProvider router={router} />
-          <ToastContainer theme="dark" />
-          <Footer />
-        </React.StrictMode>
-      </ReactFlowProvider>
-      <EventsPanel />
-    </Provider>
+    <React.StrictMode>
+      <Provider container={container}>
+        <HeroUIProvider>
+          <ReactFlowProvider>
+            <main className="dark">
+              <Header />
+              <RouterProvider router={router} />
+              <ToastContainer theme="dark" />
+              <Footer />
+            </main>
+          </ReactFlowProvider>
+        </HeroUIProvider>
+      </Provider>
+    </React.StrictMode>
   );
 });
 

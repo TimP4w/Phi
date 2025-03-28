@@ -2,10 +2,8 @@
 @import "../../shared/mixins.scss";
 
 .apps-view {
-  @include flex-center(column);
 
   &__apps {
-    @include flex-center(row, 1, wrap);
 
     @include media($xxl) {
       width: 90rem;
