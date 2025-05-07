@@ -6,7 +6,7 @@ import {
 import Resource from "./Resource";
 import "./resource.scss";
 import { NodeProps, Node } from "@xyflow/react";
-import Tag from "../tag/Tag";
+import { Chip } from "@heroui/react";
 
 type ResourceProps = NodeProps<Node<VizualizationNodeData>>;
 
@@ -18,7 +18,9 @@ function Deployment(props: ResourceProps) {
   return (
     <div>
       <div className="resource__extra-tag">
-        <Tag>{`${deployment.metadata?.readyReplicas}/${deployment.metadata?.replicas} `}</Tag>
+        <Chip className="absolute z-10 -top-9 -right-16">{`${
+          deployment.metadata?.readyReplicas || 0
+        }/${deployment.metadata?.replicas || 0}`}</Chip>
       </div>
       <Resource {...props}></Resource>
     </div>

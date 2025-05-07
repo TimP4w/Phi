@@ -12,7 +12,6 @@ export type Listener = {
 
 @injectable()
 class WebSocketServiceImpl implements WebSocketService {
-
   url: string;
   socket: WebSocket | null = null;
   listeners: Set<Listener>;
@@ -72,7 +71,12 @@ class WebSocketServiceImpl implements WebSocketService {
 
     this.socket.onclose = () => {
       if (!this.currentToastId) {
-        toast("WebSocket connection closed", { type: "error", theme: "dark", autoClose: false, toastId: "websocket-error" });
+        toast("WebSocket connection closed", {
+          type: "error",
+          theme: "dark",
+          autoClose: false,
+          toastId: "websocket-error",
+        });
       }
       this.clientId = "";
       this.stopPing();
@@ -80,7 +84,7 @@ class WebSocketServiceImpl implements WebSocketService {
     };
 
     this.socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
+      console.error("WebSocket error:", error);
     };
   }
 
@@ -91,7 +95,11 @@ class WebSocketServiceImpl implements WebSocketService {
         return;
       }
       if (this.socket.readyState === WebSocket.OPEN) {
-        this.sendMessage({ type: REALTIME_CONST.PING, clientId: "", message: "ping" });
+        this.sendMessage({
+          type: REALTIME_CONST.PING,
+          clientId: "",
+          message: "ping",
+        });
       }
     }, 5000);
   }
@@ -103,16 +111,25 @@ class WebSocketServiceImpl implements WebSocketService {
       setTimeout(() => {
         console.log(`Reconnection attempt #${this.retryCount}`);
         if (!this.currentToastId) {
-          this.currentToastId = toast(`Reconnection attempt #${this.retryCount}`, { type: "info", theme: "dark", autoClose: false });
+          this.currentToastId = toast(
+            `Reconnection attempt #${this.retryCount}`,
+            { type: "info", theme: "dark", autoClose: false },
+          );
         } else {
-          toast.update(this.currentToastId, { render: `Reconnection attempt #${this.retryCount}` });
+          toast.update(this.currentToastId, {
+            render: `Reconnection attempt #${this.retryCount}`,
+          });
         }
 
         this.connect();
       }, retryTimeout);
     } else {
       if (this.currentToastId) {
-        toast.update(this.currentToastId, { render: `Max reconnection attempts reached.`, type: "error", autoClose: false });
+        toast.update(this.currentToastId, {
+          render: `Max reconnection attempts reached.`,
+          type: "error",
+          autoClose: false,
+        });
         this.currentToastId = null;
       }
       console.log("Max reconnection attempts reached.");
@@ -136,7 +153,7 @@ class WebSocketServiceImpl implements WebSocketService {
       message.clientId = this.clientId;
       this.socket.send(JSON.stringify(message));
     } else {
-      console.error('WebSocket is not open');
+      console.error("WebSocket is not open");
     }
   }
 

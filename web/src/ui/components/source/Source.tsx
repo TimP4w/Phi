@@ -1,5 +1,6 @@
 import "./source.scss";
 import {
+  HelmReleaseNode,
   KustomizationNode,
   Repository,
   TreeNode,
@@ -27,8 +28,9 @@ const Source: React.FC<SourceProps> = ({ node }: SourceProps) => {
     if (!metadata) {
       return;
     }
-    const source: Repository | null =
-      fluxTreeStore.findRepositoryByRef(metadata.sourceRef);
+    const source: Repository | null = fluxTreeStore.findRepositoryByRef(
+      metadata.sourceRef
+    );
     if (!source) {
       return;
     }
@@ -50,8 +52,11 @@ const Source: React.FC<SourceProps> = ({ node }: SourceProps) => {
     };
 
     return (
-      <div className="source">
-        <span onClick={handleLinkClick} className="source__link">
+      <div>
+        <span
+          onClick={handleLinkClick}
+          className="flex items-center gap-2 bold hover:bg-sky-700"
+        >
           <FontAwesomeIcon icon="code-commit"></FontAwesomeIcon>
           {" " + kustomization.getLastAttemptedHash().slice(0, 8)}
           {sourceCode}
@@ -61,7 +66,10 @@ const Source: React.FC<SourceProps> = ({ node }: SourceProps) => {
   }
 
   if (node.kind === "HelmRelease") {
-    return <span className="source"></span>;
+    const helmRelease = node as HelmReleaseNode;
+    const metadata = helmRelease.metadata;
+
+    return <span className="source">{metadata?.chartVersion}</span>;
   }
 
   return null;

@@ -3,6 +3,7 @@ package kubernetesusecases
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/timp4w/phi/internal/core/kubernetes"
@@ -38,8 +39,11 @@ func NewWatchLogsUseCase() shared.UseCase[WatchLogsUseCaseInput, struct{}] {
 }
 
 func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) {
+	log.Println(fmt.Sprintf("Client: %s wants to subscribe to logs for resource %s", in.ClientID, in.ResourceID))
+
 	cancel, exists := uc.watchers[in.ClientID]
 	if exists {
+		log.Println(fmt.Sprintf("Client: %s was already subscribed to receive logs from a resource. Will cancel current subscription.", in.ClientID, in.ResourceID))
 		cancel()
 	}
 
@@ -50,6 +54,7 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 		ID: in.ClientID,
 		OnClose: func(clientID string) {
 			if clientID == in.ClientID {
+				log.Println(fmt.Sprintf("Cancelled log subscription for client: %s and resource %s.", in.ClientID, in.ResourceID))
 				cancel()
 			}
 		},

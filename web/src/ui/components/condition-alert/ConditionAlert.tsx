@@ -1,25 +1,24 @@
-import { Condition } from "../../../core/fluxTree/models/tree";
 import { useEffect, useState } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { IconProp } from "@fortawesome/fontawesome-svg-core";
+
+import { Alert } from "@heroui/react";
 import {
   CONDITION_TYPE,
-  ERROR_TYPES,
   SUCCESS_TYPES,
+  ERROR_TYPES,
 } from "../../../core/fluxTree/constants/conditions.const";
+import { Condition } from "../../../core/fluxTree/models/tree";
 import { stringToEnum } from "../../../core/shared/enum.utils";
 import { ICONS } from "../../shared/icons";
-import { Chip, Tooltip } from "@heroui/react";
 
-type ConditionTagProps = {
+type ConditionAlertProps = {
   condition: Condition;
   key: string;
 } & React.HTMLAttributes<HTMLDivElement>;
 
-const ConditionTag: React.FC<ConditionTagProps> = ({
+const ConditionAlert: React.FC<ConditionAlertProps> = ({
   condition,
   key,
-}: ConditionTagProps) => {
+}: ConditionAlertProps) => {
   const [icon, setIcon] = useState<string>("circle-info");
   const [color, setColor] = useState<
     "default" | "success" | "danger" | "primary" | "warning"
@@ -105,16 +104,11 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
   }, [condition]);
 
   return (
-    <Tooltip content={condition.message} className="dark">
-      <Chip
-        key={key}
-        color={color}
-        startContent={<FontAwesomeIcon icon={icon as IconProp} size={"1x"} />}
-        variant="faded"
-      >
-        {condition.type}
-      </Chip>
-    </Tooltip>
+    <Alert
+      color={color}
+      description={condition.message}
+      title={condition.reason}
+    />
   );
 };
 
@@ -131,4 +125,4 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
 
     */
 
-export default ConditionTag;
+export default ConditionAlert;

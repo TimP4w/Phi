@@ -30,10 +30,10 @@ func (uc *SyncResourcesUseCase) Execute(in struct{}) (map[string]*kubernetes.Res
 		return nil, err
 	}
 	resources, err := uc.kubeService.FindAllResources(rm)
-	if err != nil {
-		log.Fatalf("Error getting resources: %v", err)
-		return nil, err
-	}
+	/*if err != nil {
+		 log.Fatalf("Error getting resources: %v", err) // TODO: This is not fatal!
+		 return nil, err
+	}*/
 
 	uc.kubeStore.SetResources(resources)
 	var root kubernetes.Resource

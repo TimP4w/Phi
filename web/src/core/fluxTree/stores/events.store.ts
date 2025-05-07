@@ -41,6 +41,11 @@ class EventsStore {
       }
     }
   }
+
+  clearEventsHint() {
+    this.hasNewEvents = false;
+    this.hasNewWarnings = false;
+  }
 }
 
 export { EventsStore };

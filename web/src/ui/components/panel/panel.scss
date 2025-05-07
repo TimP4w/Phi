@@ -11,7 +11,7 @@
   transition: all 300ms ease-in-out;
   overflow: hidden;
   background-color: $main;
-  z-index: 1;
+  z-index: 0;
 
   
   @include media($xl) {
@@ -80,12 +80,6 @@
     overflow-y: auto;
   }
 
-  &__content {
-    text-align: left;
-    font-size: 1rem;
-    background-color: $secondary;
-    border-radius: .5rem;
-  }
 }
 
 .info-tab {

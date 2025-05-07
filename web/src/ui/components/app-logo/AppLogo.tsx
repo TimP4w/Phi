@@ -1,5 +1,4 @@
 import { observer } from "mobx-react-lite";
-import "./appLogo.scss";
 import KustomizationLogo from "../../assets/kustomization-logo";
 import HelmLogo from "../../assets/helm-logo";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -10,6 +9,8 @@ import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const"
 
 type AppLogoProps = {
   kind: string;
+  width?: number;
+  height?: number;
 };
 
 const AppLogo: React.FC<AppLogoProps> = observer(({ kind }: AppLogoProps) => {
@@ -24,7 +25,7 @@ const AppLogo: React.FC<AppLogoProps> = observer(({ kind }: AppLogoProps) => {
           <HelmLogo />
           <FontAwesomeIcon
             icon="map"
-            size="2x"
+            size="1x"
             color={COLORS.WARNING}
             style={{ position: "absolute", bottom: 0, right: 0 }}
           />
@@ -35,7 +36,7 @@ const AppLogo: React.FC<AppLogoProps> = observer(({ kind }: AppLogoProps) => {
           <HelmLogo />
           <FontAwesomeIcon
             icon="cloud"
-            size="2x"
+            size="1x"
             color={COLORS.INFO}
             style={{ position: "absolute", bottom: 0, right: 0 }}
           />
