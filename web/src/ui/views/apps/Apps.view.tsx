@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import React, { useState } from "react";
+import React, { ChangeEvent, useState } from "react";
 import "./apps.scss";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
@@ -99,21 +99,21 @@ const AppsView: React.FC = observer(() => {
   const [selectedSuspendStatusesToFilter, setSelectedSuspendStatusesToFilter] =
     useState<string[]>([]);
 
-  const onKindFilterChange = (e) => {
+  const onKindFilterChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const selectedKinds = e.target.value
       .split(",")
       .filter((val: string) => val !== "");
     setSelectedKindsToFilter(selectedKinds);
   };
 
-  const onStatusFilterChange = (e) => {
+  const onStatusFilterChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const selectedStatuses = e.target.value
       .split(",")
       .filter((val: string) => val !== "");
     setSelectedStatusesToFilter(selectedStatuses);
   };
 
-  const onSuspendFilterChange = (e) => {
+  const onSuspendFilterChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const selectedSuspends = e.target.value
       .split(",")
       .filter((val: string) => val !== "");

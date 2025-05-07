@@ -8,7 +8,6 @@ import {
 } from "../../../core/fluxTree/constants/conditions.const";
 import { Condition } from "../../../core/fluxTree/models/tree";
 import { stringToEnum } from "../../../core/shared/enum.utils";
-import { ICONS } from "../../shared/icons";
 
 type ConditionAlertProps = {
   condition: Condition;
@@ -17,9 +16,7 @@ type ConditionAlertProps = {
 
 const ConditionAlert: React.FC<ConditionAlertProps> = ({
   condition,
-  key,
 }: ConditionAlertProps) => {
-  const [icon, setIcon] = useState<string>("circle-info");
   const [color, setColor] = useState<
     "default" | "success" | "danger" | "primary" | "warning"
   >("default");
@@ -31,29 +28,14 @@ const ConditionAlert: React.FC<ConditionAlertProps> = ({
 
     if (conditionType && SUCCESS_TYPES.includes(conditionType)) {
       if (condition.status) {
-        setIcon(ICONS.SUCCESS);
         setColor("success");
         return;
       }
-      setIcon(ICONS.ERROR);
       setColor("danger");
       return;
     }
 
-    /*
-    if (conditionType && INFO_TYPES.includes(conditionType)) {
-      if (condition.status) {
-        setIcon(ICONS.INFO);
-        setColor(COLORS.INFO);
-        return;
-      }
-      setIcon(ICONS.ERROR);
-      setColor(COLORS.ERROR);
-      return;
-    } */
-
     if (conditionType && ERROR_TYPES.includes(conditionType)) {
-      setIcon(ICONS.ERROR);
       setColor("danger");
       return;
     }
@@ -82,24 +64,20 @@ const ConditionAlert: React.FC<ConditionAlertProps> = ({
     ];
 
     if (failingReasons.includes(condition.reason)) {
-      setIcon(ICONS.ERROR);
       setColor("danger");
       return;
     }
 
     if (warningReasons.includes(condition.reason)) {
-      setIcon(ICONS.WARNING); // TODO: warning icon
       setColor("warning");
       return;
     }
 
     if (successReasons.includes(condition.reason)) {
-      setIcon(ICONS.SUCCESS);
       setColor("success");
       return;
     }
 
-    setIcon(ICONS.INFO);
     setColor("default");
   }, [condition]);
 
@@ -111,18 +89,5 @@ const ConditionAlert: React.FC<ConditionAlertProps> = ({
     />
   );
 };
-
-/*
-*
-
-    <div key={key} className="condition-tag">
-      <Tooltip message={condition.message} />
-      {<FontAwesomeIcon icon={icon as IconProp} size={"1x"} color={color} />}
-      <span className="condition-tag__type" style={{ color: color }}>
-        {condition.type}
-      </span>
-    </div>
-
-    */
 
 export default ConditionAlert;

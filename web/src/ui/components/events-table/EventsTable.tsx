@@ -87,7 +87,7 @@ const EventsTable: React.FC<EventsTableProps> = ({ events }) => {
           <TableRow key={item.uid}>
             {(columnKey) => (
               <TableCell className="max-w-[250px]">
-                {renderCell(item, columnKey)}
+                {renderCell(item, columnKey.toString())}
               </TableCell>
             )}
           </TableRow>
