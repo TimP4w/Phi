@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"path/filepath"
 
 	// _ "github.com/mkevac/debugcharts"
 
@@ -43,8 +42,9 @@ func main() {
 		controllers.NewRealtimeController(upgradeConnectionUseCase)
 		wscontrollers.NewResourceWSController(watchLogsUseCase)
 
+		fileServer := http.FileServer(http.Dir(*frontendDir))
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-			http.ServeFile(w, r, filepath.Join(*frontendDir, "index.html"))
+			fileServer.ServeHTTP(w, r)
 		})
 
 		log.Println("Starting server on :8080")
