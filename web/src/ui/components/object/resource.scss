@@ -1,5 +1,5 @@
-@import "../../shared/colors.scss";
-@import "../../shared/mixins.scss";
+@use "../../shared/colors.scss";
+@use "../../shared/mixins.scss";
 
 .resource {
   &__extra-tag {

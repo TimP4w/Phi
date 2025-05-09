@@ -1,4 +1,4 @@
-@import "./colors.scss";
+@use "colors.scss";
 
 $xxl: 1600px;
 $xl: 1200px;
@@ -27,14 +27,14 @@ $sm: 576px;
 }
 
 @mixin card {
-  background-color: $main;
+  background-color: colors.$main;
   border-radius: .5rem;
   box-shadow: 0 0 1rem rgba(0, 0, 0, 0.1);
   padding: 1rem;
 }
 
 @mixin border {
-  border: 1px solid $accent;
+  border: 1px solid colors.$accent;
   border-radius: .5rem;
 }
 
@@ -56,7 +56,7 @@ $bold: 700;
   font-size: 2rem;
   font-weight: $weight;
   @if $color == 'accent' {
-    color: $font-grey;
+    color: colors.$font-grey;
   }
 }
 
@@ -64,7 +64,7 @@ $bold: 700;
   font-size: 1.5rem;
   font-weight: $weight;
   @if $color == 'accent' {
-    color: $font-grey;
+    color: colors.$font-grey;
   }
 }
 
@@ -72,7 +72,7 @@ $bold: 700;
   font-size: 1rem;
   font-weight: $weight;
   @if $color == 'accent' {
-    color: $font-grey;
+    color: colors.$font-grey;
   }
 }
 
@@ -80,7 +80,7 @@ $bold: 700;
   font-size: .8rem;
   font-weight: $weight;
   @if $color == 'accent' {
-    color: $font-grey;
+    color: colors.$font-grey;
   }
 }
 

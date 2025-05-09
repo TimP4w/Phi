@@ -1,4 +1,4 @@
-import { injectable } from "inversify/lib/annotation/injectable";
+import { injectable } from 'inversify';
 import { HttpService } from "../../../../../core/http/services/http.service";
 import { env } from "../../../../../core/shared/env";
 

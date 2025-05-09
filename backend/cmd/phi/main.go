@@ -4,7 +4,6 @@ import (
 	"flag"
 	"log"
 	"net/http"
-	"path/filepath"
 
 	// _ "github.com/mkevac/debugcharts"
 
@@ -44,7 +43,8 @@ func main() {
 		wscontrollers.NewResourceWSController(watchLogsUseCase)
 
 		/* Serve Static React app */
-		http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(filepath.Join(*frontendDir, "assets")))))
+		http.Handle("/", http.FileServer(http.Dir(*frontendDir)))
+		/*http.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.Dir(filepath.Join(*frontendDir, "assets")))))
 		http.Handle("/favicon.ico", http.FileServer(http.Dir(*frontendDir)))
 		http.Handle("/site.webmanifest", http.FileServer(http.Dir(*frontendDir)))
 		http.Handle("/favicon-32x32.png", http.FileServer(http.Dir(*frontendDir)))
@@ -54,7 +54,7 @@ func main() {
 		http.Handle("/android-chrome-192x192.png", http.FileServer(http.Dir(*frontendDir)))
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFile(w, r, filepath.Join(*frontendDir, "index.html"))
-		})
+		})*/
 
 		log.Println("Starting server on :8080")
 

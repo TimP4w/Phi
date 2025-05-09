@@ -1,4 +1,3 @@
-import { injectable } from 'inversify/lib/annotation/injectable';
 import { TreeService } from '../tree.service';
 import { Tree } from '../../models/tree';
 import { HttpService } from '../../../http/services/http.service';
@@ -6,6 +5,7 @@ import { container } from '../../../shared/inversify.config';
 import { TYPES } from '../../../shared/types';
 import { TreeNodeDto } from '../../models/dtos/treeDto';
 import { KubeEvent } from '../../models/kubeEvent';
+import { injectable } from 'inversify';
 
 @injectable()
 class TreeServiceImpl implements TreeService {

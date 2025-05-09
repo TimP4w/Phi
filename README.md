@@ -40,9 +40,7 @@ Code is not optimized, nor fully tested.
 - [ ] Resync backend periodically
 - [ ] Finish redesign
 
-
-
-# Development
+# Local Development
 
 Prerequisites:
 
@@ -55,6 +53,14 @@ Prerequisites:
 ```
 cd web
 yarn
+```
+
+### Set the `./web/.env` file values
+
+```
+VITE_VERSION=local
+VITE_URL=http://localhost:8080
+VITE_WS=http://localhost:8080/ws
 ```
 
 ## Backend

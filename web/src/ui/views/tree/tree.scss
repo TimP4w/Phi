@@ -1,12 +1,13 @@
-@import "../../shared/colors.scss";
-@import "../../shared/mixins.scss";
+@use "sass:color";
+@use "../../shared/colors.scss";
+@use "../../shared/mixins.scss";
 
 
 .tree-view {
-  @include flex-center(column);
+  @include mixins.flex-center(column);
 
   &__header {
-    @include flex-center(row, 1, wrap);
+    @include mixins.flex-center(row, 1, wrap);
   }
 
   &__apps {
@@ -15,35 +16,35 @@
   }
 
   &__node-name {
-    @include font-big;
+    @include mixins.font-big;
   }
 
   &__node-conditions {
-    @include flex-center(row);
+    @include mixins.flex-center(row);
     align-items: flex-start;
-    margin: $pr;
+    margin: mixins.$pr;
   }
 
   &__node-conditions-condition {
-    @include flex-center(column);
-    @include words-wrap;
+    @include mixins.flex-center(column);
+    @include mixins.words-wrap;
 
     height: 6em;
-    padding: 0 $pr;
-    border-right: 1px solid $accent;
+    padding: 0 mixins.$pr;
+    border-right: 1px solid colors.$accent;
   }
 
   &__node-conditions-condition-status {
-    padding-bottom: $pr;
+    padding-bottom: mixins.$pr;
   }
   
   &__node-conditions-condition-reason {
-    @include font-normal($bold);
-    color: darken($font, 20%);
+    @include mixins.font-normal(mixins.$bold);
+    color: color.adjust(colors.$font, $lightness: -20%);
   }
 
   &__node-conditions-condition-message {
-    @include font-small;
-    color: darken($font, 20%);
+    @include mixins.font-small;
+    color: color.adjust(colors.$font, $lightness: -20%);
   }
 }

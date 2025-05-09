@@ -1,5 +1,5 @@
-@import "./ui/shared/colors.scss";
-@import "./ui/shared/mixins.scss";
+@use "./ui/shared/colors.scss" as colors;
+@use "./ui/shared/mixins.scss" as mixins;
 
 @tailwind base;
 @tailwind components;
@@ -11,8 +11,8 @@ body {
     "Droid Sans", "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-   background-color: $background;
-   color: $font;
+   background-color: colors.$background;
+   color: colors.$font;
   // font-size: 1rem; //calc(10px + 2vmin);
 
   &,
@@ -23,28 +23,28 @@ body {
     }
 
     &::-webkit-scrollbar-track {
-      background: $main;
+      background: colors.$main;
       border-radius: .5rem;
     }
 
     &::-webkit-scrollbar-thumb {
-      background: $accent; 
+      background: colors.$accent; 
       border-radius: .5rem;
     }
 
     &::-webkit-scrollbar-thumb:hover {
-      background: $accent;
+      background: colors.$accent;
     }
   }
 }
 
 span {
-  color: $font;
+  color: colors.$font;
   font-size: 1rem;
 }
 
 a {
-  color: $font;
+  color: colors.$font;
   text-decoration: none;
   font-size: 1rem;
 }

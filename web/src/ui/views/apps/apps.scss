@@ -1,39 +1,39 @@
-@import "../../shared/colors.scss";
-@import "../../shared/mixins.scss";
+@use "../../shared/colors.scss";
+@use "../../shared/mixins.scss";
 
 .apps-view {
 
   &__apps {
 
-    @include media($xxl) {
+    @include mixins.media(mixins.$xxl) {
       width: 90rem;
     }
-    @include media($lg) {
+    @include mixins.media(mixins.$lg) {
       width: 60rem;
     }
-    @include media($md) {
+    @include mixins.media(mixins.$md) {
       width: 16rem;
     }
-    @include media($sm) {
+    @include mixins.media(mixins.$sm) {
       width: 12rem;
     }
   
   }
 
   &__system-pods {
-    @include flex-center(row, 1, wrap);
+    @include mixins.flex-center(row, 1, wrap);
     margin-top: 2rem;
 
-    @include media($xxl) {
+    @include mixins.media(mixins.$xxl) {
       width: 72rem;
     }
-    @include media($lg) {
+    @include mixins.media(mixins.$lg) {
       width: 60rem;
     }
-    @include media($md) {
+    @include mixins.media(mixins.$md) {
       width: 16rem;
     }
-    @include media($sm) {
+    @include mixins.media(mixins.$sm) {
       width: 12rem;
     }
   }
@@ -43,10 +43,10 @@
     padding: 2rem;
     width: 95rem;
 
-    @include media($xxl) {
+    @include mixins.media(mixins.$xxl) {
       width: 72rem;
     }
-    @include media($xl) {
+    @include mixins.media(mixins.$xl) {
       width: 90vw;
     }
   }

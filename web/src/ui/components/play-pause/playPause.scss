@@ -1,4 +1,5 @@
-@import "../../shared/colors.scss";
+@use "sass:color";
+@use "../../shared/colors.scss";
 
 .play-pause {
   &__actions {
@@ -11,24 +12,24 @@
   &__action-reconcile {
     cursor: pointer;
     padding: 0.5rem;
-    border-right: solid 1px $font-grey;
+    border-right: solid 1px colors.$font-grey;
     width: 1rem;
     display: flex;
     justify-content: center;
     align-items: center;
     &-icon{
       &--reconciling {
-        color: $info;
+        color: colors.$info;
         animation: rotate-reverse 2s linear infinite;
       }
     }
 
     &:hover {
-      color: darken($font, 10%);
+      color: color.adjust(colors.$font, $lightness: -10%);
     }
 
     &:active {
-      color: darken($font, 20%);
+      color: color.adjust(colors.$font, $lightness: -20%);
     }
 
   
@@ -51,18 +52,18 @@
     align-items: center;
 
     &:hover {
-      color: darken($font, 10%);
+      color: color.adjust(colors.$font, $lightness: -10%);
     }
 
     &:active {
-      color: darken($font, 20%);
+      color: color.adjust(colors.$font, $lightness: -20%);
     }
 
     &--suspended {
-      color: $warning;
+      color: colors.$warning;
     }
     &--active {
-      color: $success;
+      color: colors.$success;
     }
   }
 }

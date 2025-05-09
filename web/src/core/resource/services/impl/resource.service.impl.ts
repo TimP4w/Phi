@@ -1,4 +1,4 @@
-import { injectable } from 'inversify/lib/annotation/injectable';
+import { injectable } from 'inversify';
 import { ResourceService } from '../resource.service';
 import { HttpService } from '../../../http/services/http.service';
 import { container } from '../../../shared/inversify.config';
