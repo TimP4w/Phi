@@ -87,7 +87,7 @@ const ConditionAlert: React.FC<ConditionAlertProps> = ({
     <Alert
       color={color}
       description={condition.message}
-      title={condition.reason}
+      title={condition.type}
     />
   );
 };
