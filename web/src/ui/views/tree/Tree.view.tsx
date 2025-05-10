@@ -29,12 +29,7 @@ import Pod from "../../components/object/Pod";
 import { Badge, Avatar, Spacer, useDisclosure, Chip } from "@heroui/react";
 import AppLogo from "../../components/app-logo/AppLogo";
 import ConditionAlert from "../../components/condition-alert/ConditionAlert";
-import ResourceDrawer from "../../components/object/ResourceDrawer";
-import { WebSocketService } from "../../../core/realtime/services/webSocket.service";
-import { TYPES } from "../../../core/shared/types";
-import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
-import { describeNodeUseCase } from "../../../core/resource/usecases/describeNode.usecase";
-import { watchLogsUseCase } from "../../../core/resource/usecases/watchLogs.usecase";
+import ResourceDrawer from "../../components/panel/ResourceDrawer";
 
 const TreeView: React.FC = observer(() => {
   const { nodeUid } = useParams();
@@ -43,35 +38,12 @@ const TreeView: React.FC = observer(() => {
     Node<VizualizationNodeData>
   >([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const realtimeService = useInjection<WebSocketService>(TYPES.WebSocket);
 
   const [selectedNode, setSelectedNode] = useState<TreeNode | undefined>(
     undefined
   );
-  const [selectedNodeDescribe, setSelectedNodeDescribe] = useState<string>("");
   const { fitView } = useReactFlow();
   const [shouldLayout, setShouldLayout] = useState(false);
-
-  useEffect(() => {
-    // TODO: Re-fetch / reassign the selected node, when the tree is updated
-    if (selectedNode && selectedNode.kind === RESOURCE_TYPE.POD) {
-      // TODO: setSelectedNode is only used for logs. Maybe do that in the watchLogsUseCase?
-      fluxTreeStore.setSelectedNode(selectedNode);
-      watchLogsUseCase.execute(selectedNode);
-    }
-
-    const fetchYAML = async () => {
-      if (!selectedNode) {
-        return;
-      }
-      const describe = await describeNodeUseCase.execute(selectedNode.uid);
-      setSelectedNodeDescribe(describe);
-    };
-
-    if (selectedNode) {
-      fetchYAML();
-    }
-  }, [selectedNode, fluxTreeStore, realtimeService]);
 
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
@@ -187,7 +159,6 @@ const TreeView: React.FC = observer(() => {
         node={selectedNode}
         onOpenChange={onOpenChange}
         isOpen={isOpen}
-        describe={selectedNodeDescribe}
       />
     </div>
   );

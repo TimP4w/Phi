@@ -21,33 +21,13 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
   public execute(message: Message): Promise<void> {
     switch (message.type) {
       case REALTIME_CONST.TREE:
-        console.log("Tree message received");
         this.handleTreeMessage(message.message);
         break;
       case REALTIME_CONST.LOG: // TODO: this should be a different usecase
-        {
-          const logMessage = message.message as LogMessageDto;
-          if (this.fluxTreeStore.selectedNode?.uid === logMessage.uid) {
-            this.fluxTreeStore.appendLog(new Log(logMessage.timestamp.toString(), logMessage.log, logMessage.container));
-          }
-
-          break;
-        }
+        this.handleLogMessage(message.message as LogMessageDto);
+        break;
       case REALTIME_CONST.EVENT: {  // TODO: this should be a different usecase
-        const event = message.message as EventDto;
-        if (event.type !== "Normal") {
-          let type: TypeOptions = "warning";
-          switch (event.type) {
-            case "Warning":
-              type = "warning";
-              break;
-            default:
-              type = "error";
-              break;
-          }
-          toast(`[${event.kind}] ${event.name} \n${event.reason} - ${event.message}`, { type: type, theme: "dark" });
-        }
-        this.eventsStore.addEvent(new KubeEvent(event));
+        this.handleEventMessage(message.message as EventDto);
         break;
       }
       default:
@@ -55,6 +35,28 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
     }
 
     return Promise.resolve();
+  }
+
+  private async handleLogMessage(logMessage: LogMessageDto): Promise<void> {
+    if (this.fluxTreeStore.selectedNode?.uid === logMessage.uid) {
+      this.fluxTreeStore.appendLog(new Log(logMessage.timestamp.toString(), logMessage.log, logMessage.container));
+    }
+  }
+
+  private async handleEventMessage(event: EventDto): Promise<void> {
+    if (event.type !== "Normal") {
+      let type: TypeOptions = "warning";
+      switch (event.type) {
+        case "Warning":
+          type = "warning";
+          break;
+        default:
+          type = "error";
+          break;
+      }
+      toast(`[${event.kind}] ${event.name} \n${event.reason} - ${event.message}`, { type: type, theme: "dark" });
+    }
+    this.eventsStore.addEvent(new KubeEvent(event));
   }
 
   private async handleTreeMessage(message: unknown): Promise<void> {

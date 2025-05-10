@@ -50,7 +50,7 @@ class FluxTreeStore {
       return;
     }
     const newNode = { ...this.selectedNode };
-    newNode.logs.push(log);
+    newNode.logs.unshift(log);
     this.selectedNode = newNode;
   }
 

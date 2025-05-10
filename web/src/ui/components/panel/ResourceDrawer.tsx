@@ -13,25 +13,53 @@ import {
 import { Link } from "react-router-dom";
 import { ResourceStatus, TreeNode } from "../../../core/fluxTree/models/tree";
 import AppLogo from "../app-logo/AppLogo";
-import { InfoTab } from "../panel/InfoTab";
-import { EventsTab } from "../panel/EventsTab";
-import { DescribeTab } from "../panel/DescribeTab";
+import { InfoTab } from "./InfoTab";
+import { EventsTab } from "./EventsTab";
+import { DescribeTab } from "./DescribeTab";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
-import { LogsTab } from "../panel/LogsTab";
+import { LogsTab } from "./LogsTab";
+import { useEffect, useState } from "react";
+import { useInjection } from "inversify-react";
+import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
+import { describeNodeUseCase } from "../../../core/resource/usecases/describeNode.usecase";
+import { watchLogsUseCase } from "../../../core/resource/usecases/watchLogs.usecase";
+import { WebSocketService } from "../../../core/realtime/services/webSocket.service";
+import { TYPES } from "../../../core/shared/types";
 
 type ResourceDrawerProps = {
   onOpenChange: () => void;
   isOpen: boolean;
   node?: TreeNode;
-  describe?: string;
 };
 
-function ResourceDrawer({
-  node,
-  onOpenChange,
-  isOpen,
-  describe,
-}: ResourceDrawerProps) {
+function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
+  const fluxTreeStore = useInjection(FluxTreeStore);
+  const realtimeService = useInjection<WebSocketService>(TYPES.WebSocket);
+  const [selectedNodeDescribe, setSelectedNodeDescribe] = useState<string>("");
+
+  useEffect(() => {
+    if (isOpen) {
+      // TODO: Re-fetch / reassign the selected node, when the tree is updated
+      if (node && node.kind === RESOURCE_TYPE.POD) {
+        // TODO: setSelectedNode is only used for logs. Maybe do that in the watchLogsUseCase?
+        fluxTreeStore.setSelectedNode(node);
+        watchLogsUseCase.execute(node);
+      }
+
+      const fetchYAML = async () => {
+        if (!node) {
+          return;
+        }
+        const describe = await describeNodeUseCase.execute(node.uid);
+        setSelectedNodeDescribe(describe);
+      };
+
+      if (node) {
+        fetchYAML();
+      }
+    }
+  }, [isOpen, fluxTreeStore, realtimeService, node]);
+
   const colorByStatus = (status: ResourceStatus) => {
     switch (status) {
       case ResourceStatus.SUCCESS:
@@ -93,7 +121,7 @@ function ResourceDrawer({
                 <Tab key="describe" title="Describe">
                   <Card radius="none">
                     <CardBody>
-                      <DescribeTab describe={describe} />
+                      <DescribeTab describe={selectedNodeDescribe} />
                     </CardBody>
                   </Card>
                 </Tab>
