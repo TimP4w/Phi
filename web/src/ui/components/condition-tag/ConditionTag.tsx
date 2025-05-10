@@ -59,6 +59,7 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
       return;
     }
 
+    // TODO: move to a separate const
     const failingReasons = [
       "BuildFailed",
       "Failed",
@@ -67,6 +68,7 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
       "HealthCheckFailed",
       "StateError",
       "UpgradeFailed",
+      "ReconciliationFailed",
     ];
 
     const warningReasons = [

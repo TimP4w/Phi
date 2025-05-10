@@ -40,6 +40,7 @@ const ConditionAlert: React.FC<ConditionAlertProps> = ({
       return;
     }
 
+    // TODO: move to a separate const
     const failingReasons = [
       "BuildFailed",
       "Failed",
@@ -48,6 +49,7 @@ const ConditionAlert: React.FC<ConditionAlertProps> = ({
       "HealthCheckFailed",
       "StateError",
       "UpgradeFailed",
+      "ReconciliationFailed",
     ];
 
     const warningReasons = [

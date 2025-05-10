@@ -123,8 +123,8 @@ export class TreeNode {
       this.createdAt = new Date(dto.createdAt);
       this.deletedAt = dto.deletedAt ? new Date(dto.deletedAt) : undefined;
       this.children = dto.children ? dto.children.map((child) => TreeNode.fromDto(child)) : [];
-      this.conditions = dto.conditions.map((condition) => new Condition(condition));
-      this.status = stringToResourceStatus(dto.status);
+      this.conditions = dto.conditions ? dto.conditions.map((condition) => new Condition(condition)) : [];
+      this.status = dto.status ? stringToResourceStatus(dto.status) : ResourceStatus.UNKNOWN;
       this.events = dto.events ? dto.events.map((event) => new KubeEvent(event)) : [];
       this.fluxMetadata = dto.fluxMetadata ? dto.fluxMetadata : undefined;
       this.isFluxManaged = dto.isFluxManaged;

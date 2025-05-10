@@ -1,5 +1,4 @@
 import { observer } from "mobx-react-lite";
-import "./panel.scss";
 import AnsiToHtml from "ansi-to-html";
 import { useInjection } from "inversify-react";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";

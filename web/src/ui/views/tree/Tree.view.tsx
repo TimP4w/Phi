@@ -63,7 +63,6 @@ const TreeView: React.FC = observer(() => {
       }
       const describe = await describeNodeUseCase.execute(selectedNode.uid);
       setSelectedNodeDescribe(describe);
-      console.log("Fetched YAML");
     };
 
     if (selectedNode) {
@@ -107,8 +106,8 @@ const TreeView: React.FC = observer(() => {
   };
 
   return (
-    <div className="h-screen">
-      <div className="flex p-4 h-auto items-center">
+    <div className="flex flex-col h-[calc(100vh-64px)]">
+      <div className="flex flex-wrap gap-4 p-4 h-auto items-center">
         <div className="flex gap-3">
           <Badge
             color={colorByStatus(node.status)}
@@ -136,7 +135,7 @@ const TreeView: React.FC = observer(() => {
           )}
         </div>
         <Spacer x={24} />
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           {node.conditions.map((condition, index) => (
             <div className="p-1">
               <ConditionAlert condition={condition} key={index.toString()} />

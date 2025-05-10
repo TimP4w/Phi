@@ -8,6 +8,7 @@ import {
   TableColumn,
   TableHeader,
   TableRow,
+  Tooltip,
 } from "@heroui/react";
 import { useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -57,10 +58,12 @@ const EventsTable: React.FC<EventsTableProps> = ({ events }) => {
                 <p className="text-sm">{event.name}</p>
               )}
               <p className="text-sm text-default-400">
-                {formatDistance(event.lastObserved, new Date(), {
-                  includeSeconds: true,
-                  addSuffix: true,
-                })}
+                <Tooltip content={event.lastObserved.toString()}>
+                  {formatDistance(event.lastObserved, new Date(), {
+                    includeSeconds: true,
+                    addSuffix: true,
+                  })}
+                </Tooltip>
               </p>
             </div>
           </div>

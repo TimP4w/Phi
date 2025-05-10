@@ -43,7 +43,7 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 
 	cancel, exists := uc.watchers[in.ClientID]
 	if exists {
-		log.Println(fmt.Sprintf("Client: %s was already subscribed to receive logs from a resource. Will cancel current subscription.", in.ClientID, in.ResourceID))
+		log.Println(fmt.Sprintf("Client: %s was already subscribed to receive logs from a resource (%s). Will cancel current subscription.", in.ClientID, in.ResourceID))
 		cancel()
 	}
 

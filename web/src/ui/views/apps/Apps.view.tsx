@@ -1,19 +1,20 @@
 import "reflect-metadata";
 
-import React, { ChangeEvent, useState } from "react";
+import React, { ChangeEvent } from "react";
 import "./apps.scss";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
 import { ResourceStatus, TreeNode } from "../../../core/fluxTree/models/tree";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
-import { Select, SelectItem } from "@heroui/react";
+import { Input, Select, SelectItem } from "@heroui/react";
 import App from "../../components/app/App";
 
 import FluxControllersCard from "../../components/status-cards/FluxControllersCard";
 import FluxApplicationsCard from "../../components/status-cards/FluxApplicationsCard";
 import FluxRepositoriesCard from "../../components/status-cards/FluxRepositoriesCard";
 import FluxKindsCard from "../../components/status-cards/FluxKindsCard";
+import { useSessionState } from "../../../core/utils/useSessionState";
 
 const kindsFilter = [
   {
@@ -86,38 +87,51 @@ const suspendedFilter = [
   },
 ];
 
+enum APP_FILTER {
+  KIND,
+  STATUS,
+  SUSPEND,
+}
+
 const AppsView: React.FC = observer(() => {
   const fluxTreeStore = useInjection(FluxTreeStore);
 
-  const [selectedKindsToFilter, setSelectedKindsToFilter] = useState<string[]>([
-    RESOURCE_TYPE.KUSTOMIZATION,
-    RESOURCE_TYPE.HELM_RELEASE,
-  ]);
-  const [selectedStatusesToFilter, setSelectedStatusesToFilter] = useState<
+  const [selectedKindsToFilter, setSelectedKindsToFilter] = useSessionState<
     string[]
-  >([]);
+  >("KindsFilter", []);
+  const [selectedStatusesToFilter, setSelectedStatusesToFilter] =
+    useSessionState<string[]>("StatusesFilter", []);
   const [selectedSuspendStatusesToFilter, setSelectedSuspendStatusesToFilter] =
-    useState<string[]>([]);
+    useSessionState<string[]>("SuspendFilter", []);
+  const [searchValue, setSearchValue] = useSessionState<string>(
+    "SearchValueFilter",
+    ""
+  );
 
-  const onKindFilterChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const selectedKinds = e.target.value
+  const onFilterChange = (
+    e: ChangeEvent<HTMLSelectElement>,
+    filter: APP_FILTER
+  ) => {
+    const selectedValues = e.target.value
       .split(",")
       .filter((val: string) => val !== "");
-    setSelectedKindsToFilter(selectedKinds);
+
+    switch (filter) {
+      case APP_FILTER.KIND:
+        setSelectedKindsToFilter(selectedValues);
+        break;
+      case APP_FILTER.STATUS:
+        setSelectedStatusesToFilter(selectedValues);
+        break;
+      case APP_FILTER.SUSPEND:
+        setSelectedSuspendStatusesToFilter(selectedValues);
+        break;
+    }
   };
 
-  const onStatusFilterChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const selectedStatuses = e.target.value
-      .split(",")
-      .filter((val: string) => val !== "");
-    setSelectedStatusesToFilter(selectedStatuses);
-  };
-
-  const onSuspendFilterChange = (e: ChangeEvent<HTMLSelectElement>) => {
-    const selectedSuspends = e.target.value
-      .split(",")
-      .filter((val: string) => val !== "");
-    setSelectedSuspendStatusesToFilter(selectedSuspends);
+  const onSearchChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchValue(value);
   };
 
   const filterFunction = (node: TreeNode) => {
@@ -139,28 +153,37 @@ const AppsView: React.FC = observer(() => {
       suspendFiltersFuncs,
     ];
 
-    return allFilters
-      .filter((filters) => filters.length > 0)
-      .map((filters) => filters.reduce((a, b) => (x) => a(x) || b(x)))
-      .reduce((a, b) => (x) => a(x) && b(x))(node);
+    const isMatchingSearchValue = node.name
+      .toLowerCase()
+      .includes(searchValue.toLowerCase());
+
+    return (
+      allFilters
+        .filter((filters) => filters.length > 0)
+        .map((filters) => filters.reduce((a, b) => (x) => a(x) || b(x)))
+        .reduce(
+          (a, b) => (x) => a(x) && b(x),
+          () => true
+        )(node) && isMatchingSearchValue
+    );
   };
 
   return (
     <div className="apps-view">
-      <div className="flex gap-8 p-8 dark">
+      <div className="flex flex-wrap gap-8 p-8">
         <FluxControllersCard />
         <FluxApplicationsCard />
         <FluxRepositoriesCard />
         <FluxKindsCard />
       </div>
-      <div className="flex gap-3 p-8 dark">
+      <div className="flex flex-wrap gap-3 p-8">
         <Select
           className="max-w-xs"
           label="Filter by kind"
           placeholder="Filter by kind"
           defaultSelectedKeys={selectedKindsToFilter}
           selectionMode="multiple"
-          onChange={onKindFilterChange}
+          onChange={(e) => onFilterChange(e, APP_FILTER.KIND)}
         >
           {kindsFilter.map((kind) => (
             <SelectItem key={kind.key}>{kind.label}</SelectItem>
@@ -171,7 +194,7 @@ const AppsView: React.FC = observer(() => {
           label="Filter by status"
           placeholder="Filter by status"
           selectionMode="multiple"
-          onChange={onStatusFilterChange}
+          onChange={(e) => onFilterChange(e, APP_FILTER.STATUS)}
         >
           {statusFilter.map((status) => (
             <SelectItem className="dark" key={status.key}>
@@ -184,7 +207,7 @@ const AppsView: React.FC = observer(() => {
           label="Filter by Suspended"
           placeholder="Filter by Suspended"
           selectionMode="multiple"
-          onChange={onSuspendFilterChange}
+          onChange={(e) => onFilterChange(e, APP_FILTER.SUSPEND)}
         >
           {suspendedFilter.map((suspended) => (
             <SelectItem className="dark" key={suspended.key}>
@@ -192,8 +215,17 @@ const AppsView: React.FC = observer(() => {
             </SelectItem>
           ))}
         </Select>
+        <Input
+          className="max-w-[520px]"
+          defaultValue={searchValue}
+          label="Filter by name"
+          placeholder="Enter a search value"
+          radius="md"
+          type="text"
+          onChange={onSearchChange}
+        />
       </div>
-      <div className="flex gap-8 flex-wrap px-8">
+      <div className="flex flex-wrap gap-8 px-8">
         {[...fluxTreeStore.applications, ...fluxTreeStore.repositories]
           .filter(filterFunction)
           .map((fluxResource) => (

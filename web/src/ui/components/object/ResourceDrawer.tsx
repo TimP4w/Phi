@@ -77,21 +77,21 @@ function ResourceDrawer({
             <DrawerBody>
               <Tabs aria-label="Options">
                 <Tab key="infos" title="Info">
-                  <Card>
+                  <Card shadow="none" radius="none">
                     <CardBody>
                       <InfoTab node={node} />
                     </CardBody>
                   </Card>
                 </Tab>
                 <Tab key="events" title="Events">
-                  <Card>
+                  <Card shadow="none" radius="none">
                     <CardBody>
                       <EventsTab node={node} />
                     </CardBody>
                   </Card>
                 </Tab>
                 <Tab key="describe" title="Describe">
-                  <Card>
+                  <Card radius="none">
                     <CardBody>
                       <DescribeTab describe={describe} />
                     </CardBody>
