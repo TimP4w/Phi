@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import "@xyflow/react/dist/style.css";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useState } from "react";
 import "./tree.scss";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
@@ -14,6 +14,7 @@ import {
   ReactFlow,
   useEdgesState,
   useNodesState,
+  useReactFlow,
 } from "@xyflow/react";
 import Resource from "../../components/object/Resource";
 import { layoutTreeUseCase } from "../../../core/fluxTree/usecases/LayoutTree.usecase";
@@ -48,6 +49,8 @@ const TreeView: React.FC = observer(() => {
     undefined
   );
   const [selectedNodeDescribe, setSelectedNodeDescribe] = useState<string>("");
+  const { fitView } = useReactFlow();
+  const [shouldLayout, setShouldLayout] = useState(false);
 
   useEffect(() => {
     // TODO: Re-fetch / reassign the selected node, when the tree is updated
@@ -88,9 +91,26 @@ const TreeView: React.FC = observer(() => {
       .then(({ nodes, edges }) => {
         setNodes(nodes);
         setEdges(edges);
+      })
+      .finally(() => {
+        setShouldLayout(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fluxTreeStore.tree, nodeUid, setEdges, setNodes]);
+  }, [shouldLayout]);
+
+  // Trigger tree layout
+  useEffect(() => {
+    setShouldLayout(true);
+  }, [fluxTreeStore.tree, node, fitView]);
+
+  // Reset tree when navigating to new node
+  useLayoutEffect(() => {
+    setNodes([]);
+    setEdges([]);
+    fitView();
+    setShouldLayout(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nodeUid]);
 
   const colorByStatus = (status: ResourceStatus) => {
     switch (status) {
@@ -154,6 +174,7 @@ const TreeView: React.FC = observer(() => {
         maxZoom={4}
         nodesDraggable={false}
         colorMode={"dark"}
+        // style={{ background: COLORS.BACKROUND }}
         onNodeClick={(_, node) => {
           setSelectedNode(node.data.treeNode);
           onOpen();
