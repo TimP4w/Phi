@@ -21,7 +21,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -30,7 +30,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 Original version: https://github.com/ahmetb/kubectl-tree/blob/8c32ac5fddbb59972a0d42e10f34500592fbacb5/cmd/kubectl-tree/apis.go
 */
-
 func (k *KubeServiceImpl) FindAllApis() (*kube.ResourceMap, error) {
 	start := time.Now()
 	resList, err := k.discoveryClient.ServerPreferredResources()
@@ -43,6 +42,8 @@ func (k *KubeServiceImpl) FindAllApis() (*kube.ResourceMap, error) {
 
 	rm := &kube.ResourceMap{}
 	var wg sync.WaitGroup
+	var mu sync.Mutex // Mutex to protect shared data
+
 	for _, group := range resList {
 		wg.Add(1)
 		go func(group *metav1.APIResourceList) {
@@ -67,14 +68,24 @@ func (k *KubeServiceImpl) FindAllApis() (*kube.ResourceMap, error) {
 					ShortNames:   apiRes.ShortNames,
 				}
 				names := k.getApiNamesByResource(apiRes, gv)
+
+				// Temporary slice to avoid modifying shared slices concurrently
+				var newList []kube.ApiResource
 				for _, name := range names {
+					mu.Lock()
 					rm.M.Store(name, append(rm.Lookup(name), api))
+					newList = append(newList, api)
+					mu.Unlock()
 				}
-				rm.List = append(rm.List, api)
+
+				mu.Lock()
+				rm.List = append(rm.List, newList...)
+				mu.Unlock()
 			}
 		}(group)
 	}
 	wg.Wait()
+
 	log.Printf("Found %d APIs", len(rm.List))
 	return rm, nil
 }
