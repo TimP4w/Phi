@@ -222,7 +222,7 @@ func (k *KubeServiceImpl) WatchResources(uniqueResources map[string]struct{}, ad
 func (k *KubeServiceImpl) GetEvents() ([]kube.Event, error) {
 	kubeEvents, err := k.clientSet.CoreV1().Events("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return nil, err
+		return []kubernetes.Event{}, err
 	}
 
 	var events []kube.Event = make([]kube.Event, 0)

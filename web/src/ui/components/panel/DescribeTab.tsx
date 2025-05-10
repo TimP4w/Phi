@@ -1,5 +1,4 @@
 import { atomOneDark, CodeBlock } from "react-code-blocks";
-import "./panel.scss";
 import * as jsyml from "js-yaml";
 import { useMemo } from "react";
 import { observer } from "mobx-react-lite";

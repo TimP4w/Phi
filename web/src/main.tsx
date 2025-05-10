@@ -40,7 +40,6 @@ import {
   faXmark,
   faEllipsisV,
 } from "@fortawesome/free-solid-svg-icons";
-import Footer from "./ui/components/layout/Footer";
 import { fetchEventsUseCase } from "./core/fluxTree/usecases/FetchEvents.usecase";
 import { HeroUIProvider } from "@heroui/react";
 
@@ -94,7 +93,6 @@ fetchTreeUseCase.execute().then(() => {
               <Header />
               <RouterProvider router={router} />
               <ToastContainer theme="dark" />
-              <Footer />
             </main>
           </ReactFlowProvider>
         </HeroUIProvider>

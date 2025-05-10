@@ -1,6 +1,7 @@
 package kubernetesusecases
 
 import (
+	"log"
 	"time"
 
 	"github.com/timp4w/phi/internal/core/kubernetes"
@@ -37,7 +38,7 @@ func (uc *WatchEventsUseCase) Execute(in struct{}) (struct{}, error) {
 func (uc *WatchEventsUseCase) onEvent(event *kubernetes.Event) {
 	resource := uc.kubeStore.GetResourceByUID(string(event.ResourceUID))
 	if resource == nil {
-		// log.Printf("Resource %s [%s] not found for Event", event.Name, event.Kind)
+		log.Printf("Resource %s [%s] not found for Event", event.Name, event.Kind)
 		return
 	}
 	resource.Events = append(resource.Events, *event)

@@ -7,7 +7,11 @@ export const router = createBrowserRouter([
   {
     id: "Applications",
     path: ROUTES.APPS,
-    element: <AppsView />,
+    element: (
+      <div className="flex flex-col h-[calc(100vh-64px)]">
+        <AppsView />
+      </div>
+    ),
   },
   {
     id: "Tree",

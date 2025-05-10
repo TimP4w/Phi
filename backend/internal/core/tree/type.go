@@ -3,15 +3,15 @@ package tree
 import (
 	"sync"
 
-	types "github.com/timp4w/phi/internal/core/kubernetes"
+	kube "github.com/timp4w/phi/internal/core/kubernetes"
 )
 
 type Tree struct {
 	mu   sync.RWMutex
-	Root types.Resource `json:"root"`
+	Root kube.Resource `json:"root"`
 }
 
-func NewTree(rootNode types.Resource) *Tree {
+func NewTree(rootNode kube.Resource) *Tree {
 	return &Tree{
 		Root: rootNode,
 		mu:   sync.RWMutex{},
