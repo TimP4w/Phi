@@ -21,6 +21,11 @@ func NewTreeController(getTreeUseCase shared.UseCase[struct{}, *kube.Resource]) 
 	return &controller
 }
 
+// GetTree godoc
+// @Summary Get tree
+// @Produce json
+// @Success 200 {object} kube.Resource
+// @Router /api/tree [get]
 func (tc *TreeController) GetTree(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")

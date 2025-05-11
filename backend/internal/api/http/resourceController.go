@@ -33,16 +33,22 @@ func NewResourceController(
 		getEventsUseCase:       getEventsUseCase,
 	}
 
-	http.HandleFunc("/api/resource/{id}/describe", corsHandler(controller.HandleDescribe))
-	http.HandleFunc("/api/resource/{id}/reconcile", corsHandler(controller.HandleReconcile))
-	http.HandleFunc("/api/resource/{id}/suspend", corsHandler(controller.HandleSuspend))
-	http.HandleFunc("/api/resource/{id}/resume", corsHandler(controller.HandleResume))
-	http.HandleFunc("/api/events", corsHandler(controller.HandleEvents))
+	http.HandleFunc("/api/resource/{id}/describe", corsHandler(controller.GetDescribe))
+	http.HandleFunc("/api/resource/{id}/reconcile", corsHandler(controller.PatchReconcile))
+	http.HandleFunc("/api/resource/{id}/suspend", corsHandler(controller.PatchSuspend))
+	http.HandleFunc("/api/resource/{id}/resume", corsHandler(controller.PatchResume))
+	http.HandleFunc("/api/events", corsHandler(controller.GetEvents))
 
 	return &controller
 }
 
-func (rc *ResourceController) HandleDescribe(w http.ResponseWriter, r *http.Request) {
+// DescribeResource godoc
+// @Summary Get describe YAML of a resource
+// @Produce plain
+// @Param id path string true "UUID"
+// @Success 200 {object} string
+// @Router /api/resource/{id}/describe [get]
+func (rc *ResourceController) GetDescribe(w http.ResponseWriter, r *http.Request) {
 	resourceUid := r.PathValue("id")
 	if resourceUid == "" {
 		http.Error(w, "Pod uid is required", http.StatusBadRequest)
@@ -50,6 +56,7 @@ func (rc *ResourceController) HandleDescribe(w http.ResponseWriter, r *http.Requ
 	}
 	yamlData, err := rc.getResourceYAMLUseCase.Execute(resourceUid)
 	if err != nil {
+		// TODO: handle resource not found (404)
 		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -59,7 +66,13 @@ func (rc *ResourceController) HandleDescribe(w http.ResponseWriter, r *http.Requ
 	w.Write(yamlData)
 }
 
-func (rc *ResourceController) HandleReconcile(w http.ResponseWriter, r *http.Request) {
+// ReconcileResource godoc
+// @Summary Start the reconciliation of a resource that supports it
+// @Produce json
+// @Param id path string true "UUID"
+// @Success 200 {object} string
+// @Router /api/resource/{id}/reconcile [patch]
+func (rc *ResourceController) PatchReconcile(w http.ResponseWriter, r *http.Request) {
 	resourceUid := r.PathValue("id")
 	if resourceUid == "" {
 		http.Error(w, "UID is required", http.StatusBadRequest)
@@ -68,6 +81,7 @@ func (rc *ResourceController) HandleReconcile(w http.ResponseWriter, r *http.Req
 
 	_, err := rc.reconcileUseCase.Execute(resourceUid)
 	if err != nil {
+		// TODO: handle resource not found (404)
 		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -77,7 +91,13 @@ func (rc *ResourceController) HandleReconcile(w http.ResponseWriter, r *http.Req
 
 }
 
-func (rc *ResourceController) HandleSuspend(w http.ResponseWriter, r *http.Request) {
+// RSuspendResource godoc
+// @Summary Suspend the reconciliation of a resource that supports it
+// @Produce json
+// @Param id path string true "UUID"
+// @Success 200 {object} string
+// @Router /api/resource/{id}/suspend [patch]
+func (rc *ResourceController) PatchSuspend(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -91,6 +111,7 @@ func (rc *ResourceController) HandleSuspend(w http.ResponseWriter, r *http.Reque
 
 	_, err := rc.suspendUseCase.Execute(kubernetesusecases.SuspendUseCaseInput{UID: resourceUid})
 	if err != nil {
+		// TODO: handle resource not found (404)
 		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -100,7 +121,13 @@ func (rc *ResourceController) HandleSuspend(w http.ResponseWriter, r *http.Reque
 	w.Write([]byte(`{"status": "success"}`))
 }
 
-func (rc *ResourceController) HandleResume(w http.ResponseWriter, r *http.Request) {
+// ResumeResource godoc
+// @Summary Resume the reconciliation of a resource that supports it
+// @Produce json
+// @Param id path string true "UUID"
+// @Success 200 {object} string
+// @Router /api/resource/{id}/resume [patch]
+func (rc *ResourceController) PatchResume(w http.ResponseWriter, r *http.Request) {
 	resourceUid := r.PathValue("id")
 
 	if resourceUid == "" {
@@ -110,6 +137,7 @@ func (rc *ResourceController) HandleResume(w http.ResponseWriter, r *http.Reques
 
 	_, err := rc.resumeUseCase.Execute(kubernetesusecases.ResumeUseCaseInput{UID: resourceUid})
 	if err != nil {
+		// TODO: handle resource not found (404)
 		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -118,8 +146,12 @@ func (rc *ResourceController) HandleResume(w http.ResponseWriter, r *http.Reques
 	w.Write([]byte(`{"status": "success"}`))
 }
 
-func (rc *ResourceController) HandleEvents(w http.ResponseWriter, r *http.Request) {
-
+// GetEvents godoc
+// @Summary Get events
+// @Produce json
+// @Success 200 {object} []kube.Event
+// @Router /api/events [get]
+func (rc *ResourceController) GetEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := rc.getEventsUseCase.Execute(struct{}{})
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error getting events: %v", err), http.StatusInternalServerError)

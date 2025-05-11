@@ -1,0 +1,330 @@
+basePath: /
+definitions:
+  kubernetes.Condition:
+    properties:
+      lastTransitionTime:
+        type: string
+      message:
+        type: string
+      reason:
+        type: string
+      status:
+        type: string
+      type:
+        type: string
+    type: object
+  kubernetes.DeploymentMetadata:
+    properties:
+      availableReplicas:
+        type: integer
+      readyReplicas:
+        type: integer
+      replicas:
+        type: integer
+      updatedReplicas:
+        type: integer
+    type: object
+  kubernetes.Event:
+    properties:
+      count:
+        type: integer
+      firstObserved:
+        type: string
+      kind:
+        type: string
+      lastObserved:
+        type: string
+      message:
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+      reason:
+        type: string
+      resourceUID:
+        type: string
+      source:
+        type: string
+      type:
+        type: string
+      uid:
+        type: string
+    type: object
+  kubernetes.FluxMetadata:
+    properties:
+      isReconciling:
+        type: boolean
+      isSuspended:
+        type: boolean
+      lastHandledReconcileAt:
+        type: string
+    type: object
+  kubernetes.GitRepositoryMetadata:
+    properties:
+      branch:
+        type: string
+      commit:
+        type: string
+      name:
+        type: string
+      semver:
+        type: string
+      tag:
+        type: string
+      url:
+        type: string
+    type: object
+  kubernetes.HelmReleaseMetadata:
+    properties:
+      chartName:
+        type: string
+      chartVersion:
+        type: string
+      isReconciling:
+        type: boolean
+      isSuspended:
+        type: boolean
+      sourceRef:
+        $ref: '#/definitions/kubernetes.SourceRef'
+    type: object
+  kubernetes.KustomizationMetadata:
+    properties:
+      isReconciling:
+        type: boolean
+      isSuspended:
+        type: boolean
+      lastAppliedRevision:
+        type: string
+      lastAttemptedRevision:
+        type: string
+      lastHandledReconcileAt:
+        type: string
+      path:
+        type: string
+      sourceRef:
+        $ref: '#/definitions/kubernetes.SourceRef'
+    type: object
+  kubernetes.OCIRepositoryMetadata:
+    properties:
+      digest:
+        type: string
+      semver:
+        type: string
+      semverFilter:
+        type: string
+      tag:
+        type: string
+      url:
+        type: string
+    type: object
+  kubernetes.PVCMetadata:
+    properties:
+      accessModes:
+        items:
+          type: string
+        type: array
+      capacity:
+        additionalProperties:
+          type: string
+        type: object
+      phase:
+        type: string
+      storageClass:
+        type: string
+      volumeMode:
+        type: string
+      volumeName:
+        type: string
+    type: object
+  kubernetes.PodMetadata:
+    properties:
+      image:
+        type: string
+      phase:
+        type: string
+    type: object
+  kubernetes.Resource:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/kubernetes.Resource'
+        type: array
+      conditions:
+        items:
+          $ref: '#/definitions/kubernetes.Condition'
+        type: array
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      deploymentMetadata:
+        $ref: '#/definitions/kubernetes.DeploymentMetadata'
+      events:
+        items:
+          $ref: '#/definitions/kubernetes.Event'
+        type: array
+      fluxMetadata:
+        $ref: '#/definitions/kubernetes.FluxMetadata'
+      gitRepositoryMetadata:
+        $ref: '#/definitions/kubernetes.GitRepositoryMetadata'
+      group:
+        type: string
+      helmReleaseMetadata:
+        $ref: '#/definitions/kubernetes.HelmReleaseMetadata'
+      isFluxManaged:
+        type: boolean
+      kind:
+        type: string
+      kustomizationMetadata:
+        $ref: '#/definitions/kubernetes.KustomizationMetadata'
+      labels:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        type: string
+      namespace:
+        type: string
+      ociRepositoryMetadata:
+        $ref: '#/definitions/kubernetes.OCIRepositoryMetadata'
+      parentIDs:
+        items:
+          type: string
+        type: array
+      parentRefs:
+        items:
+          type: string
+        type: array
+      podMetadata:
+        $ref: '#/definitions/kubernetes.PodMetadata'
+      pvcMetadata:
+        $ref: '#/definitions/kubernetes.PVCMetadata'
+      resource:
+        type: string
+      status:
+        $ref: '#/definitions/kubernetes.Status'
+      uid:
+        type: string
+      version:
+        type: string
+    type: object
+  kubernetes.SourceRef:
+    properties:
+      kind:
+        type: string
+      name:
+        type: string
+      namespace:
+        type: string
+    type: object
+  kubernetes.Status:
+    enum:
+    - unknown
+    - success
+    - failed
+    - pending
+    - warning
+    type: string
+    x-enum-varnames:
+    - StatusUnknown
+    - StatusSuccess
+    - StatusFailed
+    - StatusPending
+    - StatusWarning
+host: localhost:8080
+info:
+  contact: {}
+  description: API for managing Kubernetes resources
+  title: Phi API
+  version: "1.0"
+paths:
+  /api/events:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/kubernetes.Event'
+            type: array
+      summary: Get events
+  /api/resource/{id}/describe:
+    get:
+      parameters:
+      - description: UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Get describe YAML of a resource
+  /api/resource/{id}/reconcile:
+    patch:
+      parameters:
+      - description: UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Start the reconciliation of a resource that supports it
+  /api/resource/{id}/resume:
+    patch:
+      parameters:
+      - description: UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Resume the reconciliation of a resource that supports it
+  /api/resource/{id}/suspend:
+    patch:
+      parameters:
+      - description: UUID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Suspend the reconciliation of a resource that supports it
+  /api/tree:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/kubernetes.Resource'
+      summary: Get tree
+schemes:
+- http
+swagger: "2.0"

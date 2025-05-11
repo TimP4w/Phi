@@ -1,3 +1,9 @@
+// @title Phi API
+// @version 1.0
+// @description API for managing Kubernetes resources
+// @BasePath /
+// @schemes http
+// @host localhost:8080
 package main
 
 import (
@@ -6,8 +12,11 @@ import (
 	"net/http"
 	"path/filepath"
 
+	httpSwagger "github.com/swaggo/http-swagger"
+
 	// _ "github.com/mkevac/debugcharts"
 
+	_ "github.com/timp4w/phi/docs"
 	controllers "github.com/timp4w/phi/internal/api/http"
 	wscontrollers "github.com/timp4w/phi/internal/api/ws"
 	kubernetesusecases "github.com/timp4w/phi/internal/core/kubernetes/usecases"
@@ -55,6 +64,7 @@ func main() {
 		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFile(w, r, filepath.Join(*frontendDir, "index.html"))
 		})
+		http.Handle("/swagger/", httpSwagger.WrapHandler)
 
 		log.Println("Starting server on :8080")
 
