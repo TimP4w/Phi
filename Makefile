@@ -45,5 +45,7 @@ clean: clean-be clean-fe
 
 build: deps-be build-be deps-fe build-fe
 
+test: test-be
 
-.PHONY: build-be clean-be test-be deps-be deps-fe build-fe clean-fe build clean
+
+.PHONY: build-be clean-be test-be deps-be deps-fe build-fe clean-fe build clean test

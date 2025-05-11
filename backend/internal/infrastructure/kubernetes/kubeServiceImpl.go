@@ -74,17 +74,17 @@ func NewKubeServiceImpl() kube.KubeService {
 
 	dynamicClient, err := dynamic.NewForConfig(restConfig)
 	if err != nil {
-		log.Fatalf("failed to construct dynamic client: %w", err)
+		log.Fatal("failed to construct dynamic client:", err)
 	}
 
 	discoveryClient, err := cf.ToDiscoveryClient()
 	if err != nil {
-		log.Fatalf("failed to construct discovery client: %w", err)
+		log.Fatal("failed to construct discovery client:", err)
 	}
 
 	clientSet, err := clientset.NewForConfig(restConfig)
 	if err != nil {
-		log.Fatalf("failed to construct clientset: %w", err)
+		log.Fatal("failed to construct clientset:", err)
 	}
 
 	service := &KubeServiceImpl{

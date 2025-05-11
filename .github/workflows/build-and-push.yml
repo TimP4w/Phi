@@ -48,6 +48,10 @@ jobs:
         run: |
           make build VER=${{ env.new_version }}
 
+      - name: Test all
+        run: |
+          make test
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
