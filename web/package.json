@@ -5,9 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "yarn set-version && tsc -b && vite build",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "set-version": "echo VITE_VERSION=$(git tag --list 'v*' | sort -V | tail -n 1) > .env",
     "preview": "vite preview"
   },
   "dependencies": {

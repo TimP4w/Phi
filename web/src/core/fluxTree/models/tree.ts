@@ -175,9 +175,9 @@ export class TreeNode {
     }
   }
 
-
 };
 
+// TODO: don't map into metadata, but as object property directly (TBD)
 export class HelmReleaseNode extends TreeNode {
   metadata: HelmReleaseMetadata | null;
   isReconcillable: boolean = true;

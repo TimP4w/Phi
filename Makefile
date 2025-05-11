@@ -10,6 +10,7 @@ BACKEND_DIR=backend
 FRONTEND_DIR=web
 CMD_DIR=$(BACKEND_DIR)/cmd/phi
 DIST_DIR=dist
+VER=local
 
 build-be:
 	mkdir -p $(DIST_DIR)
@@ -30,6 +31,7 @@ deps-fe:
 	cd $(FRONTEND_DIR) && yarn
 
 build-fe:
+	cd $(FRONTEND_DIR) && echo "VITE_VERSION=$(VER)" > .env
 	cd $(FRONTEND_DIR) && yarn build
 	mkdir -p $(DIST_DIR)/web
 	cp -r $(FRONTEND_DIR)/dist/* $(DIST_DIR)/web
