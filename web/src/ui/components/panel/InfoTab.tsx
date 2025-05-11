@@ -139,6 +139,10 @@ export const InfoTab = ({ node }: InfoTab) => {
         </TableHeader>
         <TableBody>
           <TableRow>
+            <TableCell>UID</TableCell>
+            <TableCell>{node.uid}</TableCell>
+          </TableRow>
+          <TableRow>
             <TableCell>Name</TableCell>
             <TableCell>{node.name}</TableCell>
           </TableRow>
@@ -163,8 +167,28 @@ export const InfoTab = ({ node }: InfoTab) => {
             <TableCell>{node.version}</TableCell>
           </TableRow>
           <TableRow>
-            <TableCell>UID</TableCell>
-            <TableCell>{node.uid}</TableCell>
+            <TableCell>Annotations</TableCell>
+            <TableCell className="flex flex-wrap gap-1">
+              {node.annotations
+                ? Array.from(node.annotations).map(([key, value]) => (
+                    <Chip key={key}>
+                      {key}={value}
+                    </Chip>
+                  ))
+                : ""}
+            </TableCell>
+          </TableRow>
+          <TableRow>
+            <TableCell>Labels</TableCell>
+            <TableCell className="flex flex-wrap gap-1">
+              {node.labels
+                ? Array.from(node.labels).map(([key, value]) => (
+                    <Chip key={key}>
+                      {key}={value}
+                    </Chip>
+                  ))
+                : ""}
+            </TableCell>
           </TableRow>
           <TableRow>
             <TableCell>Is FluxCD Managed</TableCell>

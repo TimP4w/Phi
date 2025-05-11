@@ -36,20 +36,21 @@ func GetRefVersion(version string) string {
 
 func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource string) kube.Resource {
 	el := kube.Resource{
-		Kind:       obj.GetKind(),
-		Version:    obj.GetAPIVersion(),
-		Namespace:  obj.GetNamespace(),
-		Name:       obj.GetName(),
-		Resource:   resource,
-		UID:        string(obj.GetUID()),
-		Labels:     obj.GetLabels(),
-		Group:      obj.GetObjectKind().GroupVersionKind().Group,
-		Status:     kube.StatusUnknown,
-		Conditions: []kube.Condition{},
-		Events:     []kube.Event{},
-		Children:   []kube.Resource{},
-		CreatedAt:  obj.GetCreationTimestamp().Time,
-		ParentRefs: []string{},
+		Kind:        obj.GetKind(),
+		Version:     obj.GetAPIVersion(),
+		Namespace:   obj.GetNamespace(),
+		Name:        obj.GetName(),
+		Resource:    resource,
+		UID:         string(obj.GetUID()),
+		Labels:      obj.GetLabels(),
+		Annotations: obj.GetAnnotations(),
+		Group:       obj.GetObjectKind().GroupVersionKind().Group,
+		Status:      kube.StatusUnknown,
+		Conditions:  []kube.Condition{},
+		Events:      []kube.Event{},
+		Children:    []kube.Resource{},
+		CreatedAt:   obj.GetCreationTimestamp().Time,
+		ParentRefs:  []string{},
 	}
 
 	if obj.GetDeletionTimestamp() != nil {
@@ -67,25 +68,25 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 
 	switch el.Kind {
 	case "Pod":
-		getPodData(&el, obj)
+		mapPodData(&el, obj)
 	case "Deployment":
-		getDeploymentData(&el, obj)
+		mapDeploymentData(&el, obj)
 	case "Kustomization":
-		getKustomizationData(&el, obj)
+		mapKustomizationData(&el, obj)
 	case "HelmRelease":
-		getHelmReleaseData(&el, obj)
+		mapHelmReleaseData(&el, obj)
 	case "GitRepository":
-		getGitRepositoryData(&el, obj)
+		mapGitRepositoryData(&el, obj)
 	case "HelmChart":
-		getHelmChartData(&el, obj)
+		mapHelmChartData(&el, obj)
 	case "HelmRepository":
-		getHelmRepositoryData(&el, obj)
+		mapHelmRepositoryData(&el, obj)
 	case "OCIRepository":
-		getOciRepositoryData(&el, obj)
+		mapOciRepositoryData(&el, obj)
 	case "PersistentVolumeClaim":
-		getPVCData(&el, obj)
+		mapPVCData(&el, obj)
 	case "PersistentVolume":
-		getPVData(&el, obj)
+		mapPVData(&el, obj)
 	// case "Bucket":
 	default:
 		// do nothing
@@ -147,7 +148,7 @@ func mapFluxMetadata(el *kube.Resource, annotations map[string]string, lastRecon
 	}
 }
 
-func getHelmChartData(el *kube.Resource, obj unstructured.Unstructured) {
+func mapHelmChartData(el *kube.Resource, obj unstructured.Unstructured) {
 	helmChart := &sourcev1.HelmChart{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), helmChart)
 	if err != nil {
@@ -159,7 +160,7 @@ func getHelmChartData(el *kube.Resource, obj unstructured.Unstructured) {
 	mapFluxMetadata(el, helmChart.GetAnnotations(), helmChart.Status.LastHandledReconcileAt, helmChart.Spec.Suspend)
 }
 
-func getGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
+func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	gitRepository := &sourcev1.GitRepository{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), gitRepository)
 	if err != nil {
@@ -181,7 +182,7 @@ func getGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 
 }
 
-func getOciRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
+func mapOciRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	ociRepository := &sourcev1beta2.OCIRepository{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), ociRepository)
 	if err != nil {
@@ -202,7 +203,7 @@ func getOciRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 
 }
 
-func getHelmRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
+func mapHelmRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	helmRepository := &sourcev1.HelmRepository{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), helmRepository)
 	if err != nil {
@@ -213,7 +214,7 @@ func getHelmRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	mapFluxMetadata(el, helmRepository.GetAnnotations(), helmRepository.Status.LastHandledReconcileAt, helmRepository.Spec.Suspend)
 }
 
-func getPodData(el *kube.Resource, obj unstructured.Unstructured) {
+func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 	pod := &v1.Pod{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), pod)
 	if err != nil {
@@ -248,7 +249,7 @@ func getPodData(el *kube.Resource, obj unstructured.Unstructured) {
 
 }
 
-func getPVCData(el *kube.Resource, obj unstructured.Unstructured) {
+func mapPVCData(el *kube.Resource, obj unstructured.Unstructured) {
 	pvc := &v1.PersistentVolumeClaim{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), pvc)
 	if err != nil {
@@ -283,7 +284,7 @@ func getPVCData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 }
 
-func getPVData(el *kube.Resource, obj unstructured.Unstructured) {
+func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 	pv := &v1.PersistentVolume{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), pv)
 	if err != nil {
@@ -294,7 +295,7 @@ func getPVData(el *kube.Resource, obj unstructured.Unstructured) {
 	el.ParentRefs = append(el.ParentRefs, pv.Spec.ClaimRef.Name+"_"+pv.Spec.ClaimRef.Namespace+"_"+pv.Spec.ClaimRef.Kind+"_"+GetRefVersion(pv.Spec.ClaimRef.APIVersion))
 }
 
-func getDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
+func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 	deployment := &appsV1.Deployment{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), deployment)
 	if err != nil {
@@ -334,7 +335,7 @@ func getDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 
 }
 
-func getKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
+func mapKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
 	// Convert the unstructured object to a Kustomization object
 	kustomization := &kustomizev1.Kustomization{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), kustomization)
@@ -379,7 +380,7 @@ func getKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
 
 }
 
-func getHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
+func mapHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 	helmRelease := &helmv2.HelmRelease{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), helmRelease)
 	if err != nil {

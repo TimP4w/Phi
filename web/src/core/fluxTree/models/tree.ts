@@ -99,6 +99,8 @@ export class TreeNode {
   createdAt: Date;
   deletedAt?: Date;
   children: TreeNode[] = [];
+  annotations: Map<string, string>;
+  labels: Map<string, string>;
   parentId: string | null;
   status: ResourceStatus;
   conditions: Condition[] = [];
@@ -123,11 +125,14 @@ export class TreeNode {
       this.createdAt = new Date(dto.createdAt);
       this.deletedAt = dto.deletedAt ? new Date(dto.deletedAt) : undefined;
       this.children = dto.children ? dto.children.map((child) => TreeNode.fromDto(child)) : [];
+      this.annotations = dto.annotations ? new Map(Object.entries(dto.annotations)) : new Map();
+      this.labels = dto.labels ? new Map(Object.entries(dto.labels)) : new Map();
       this.conditions = dto.conditions ? dto.conditions.map((condition) => new Condition(condition)) : [];
       this.status = dto.status ? stringToResourceStatus(dto.status) : ResourceStatus.UNKNOWN;
       this.events = dto.events ? dto.events.map((event) => new KubeEvent(event)) : [];
       this.fluxMetadata = dto.fluxMetadata ? dto.fluxMetadata : undefined;
       this.isFluxManaged = dto.isFluxManaged;
+      console.log(dto.annotations);
     } else {
       this.uid = "";
       this.name = "";
@@ -136,6 +141,8 @@ export class TreeNode {
       this.namespace = "";
       this.resource = "";
       this.group = "";
+      this.labels = new Map<string, string>();
+      this.annotations = new Map<string, string>();
       this.parentId = null;
       this.createdAt = new Date();
       this.status = ResourceStatus.UNKNOWN;

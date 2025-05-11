@@ -18,6 +18,7 @@ type Resource struct {
 	ParentRefs            []string              `json:"parentRefs"`
 	UID                   string                `json:"uid"`
 	Labels                map[string]string     `json:"labels"`
+	Annotations           map[string]string     `json:"annotations"`
 	Group                 string                `json:"group"`
 	Status                Status                `json:"status"`
 	Conditions            []Condition           `json:"conditions"`
@@ -46,6 +47,7 @@ func (e *Resource) Copy(other Resource) {
 	e.ParentRefs = other.ParentRefs
 	e.UID = other.UID
 	e.Labels = other.Labels
+	e.Annotations = other.Annotations
 	e.Group = other.Group
 	e.Status = other.Status
 	e.Conditions = other.Conditions
@@ -76,6 +78,7 @@ func (e *Resource) GetRefVersion() string {
 	return e.Version
 }
 
+// TODO: rename to IsDeepEqual
 func (e *Resource) DeepEqual(other Resource) bool {
 	return false
 	//TODO: extend this...
