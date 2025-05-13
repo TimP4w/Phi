@@ -1,15 +1,12 @@
 # Φ Phi
 
-A dashboard for FluxCD _heavily_ inspired by [ArgoCD](https://argoproj.github.io/cd/).
+A dashboard / control plane for FluxCD _heavily_ inspired by [ArgoCD](https://argoproj.github.io/cd/)'s own dashboard.
 
 This project began as a hands-on experiment with Go and over time, it transformed to this dashboard after some head bashing with flux and my homelab cluster.
 
-This works for my cluster and my setup, however it may struggle with other configurations and versions...
-
 __THIS IS NOT PRODUCTION READY__
 
-If you want to try it out beware: many bugs are to be expected.
-Code is not optimized, nor fully tested.
+I work on it when I have time and feel like it, focusing on what I need, so expect a many bugs, poorly tested, "works on my setup" type of thing (for now?).
 
 ![img](./docs/dashboard.png)
 
@@ -29,8 +26,8 @@ Code is not optimized, nor fully tested.
 # Backlog (for v1)
 
 - [ ] Ability to filter events (regression)
-- [ ] Search bars (regression)
-- [ ] Persist selections in session storage
+- [X] Search bars (regression)
+- [X] Persist selections in session storage
 - [ ] Add symbol in the UI to show resources about to be deleted and finalizers
 - [ ] Handle more information which are resource specific (e.g. used space of a volume, TBD)
 - [ ] Allow for some resource specific actions (e.g. delete a pod, TBD)

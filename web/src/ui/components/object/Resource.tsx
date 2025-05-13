@@ -48,8 +48,13 @@ function Resource({ data }: ResourceProps) {
                   icon={<AppLogo kind={treeNode.kind} />}
                 />
                 <div className="flex flex-col">
-                  <Link key={treeNode.uid} to={`/tree/${treeNode.uid}`}>
-                    <p className="text-md underline text-ellipsis truncate max-w-[120px]">
+                  <Link
+                    key={treeNode.uid}
+                    to={`/tree/${treeNode.uid}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="hover:text-gray-300 hover:scale-105 hover:underline transition-transform duration-150"
+                  >
+                    <p className="text-md text-ellipsis truncate max-w-[120px]">
                       {treeNode.name}
                     </p>
                   </Link>
@@ -84,37 +89,3 @@ function Resource({ data }: ResourceProps) {
 }
 
 export default Resource;
-
-/*
-    <div className="resource">
-      <div className="resource__kind-tag">
-        <Tag>{treeNode.kind}</Tag>
-      </div>
-      <Handle type="target" position={Position.Left} />
-      <div className="resource__content">
-        <div>
-          <div className="resource__label-container">
-            <span className="resource__name">{treeNode.name}</span>
-            <span className="resource__namespace">{treeNode.namespace}</span>
-          </div>
-        </div>
-        <div className="resource__status-container">
-          {treeNode.status !== ResourceStatus.UNKNOWN && (
-            <>
-              <StatusCircle status={treeNode.status} />
-            </>
-          )}
-          {treeNode.isFluxManaged && (
-            <>
-              <div />
-              <div className="resource__flux-managed-tag">
-                <Tooltip message="Managed By Flux" />
-                <FluxLogo width={50} height={30} />
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-    </div>
-    */

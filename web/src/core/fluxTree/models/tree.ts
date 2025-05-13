@@ -132,7 +132,6 @@ export class TreeNode {
       this.events = dto.events ? dto.events.map((event) => new KubeEvent(event)) : [];
       this.fluxMetadata = dto.fluxMetadata ? dto.fluxMetadata : undefined;
       this.isFluxManaged = dto.isFluxManaged;
-      console.log(dto.annotations);
     } else {
       this.uid = "";
       this.name = "";
