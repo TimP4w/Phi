@@ -14,6 +14,15 @@ export default {
   plugins: [
     heroui({
       defaultTheme: "dark",
+      themes: {
+        dark: {
+          colors: {
+            white: "#ECEDEE",
+            foreground: "#ECEDEE", // This is also font color
+            background: "#080808",
+          },
+        },
+      },
     }),
   ],
 };

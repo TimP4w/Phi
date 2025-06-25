@@ -9,28 +9,33 @@ import {
   DrawerBody,
   DrawerFooter,
   useDisclosure,
-  Badge,
   Button,
+  Tabs,
+  Tab,
 } from "@heroui/react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { Bell } from "lucide-react";
+import { FLUX_CONTROLLER } from "../../../core/fluxTree/constants/resources.const";
+import { isEnumValue } from "../../../core/shared/enum.utils";
 
 export const EventsPanel = observer(() => {
   const eventsStore = useInjection(EventsStore);
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
+  const isFluxEvent = (eventSource: string): boolean => {
+    return isEnumValue(FLUX_CONTROLLER, eventSource);
+  };
+
   return (
-    <>
-      <Badge
-        shape="circle"
-        isInvisible={!eventsStore.hasNewEvents}
+    <div>
+      <Button
+        variant="flat"
+        size="sm"
+        onPress={onOpen}
         color={eventsStore.hasNewWarnings ? "warning" : "default"}
-        content=""
-        className="border-transparent"
       >
-        <Button isIconOnly radius="full" variant="light">
-          <FontAwesomeIcon icon="bell" size="2x" onClick={onOpen} />
-        </Button>
-      </Badge>
+        <Bell className="h-4 w-4 mr-1" />
+        Events
+      </Button>
       <Drawer
         isOpen={isOpen}
         size={"5xl"}
@@ -44,34 +49,27 @@ export const EventsPanel = observer(() => {
           <>
             <DrawerHeader className="flex flex-col gap-1">Events</DrawerHeader>
             <DrawerBody>
-              <EventsTable events={eventsStore.events} />
+              <Tabs>
+                <Tab key="fluxevents" title="Flux Events">
+                  <EventsTable
+                    events={eventsStore.events.filter((event) =>
+                      isFluxEvent(event.source)
+                    )}
+                  />
+                </Tab>
+                <Tab key="clusterevents" title="Cluster Events">
+                  <EventsTable
+                    events={eventsStore.events.filter(
+                      (event) => !isFluxEvent(event.source)
+                    )}
+                  />
+                </Tab>
+              </Tabs>
             </DrawerBody>
             <DrawerFooter></DrawerFooter>
           </>
         </DrawerContent>
       </Drawer>
-    </>
-  );
-  /*
-  return (
-    <div
-      ref={panelRef}
-      className={classNames("events-panel", {
-        "events-panel--open": isOpen,
-        "events-panel--closed": !isOpen,
-      })}
-    >
-      <div className="events-panel__table">
-        <div className="events-panel__header-bar">
-          <FontAwesomeIcon
-            className="events-panel__close-icon"
-            onClick={() => closePanel()}
-            size="2x"
-            icon={"xmark"}
-          />
-        </div>
-        <EventsTable events={eventsStore.events} />
-      </div>
     </div>
-  );*/
+  );
 });

@@ -11,9 +11,9 @@ export const LogsTab = observer(() => {
 
   return (
     <div className="logs-tab">
-      {fluxTreeStore.selectedNode ? (
+      {fluxTreeStore.selectedResource ? (
         <div className="logs-tab__logs">
-          {fluxTreeStore.selectedNode?.logs.map((log, index) => (
+          {fluxTreeStore.selectedResource?.logs.map((log, index) => (
             <div key={index} className="logs-tab__log-row">
               <span className="logs-tab__log-container">{log.container} </span>
               <span className="logs-tab__log-timestamp">

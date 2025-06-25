@@ -1,0 +1,33 @@
+// Project-local debug tasks
+//
+// For more documentation on how to configure debug tasks,
+// see: https://zed.dev/docs/debugger
+[
+  {
+    "label": "Debug Backend",
+    "adapter": "Delve",
+    "request": "launch",
+    "mode": "debug",
+    "program": "./backend/cmd/phi/main.go",
+    "cwd": "./backend",
+    "env": {
+      "PHI_DEV": "true",
+      "PHI_KUBE_CONFIG_PATH": "/home/timp4w/.kube/config"
+    }
+  },
+  {
+    "label": "Debug Frontend",
+    "adapter": "JavaScript",
+    "type": "chrome",
+    "request": "launch",
+    "url": "http://localhost:5173",
+    "program": "./web",
+    "cwd": "./web",
+    "webRoot": "./web",
+    "sourceMaps": true,
+    "build": {
+      "command": "yarn",
+      "args": ["--cwd", "web", "dev"]
+    }
+  }
+]

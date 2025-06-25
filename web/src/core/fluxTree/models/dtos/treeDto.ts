@@ -33,8 +33,6 @@ export type TreeNodeDto = {
   fluxMetadata?: FluxMetadataDto;
 };
 
-
-
 export type ConditionDto = {
   lastTransitionTime: Date;
   type: string;
@@ -85,6 +83,8 @@ type DeploymentMetadataDto = {
   readyReplicas: number;
   updatedReplicas: number;
   availableReplicas: number;
+  images: string[];
+
 };
 
 type GitRepositoryMetadataDto = {
@@ -104,18 +104,15 @@ type OCIRepositoryMetadataDto = {
   semverFilter: string;
 };
 
+type HelmChartMetadataDto = unknown;
 
-type HelmChartMetadataDto = {
-};
-
-type HelmRepositoryMetadataDto = {
-
-};
+type HelmRepositoryMetadataDto = unknown;
 
 type FluxMetadataDto = {
   lastHandledReconcileAt: Date;
   isReconciling: boolean;
   isSuspended: boolean;
+  lastSyncAt: Date;
 };
 
 

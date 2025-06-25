@@ -53,10 +53,10 @@ func NewKubeServiceImpl() kube.KubeService {
 	flag.Set("v", "1")
 	flag.Parse()
 
-	isDev := os.Getenv("PHI_DEV")
+	isDev := os.Getenv("PHI_DEV") // TODO move to a const
 
 	if isDev == "true" {
-		kubeconfigPath := os.Getenv("PHI_KUBE_CONFIG_PATH")
+		kubeconfigPath := os.Getenv("PHI_KUBE_CONFIG_PATH") // TODO move to a const
 		cf.KubeConfig = &kubeconfigPath
 		restConfig, err = cf.ToRESTConfig()
 	} else {
