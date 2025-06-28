@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import React, { ChangeEvent } from "react";
+import React, { ChangeEvent, useEffect } from "react";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
@@ -18,6 +18,7 @@ import { useSessionState } from "../../../core/utils/useSessionState";
 import Header from "../../components/layout/Header";
 import { SiFlux } from "@icons-pack/react-simple-icons";
 import ResourceCountWidget from "../../components/widgets/ResourcesCountWidget";
+import { fetchTreeUseCase } from "../../../core/fluxTree/usecases/FetchTree.usecase";
 
 const kindsFilter = [
   {
@@ -124,6 +125,10 @@ const AppsView: React.FC = observer(() => {
     "SearchValueFilter",
     ""
   );
+
+  useEffect(() => {
+    fetchTreeUseCase.execute();
+  }, []);
 
   const onFilterChange = (
     e: ChangeEvent<HTMLSelectElement>,
