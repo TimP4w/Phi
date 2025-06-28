@@ -109,6 +109,7 @@ type Event struct {
 
 type FluxMetadata struct {
 	LastHandledReconcileAt time.Time `json:"lastHandledReconcileAt,omitempty"`
+	LastSyncAt             time.Time `json:"lastSyncAt,omitempty"`
 	IsSuspended            bool      `json:"isSuspended,omitempty"`
 	IsReconciling          bool      `json:"isReconciling,omitempty"`
 }
@@ -137,10 +138,11 @@ type KustomizationMetadata struct {
 }
 
 type DeploymentMetadata struct {
-	Replicas          int32 `json:"replicas,omitempty"`
-	ReadyReplicas     int32 `json:"readyReplicas,omitempty"`
-	UpdatedReplicas   int32 `json:"updatedReplicas,omitempty"`
-	AvailableReplicas int32 `json:"availableReplicas,omitempty"`
+	Replicas          int32    `json:"replicas,omitempty"`
+	ReadyReplicas     int32    `json:"readyReplicas,omitempty"`
+	UpdatedReplicas   int32    `json:"updatedReplicas,omitempty"`
+	AvailableReplicas int32    `json:"availableReplicas,omitempty"`
+	Images            []string `json:"images,omitempty"`
 }
 
 type PVCMetadata struct {

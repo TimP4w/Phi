@@ -1,6 +1,5 @@
 import {
   Card,
-  Avatar,
   CardBody,
   Drawer,
   DrawerContent,
@@ -10,9 +9,8 @@ import {
   Tabs,
   Tab,
 } from "@heroui/react";
-import { Link } from "react-router-dom";
-import { ResourceStatus, TreeNode } from "../../../core/fluxTree/models/tree";
-import AppLogo from "../app-logo/AppLogo";
+import { KubeResource } from "../../../core/fluxTree/models/tree";
+import AppLogo from "../resource-icon/ResourceIcon";
 import { InfoTab } from "./InfoTab";
 import { EventsTab } from "./EventsTab";
 import { DescribeTab } from "./DescribeTab";
@@ -25,11 +23,12 @@ import { describeNodeUseCase } from "../../../core/resource/usecases/describeNod
 import { watchLogsUseCase } from "../../../core/resource/usecases/watchLogs.usecase";
 import { WebSocketService } from "../../../core/realtime/services/webSocket.service";
 import { TYPES } from "../../../core/shared/types";
+import StatusChip from "../status-chip/StatusChip";
 
 type ResourceDrawerProps = {
   onOpenChange: () => void;
   isOpen: boolean;
-  node?: TreeNode;
+  node?: KubeResource;
 };
 
 function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
@@ -42,7 +41,7 @@ function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
       // TODO: Re-fetch / reassign the selected node, when the tree is updated
       if (node && node.kind === RESOURCE_TYPE.POD) {
         // TODO: setSelectedNode is only used for logs. Maybe do that in the watchLogsUseCase?
-        fluxTreeStore.setSelectedNode(node);
+        fluxTreeStore.setSelectedResource(node);
         watchLogsUseCase.execute(node);
       }
 
@@ -60,19 +59,6 @@ function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
     }
   }, [isOpen, fluxTreeStore, realtimeService, node]);
 
-  const colorByStatus = (status: ResourceStatus) => {
-    switch (status) {
-      case ResourceStatus.SUCCESS:
-        return "success";
-      case ResourceStatus.FAILED:
-        return "danger";
-      case ResourceStatus.PENDING:
-        return "warning";
-      default:
-        return "primary";
-    }
-  };
-
   return (
     <Drawer
       isOpen={isOpen}
@@ -84,22 +70,15 @@ function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
         {node && (
           <>
             <DrawerHeader className="flex flex-col gap-1">
-              <div className="flex gap-3">
-                <Avatar
-                  isBordered
-                  classNames={{
-                    base: "bg-transparent",
-                    icon: "text-black/80",
-                  }}
-                  color={colorByStatus(node.status)}
-                  icon={<AppLogo kind={node.kind} />}
-                />
-                <div className="flex flex-col">
-                  <Link key={node.uid} to={`/tree/${node.uid}`}>
-                    <p className="text-md underline">{node.name}</p>
-                  </Link>
-                  <p className="text-small text-default-500">{node.kind}</p>
+              <div className="flex flex-col">
+                <div className="flex flex-row gap-3 items-center">
+                  <AppLogo kind={node?.kind} />
+                  <span className="text-3xl font-bold">{node?.name}</span>
+                  <StatusChip resource={node} />
                 </div>
+                <span className="self-start text-sm text-default-400">
+                  {node.kind} • {node.namespace}
+                </span>
               </div>
             </DrawerHeader>
             <DrawerBody>
@@ -107,14 +86,14 @@ function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
                 <Tab key="infos" title="Info">
                   <Card shadow="none" radius="none">
                     <CardBody>
-                      <InfoTab node={node} />
+                      <InfoTab resource={node} />
                     </CardBody>
                   </Card>
                 </Tab>
                 <Tab key="events" title="Events">
                   <Card shadow="none" radius="none">
                     <CardBody>
-                      <EventsTab node={node} />
+                      <EventsTab resource={node} />
                     </CardBody>
                   </Card>
                 </Tab>

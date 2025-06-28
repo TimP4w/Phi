@@ -1,229 +1,164 @@
+import { Chip, Divider } from "@heroui/react";
 import {
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableColumn,
-  TableHeader,
-  TableRow,
-  Tooltip,
-} from "@heroui/react";
-import {
-  DeploymentNode,
-  KustomizationNode,
-  PersistentVolumeClaimNode,
-  PodNode,
-  TreeNode,
+  Deployment,
+  Kustomization,
+  PersistentVolumeClaim,
+  Pod,
+  KubeResource,
 } from "../../../core/fluxTree/models/tree";
-import { RowElement } from "@react-types/table";
-import { formatDistance } from "date-fns";
+import TooltipedDate from "../tooltiped-date/TooltipedDate";
 
-type InfoTab = {
-  node: TreeNode | null;
+type InfoTabProps = {
+  resource: KubeResource | null;
 };
 
-export const InfoTab = ({ node }: InfoTab) => {
-  if (!node) {
-    return <div className="info-tab">No Node</div>;
-  }
+const InfoRow = ({
+  label,
+  value,
+}: {
+  label: string;
+  value?: React.ReactNode;
+}) => (
+  <div className="flex justify-between text-sm hover:bg-default-100 px-2 py-1 rounded">
+    <span className="text-default-400">{label}</span>
+    <span className="font-mono text-xs items-center">{value}</span>
+  </div>
+);
 
-  const extraRows: RowElement<unknown>[] = [];
+export const InfoTab = ({ resource }: InfoTabProps) => {
+  if (!resource) return <div className="info-tab">No resource</div>;
 
-  const getKustomizationData = (
-    node: KustomizationNode
-  ): RowElement<unknown>[] => [
-    <TableRow>
-      <TableCell>Path</TableCell>
-      <TableCell>{node.metadata?.path}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Is Reconciling</TableCell>
-      <TableCell>{node.fluxMetadata?.isReconciling}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Is Suspended</TableCell>
-      <TableCell>{node.fluxMetadata?.isSuspended}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Last Applied Revision</TableCell>
-      <TableCell>{node.metadata?.lastAppliedRevision}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Last Attempted Revision</TableCell>
-      <TableCell>{node.metadata?.lastAttemptedRevision}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Last Handled Reconciliation</TableCell>
-      <TableCell>
-        {node.fluxMetadata?.lastHandledReconcileAt?.toString()}
-      </TableCell>
-    </TableRow>,
-  ];
-
-  const getDeploymentData = (node: DeploymentNode): RowElement<unknown>[] => [
-    <TableRow>
-      <TableCell>Replicas</TableCell>
-      <TableCell>{node.metadata?.replicas.toString()}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Available Replicas</TableCell>
-      <TableCell>{node.metadata?.availableReplicas.toString()}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Ready Replicas</TableCell>
-      <TableCell>{node.metadata?.readyReplicas.toString()}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Updated Replicas</TableCell>
-      <TableCell>{node.metadata?.updatedReplicas.toString()}</TableCell>
-    </TableRow>,
-  ];
-
-  const getPodData = (node: PodNode): RowElement<unknown>[] => [
-    <TableRow>
-      <TableCell>Image</TableCell>
-      <TableCell>
-        <Chip>{node.metadata?.image}</Chip>
-      </TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Phase</TableCell>
-      <TableCell>{node.metadata?.phase.toString()}</TableCell>
-    </TableRow>,
-  ];
-
-  const getPVCData = (
-    node: PersistentVolumeClaimNode
-  ): RowElement<unknown>[] => [
-    <TableRow>
-      <TableCell>Access Modes</TableCell>
-      <TableCell>{node.metadata?.accessModes.join(", ")}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Storage Class</TableCell>
-      <TableCell>{node.metadata?.storageClass}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Volume Mode</TableCell>
-      <TableCell>{node.metadata?.volumeMode}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Volume Name</TableCell>
-      <TableCell>{node.metadata?.volumeName}</TableCell>
-    </TableRow>,
-    <TableRow>
-      <TableCell>Phase</TableCell>
-      <TableCell>{node.metadata?.phase.toString()}</TableCell>
-    </TableRow>,
-  ];
-
-  if (node.kind === "Kustomization") {
-    extraRows.push(...getKustomizationData(node as KustomizationNode));
-  }
-  if (node.kind === "Deployment") {
-    extraRows.push(...getDeploymentData(node as DeploymentNode));
-  }
-  if (node.kind === "Pod") {
-    extraRows.push(...getPodData(node as PodNode));
-  }
-  if (node.kind === "PersistentVolumeClaim") {
-    extraRows.push(...getPVCData(node as PersistentVolumeClaimNode));
-  }
+  const renderExtraFields = () => {
+    switch (resource.kind) {
+      case "Kustomization": {
+        const n = resource as Kustomization;
+        return (
+          <>
+            <InfoRow label="Path" value={n.metadata?.path} />
+            <InfoRow
+              label="Is Reconciling"
+              value={n.isReconciling.toString()}
+            />
+            <InfoRow label="Is Suspended" value={n.isSuspended.toString()} />
+            <InfoRow
+              label="Last Applied Revision"
+              value={n.metadata?.lastAppliedRevision}
+            />
+            <InfoRow
+              label="Last Attempted Revision"
+              value={n.metadata?.lastAttemptedRevision}
+            />
+            <InfoRow
+              label="Last Handled Reconciliation"
+              value={<TooltipedDate date={n.lastHandledReconcileAt} />}
+            />
+            <InfoRow
+              label="Last Handled Reconciliation"
+              value={<TooltipedDate date={n.lastSyncAt} />}
+            />
+          </>
+        );
+      }
+      case "Deployment": {
+        const n = resource as Deployment;
+        return (
+          <>
+            <InfoRow
+              label="Replicas"
+              value={n.metadata?.replicas?.toString()}
+            />
+            <InfoRow
+              label="Available Replicas"
+              value={n.metadata?.availableReplicas?.toString()}
+            />
+            <InfoRow
+              label="Ready Replicas"
+              value={n.metadata?.readyReplicas?.toString()}
+            />
+            <InfoRow
+              label="Updated Replicas"
+              value={n.metadata?.updatedReplicas?.toString()}
+            />
+          </>
+        );
+      }
+      case "Pod": {
+        const n = resource as Pod;
+        return (
+          <>
+            <InfoRow label="Image" value={<Chip>{n.metadata?.image}</Chip>} />
+            <InfoRow label="Phase" value={n.metadata?.phase.toString()} />
+          </>
+        );
+      }
+      case "PersistentVolumeClaim": {
+        const n = resource as PersistentVolumeClaim;
+        return (
+          <>
+            <InfoRow
+              label="Access Modes"
+              value={n.metadata?.accessModes.join(", ")}
+            />
+            <InfoRow label="Storage Class" value={n.metadata?.storageClass} />
+            <InfoRow label="Volume Mode" value={n.metadata?.volumeMode} />
+            <InfoRow label="Volume Name" value={n.metadata?.volumeName} />
+            <InfoRow label="Phase" value={n.metadata?.phase.toString()} />
+          </>
+        );
+      }
+    }
+  };
 
   return (
-    <div>
-      <Table hideHeader removeWrapper>
-        <TableHeader>
-          <TableColumn>Property</TableColumn>
-          <TableColumn>Value</TableColumn>
-        </TableHeader>
-        <TableBody>
-          <TableRow>
-            <TableCell>UID</TableCell>
-            <TableCell>{node.uid}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Name</TableCell>
-            <TableCell>{node.name}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Namespace</TableCell>
-            <TableCell>{node.namespace}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Kind</TableCell>
-            <TableCell>{node.kind}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Resource</TableCell>
-            <TableCell>{node.resource}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Group</TableCell>
-            <TableCell>{node.group}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Version</TableCell>
-            <TableCell>{node.version}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Annotations</TableCell>
-            <TableCell className="flex flex-wrap gap-1">
-              {node.annotations
-                ? Array.from(node.annotations).map(([key, value]) => (
-                    <Chip key={key}>
-                      {key}={value}
-                    </Chip>
-                  ))
-                : ""}
-            </TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Labels</TableCell>
-            <TableCell className="flex flex-wrap gap-1">
-              {node.labels
-                ? Array.from(node.labels).map(([key, value]) => (
-                    <Chip key={key}>
-                      {key}={value}
-                    </Chip>
-                  ))
-                : ""}
-            </TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Is FluxCD Managed</TableCell>
-            <TableCell>{node.isFluxManaged.toString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Status</TableCell>
-            <TableCell>{node.status}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Children</TableCell>
-            <TableCell>{node.children.length.toString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Events</TableCell>
-            <TableCell>{node.events.length.toString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Is Reconcillable</TableCell>
-            <TableCell>{node.isReconcillable.toString()}</TableCell>
-          </TableRow>
-          <TableRow>
-            <TableCell>Created At</TableCell>
-            <TableCell>
-              <Tooltip content={node.createdAt.toDateString()}>
-                {formatDistance(node.createdAt.toDateString(), new Date(), {
-                  includeSeconds: true,
-                  addSuffix: true,
-                })}
-              </Tooltip>
-            </TableCell>
-          </TableRow>
-          {extraRows as unknown as RowElement<unknown>}
-        </TableBody>
-      </Table>
+    <div className="space-y-2 text-sm">
+      <InfoRow label="UID" value={resource.uid} />
+      <InfoRow label="Name" value={resource.name} />
+      <InfoRow label="Namespace" value={resource.namespace} />
+      <InfoRow label="Kind" value={resource.kind} />
+      <InfoRow label="Resource" value={resource.resource} />
+      <InfoRow label="Group" value={resource.group} />
+      <InfoRow label="Version" value={resource.version} />
+      <InfoRow
+        label="Annotations"
+        value={
+          resource.annotations ? (
+            <div className="flex flex-wrap gap-1">
+              {Array.from(resource.annotations).map(([k, v]) => (
+                <Chip key={k}>{`${k}=${v}`}</Chip>
+              ))}
+            </div>
+          ) : (
+            ""
+          )
+        }
+      />
+      <InfoRow
+        label="Labels"
+        value={
+          resource.labels ? (
+            <div className="flex flex-wrap gap-1">
+              {Array.from(resource.labels).map(([k, v]) => (
+                <Chip key={k}>{`${k}=${v}`}</Chip>
+              ))}
+            </div>
+          ) : (
+            ""
+          )
+        }
+      />
+      <InfoRow label="Status" value={resource.status} />
+      <InfoRow label="Children" value={resource.children.length.toString()} />
+      <InfoRow label="Events" value={resource.events.length.toString()} />
+      <InfoRow
+        label="Is Reconcillable"
+        value={resource.isReconcillable.toString()}
+      />
+      <InfoRow
+        label="Created At"
+        value={<TooltipedDate date={resource.createdAt} />}
+      />
+      <Divider />
+      {renderExtraFields()}
     </div>
   );
 };

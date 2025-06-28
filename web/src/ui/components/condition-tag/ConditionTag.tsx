@@ -69,6 +69,20 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
       "StateError",
       "UpgradeFailed",
       "ReconciliationFailed",
+      "URLInvalid",
+      "AuthenticationFailed",
+      "VerificationError",
+      "DirectoryCreationFailed",
+      "StatOperationFailed",
+      "ReadOperationFailed",
+      "AcquireLockFailed",
+      "InvalidPath",
+      "ArchiveOperationFailed",
+      "SymlinkUpdateFailed",
+      "CacheOperationFailed",
+      "PatchOperationFailed",
+      "InvalidSTSConfiguration",
+      "InvalidProviderConfiguration",
     ];
 
     const warningReasons = [
@@ -78,10 +92,12 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
     ];
 
     const successReasons = [
+      "InstallSucceeded",
       "UpgradeSucceeded",
       "ChartPullSucceeded",
       "ReconciliationSucceeded",
       "Succeeded",
+      "ArtifactUpToDate",
     ];
 
     if (failingReasons.includes(condition.reason)) {
@@ -119,18 +135,5 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
     </Tooltip>
   );
 };
-
-/*
-*
-
-    <div key={key} className="condition-tag">
-      <Tooltip message={condition.message} />
-      {<FontAwesomeIcon icon={icon as IconProp} size={"1x"} color={color} />}
-      <span className="condition-tag__type" style={{ color: color }}>
-        {condition.type}
-      </span>
-    </div>
-
-    */
 
 export default ConditionTag;

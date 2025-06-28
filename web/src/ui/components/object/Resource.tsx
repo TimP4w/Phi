@@ -4,9 +4,10 @@ import {
   ResourceStatus,
   VizualizationNodeData,
 } from "../../../core/fluxTree/models/tree";
-import AppLogo from "../app-logo/AppLogo";
+import AppLogo from "../resource-icon/ResourceIcon";
 import "./resource.scss";
 import { Handle, NodeProps, Position, Node } from "@xyflow/react";
+import { ROUTES } from "../../routes/routes.enum";
 
 type ResourceProps = NodeProps<Node<VizualizationNodeData>>;
 
@@ -50,7 +51,7 @@ function Resource({ data }: ResourceProps) {
                 <div className="flex flex-col">
                   <Link
                     key={treeNode.uid}
-                    to={`/tree/${treeNode.uid}`}
+                    to={`${ROUTES.RESOURCE}/${treeNode.uid}`}
                     onClick={(e) => e.stopPropagation()}
                     className="hover:text-gray-300 hover:scale-105 hover:underline transition-transform duration-150"
                   >

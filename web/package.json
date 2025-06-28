@@ -15,6 +15,7 @@
     "@fortawesome/free-solid-svg-icons": "^6.6.0",
     "@fortawesome/react-fontawesome": "^0.2.2",
     "@heroui/react": "^2.7.5",
+    "@icons-pack/react-simple-icons": "^13.2.0",
     "@types/pako": "^2.0.3",
     "@xyflow/react": "^12.1.1",
     "ansi-to-html": "^0.7.2",
@@ -26,6 +27,7 @@
     "inversify": "^6.0.2",
     "inversify-react": "^1.1.1",
     "js-yaml": "^4.1.0",
+    "lucide-react": "^0.523.0",
     "mobx": "^6.13.1",
     "mobx-react-lite": "^4.0.7",
     "pako": "^2.1.0",
@@ -35,9 +37,9 @@
     "react-router-dom": "^6.26.1",
     "react-toastify": "^10.0.5",
     "react-tooltip": "^5.28.0",
+    "recharts": "^3.0.0",
     "reflect-metadata": "^0.2.2",
     "use-debounce": "^10.0.3",
-    "victory": "^37.3.6",
     "web-vitals": "^2.1.4"
   },
   "devDependencies": {

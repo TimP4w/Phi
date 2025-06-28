@@ -1,33 +1,27 @@
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { TreeNode } from "../../../core/fluxTree/models/tree";
+import { KubeResource } from "../../../core/fluxTree/models/tree";
 import EventsTable from "../events-table/EventsTable";
-import "./panel.scss";
-import { COLORS } from "../../shared/colors";
+import { BellOff } from "lucide-react";
 
 type EventsTabProps = {
-  node: TreeNode | null;
+  resource: KubeResource | null;
 };
 
-export const EventsTab = ({ node }: EventsTabProps) => {
-  if (!node) {
-    return <div className="events-tab">No Node</div>;
+export const EventsTab = ({ resource }: EventsTabProps) => {
+  if (!resource) {
+    return <div className="events-tab">No Resource</div>;
   }
-  if (node?.events.length === 0) {
+  if (resource?.events.length === 0) {
     return (
-      <div className="events-tab events-tab--no-events">
-        <h2>No Events</h2>
-        <FontAwesomeIcon
-          icon="bell-slash"
-          size="10x"
-          color={COLORS.ACCENT_DARKER}
-        />
+      <div className="flex flex-col gap-2 items-center p-4">
+        <span className="text-xl">No Events for this Resource</span>
+        <BellOff className="text-default-100" size={256}></BellOff>
       </div>
     );
   }
   return (
     <div className="events-tab">
       <div className="events-tab__events">
-        <EventsTable events={node.events} />
+        <EventsTable events={resource.events} />
       </div>
     </div>
   );

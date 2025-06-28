@@ -1,29 +1,39 @@
-import { ConditionDto, TreeNodeDto } from "./dtos/treeDto";
-import { RESOURCE_TYPE } from "../constants/resources.const";
+import { ConditionDto, LogMessageDto, TreeNodeDto } from "./dtos/treeDto";
+import { FLUX_NAMESPACE, RESOURCE_TYPE } from "../constants/resources.const";
 import { KubeEvent } from "./kubeEvent";
 
 export class Tree {
-  root: TreeNode;
+  root: KubeResource;
 
-  constructor(root: TreeNode) {
+  constructor(root: KubeResource) {
     this.root = root;
   }
 
-  public getApplicationNodes(): TreeNode[] {
-    const applications: TreeNode[] = [];
-    const applicationKinds: string[] = [RESOURCE_TYPE.KUSTOMIZATION, RESOURCE_TYPE.HELM_RELEASE, RESOURCE_TYPE.HELM_CHART].map((kind) => kind.toString());
+  public getApplicationResources(): FluxResource[] {
+    const applications: KubeResource[] = [];
+    const applicationKinds: string[] = [
+      RESOURCE_TYPE.KUSTOMIZATION,
+      RESOURCE_TYPE.HELM_RELEASE,
+      RESOURCE_TYPE.HELM_CHART,
+    ].map((kind) => kind.toString());
     this.traverse(this.root, (node) => {
       if (applicationKinds.includes(node.kind)) {
         applications.push(node);
       }
       return false;
     });
-    return applications;
+
+    return applications as FluxResource[];
   }
 
   public getRepositories(): Repository[] {
     const repositories: Repository[] = [];
-    const repositoryKinds: string[] = [RESOURCE_TYPE.OCI_REPOSITORY, RESOURCE_TYPE.HELM_REPOSITORY, RESOURCE_TYPE.GIT_REPOSITORY, RESOURCE_TYPE.BUCKET].map((kind) => kind.toString());
+    const repositoryKinds: string[] = [
+      RESOURCE_TYPE.OCI_REPOSITORY,
+      RESOURCE_TYPE.HELM_REPOSITORY,
+      RESOURCE_TYPE.GIT_REPOSITORY,
+      RESOURCE_TYPE.BUCKET,
+    ].map((kind) => kind.toString());
     this.traverse(this.root, (node) => {
       if (repositoryKinds.includes(node.kind)) {
         repositories.push(node as Repository);
@@ -33,19 +43,18 @@ export class Tree {
     return repositories;
   }
 
-
-  public getFluxSystemPods(): TreeNode[] {
-    const result: TreeNode[] = [];
+  public getFluxControllersDeployments(): Deployment[] {
+    const result: Deployment[] = [];
     this.root.children.forEach((child) => {
-      if (child.kind === RESOURCE_TYPE.DEPLOYMENT && child.namespace === "flux-system") {
-        result.push(child);
+      if (child.kind === RESOURCE_TYPE.DEPLOYMENT && child.namespace === FLUX_NAMESPACE) {
+        result.push(child as Deployment);
       }
     });
 
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  public findNodeById(nodeId?: string): TreeNode {
+  public findNodeById(nodeId?: string): KubeResource {
     if (!nodeId) {
       return this.root;
     }
@@ -56,7 +65,10 @@ export class Tree {
     throw new Error(`Node with id ${nodeId} not found`);
   }
 
-  private findNodeByIdRecursive(node: TreeNode, nodeId: string): TreeNode | null {
+  private findNodeByIdRecursive(
+    node: KubeResource,
+    nodeId: string,
+  ): KubeResource | null {
     if (node.uid === nodeId) {
       return node;
     }
@@ -69,11 +81,18 @@ export class Tree {
     return null;
   }
 
-  public traverse(startNode: TreeNode, callback: (node: TreeNode, layer: number) => boolean): void {
+  public traverse(
+    startNode: KubeResource,
+    callback: (node: KubeResource, layer: number) => boolean,
+  ): void {
     this.traverseRecursive(startNode, 0, callback);
   }
 
-  private traverseRecursive(node: TreeNode, layer: number, callback: (node: TreeNode, layer: number) => boolean): void {
+  private traverseRecursive(
+    node: KubeResource,
+    layer: number,
+    callback: (node: KubeResource, layer: number) => boolean,
+  ): void {
     const skip = callback(node, layer);
     if (skip) {
       return;
@@ -84,11 +103,11 @@ export class Tree {
   }
 
   static fromDto(rootDto: TreeNodeDto): Tree {
-    return new Tree(TreeNode.fromDto(rootDto));
+    return new Tree(KubeResource.fromDto(rootDto));
   }
-};
+}
 
-export class TreeNode {
+export class KubeResource {
   uid: string;
   name: string;
   kind: string;
@@ -98,16 +117,15 @@ export class TreeNode {
   group?: string;
   createdAt: Date;
   deletedAt?: Date;
-  children: TreeNode[] = [];
+  children: KubeResource[] = [];
   annotations: Map<string, string>;
   labels: Map<string, string>;
   parentId: string | null;
   status: ResourceStatus;
   conditions: Condition[] = [];
   events: KubeEvent[] = [];
-  logs: Log[] = [];
+  logs: PodLog[] = [];
   isFluxManaged: boolean = false;
-  fluxMetadata?: FluxMetadata;
   isReconcillable: boolean = false;
 
   constructor();
@@ -124,13 +142,24 @@ export class TreeNode {
       this.parentId = null;
       this.createdAt = new Date(dto.createdAt);
       this.deletedAt = dto.deletedAt ? new Date(dto.deletedAt) : undefined;
-      this.children = dto.children ? dto.children.map((child) => TreeNode.fromDto(child)) : [];
-      this.annotations = dto.annotations ? new Map(Object.entries(dto.annotations)) : new Map();
-      this.labels = dto.labels ? new Map(Object.entries(dto.labels)) : new Map();
-      this.conditions = dto.conditions ? dto.conditions.map((condition) => new Condition(condition)) : [];
-      this.status = dto.status ? stringToResourceStatus(dto.status) : ResourceStatus.UNKNOWN;
-      this.events = dto.events ? dto.events.map((event) => new KubeEvent(event)) : [];
-      this.fluxMetadata = dto.fluxMetadata ? dto.fluxMetadata : undefined;
+      this.children = dto.children
+        ? dto.children.map((child) => KubeResource.fromDto(child))
+        : [];
+      this.annotations = dto.annotations
+        ? new Map(Object.entries(dto.annotations))
+        : new Map();
+      this.labels = dto.labels
+        ? new Map(Object.entries(dto.labels))
+        : new Map();
+      this.conditions = dto.conditions
+        ? dto.conditions.map((condition) => new Condition(condition))
+        : [];
+      this.status = dto.status
+        ? stringToResourceStatus(dto.status)
+        : ResourceStatus.UNKNOWN;
+      this.events = dto.events
+        ? dto.events.map((event) => new KubeEvent(event))
+        : [];
       this.isFluxManaged = dto.isFluxManaged;
     } else {
       this.uid = "";
@@ -149,93 +178,83 @@ export class TreeNode {
     }
   }
 
-  static fromDto(dto: TreeNodeDto): TreeNode {
+  static fromDto(dto: TreeNodeDto): KubeResource {
     switch (dto.kind) {
       case RESOURCE_TYPE.KUSTOMIZATION:
-        return new KustomizationNode(dto);
+        return new Kustomization(dto);
       case RESOURCE_TYPE.HELM_RELEASE:
-        return new HelmReleaseNode(dto);
+        return new HelmRelease(dto);
       case RESOURCE_TYPE.POD:
-        return new PodNode(dto);
+        return new Pod(dto);
       case RESOURCE_TYPE.DEPLOYMENT:
-        return new DeploymentNode(dto);
+        return new Deployment(dto);
       case RESOURCE_TYPE.GIT_REPOSITORY:
-        return new GitRepositoryNode(dto);
+        return new GitRepository(dto);
       case RESOURCE_TYPE.HELM_CHART:
-        return new HelmChartNode(dto);
+        return new HelmChart(dto);
       case RESOURCE_TYPE.HELM_REPOSITORY:
-        return new HelmRepositoryNode(dto);
+        return new HelmRepository(dto);
       case RESOURCE_TYPE.PVC:
-        return new PersistentVolumeClaimNode(dto);
+        return new PersistentVolumeClaim(dto);
       case RESOURCE_TYPE.OCI_REPOSITORY:
-        return new OCIRepositoryNode(dto);
+        return new OCIRepository(dto);
       default:
-        return new TreeNode(dto);
+        return new KubeResource(dto);
     }
   }
+}
 
-};
+export abstract class FluxResource extends KubeResource {
+  isReconcillable: boolean = true;
+  lastHandledReconcileAt?: Date;
+  isReconciling: boolean;
+  isSuspended: boolean;
+  lastSyncAt?: Date;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.lastHandledReconcileAt = dto.fluxMetadata?.lastHandledReconcileAt;
+    this.isReconciling = dto.fluxMetadata?.isReconciling || false;
+    this.isSuspended = dto.fluxMetadata?.isSuspended || false;
+    this.lastSyncAt = dto.fluxMetadata?.lastSyncAt;
+  }
+}
+
+
+export interface Repository extends FluxResource {
+  getURL(): string;
+  getCode(): string;
+}
+
 
 // TODO: don't map into metadata, but as object property directly (TBD)
-export class HelmReleaseNode extends TreeNode {
+export class HelmRelease extends FluxResource {
   metadata: HelmReleaseMetadata | null;
-  isReconcillable: boolean = true;
   constructor(dto: TreeNodeDto) {
     super(dto);
     this.metadata = dto.helmReleaseMetadata ? dto.helmReleaseMetadata : null;
   }
 }
-export class KustomizationNode extends TreeNode {
+export class Kustomization extends FluxResource {
   metadata: KustomizationMetadata | null;
   isReconcillable: boolean = true;
   constructor(dto: TreeNodeDto) {
     super(dto);
-    this.metadata = dto.kustomizationMetadata ? dto.kustomizationMetadata : null;
+    this.metadata = dto.kustomizationMetadata
+      ? dto.kustomizationMetadata
+      : null;
   }
 
   getLastAttemptedHash(): string {
     return this.metadata?.lastAttemptedRevision
       ? this.metadata?.lastAttemptedRevision.slice(
-        this.metadata?.lastAttemptedRevision.indexOf(":") + 1
+        this.metadata?.lastAttemptedRevision.indexOf(":") + 1,
       )
       : "";
   }
-
 }
 
-export interface Repository extends TreeNode {
-  getURL(): string;
-  getCode(): string;
-}
-
-export class PodNode extends TreeNode {
-  metadata: PodMetadata | null;
-
-  constructor(dto: TreeNodeDto) {
-    super(dto);
-    this.metadata = dto.podMetadata ? dto.podMetadata : null;
-  }
-}
-
-export class DeploymentNode extends TreeNode {
-  metadata: DeploymentMetadata | null;
-
-  constructor(dto: TreeNodeDto) {
-    super(dto);
-    this.metadata = dto.deploymentMetadata ? dto.deploymentMetadata : null;
-  }
-}
-
-export class PersistentVolumeClaimNode extends TreeNode {
-  metadata: PersistentVolumeClaimMetadata | null;
-
-  constructor(dto: TreeNodeDto) {
-    super(dto);
-    this.metadata = dto.pvcMetadata ? dto.pvcMetadata : null;
-  }
-}
-
-export class HelmChartNode extends TreeNode {
+export class HelmChart extends FluxResource {
   metadata: HelmChartMetadata | null;
   isReconcillable: boolean = true;
 
@@ -245,23 +264,27 @@ export class HelmChartNode extends TreeNode {
   }
 }
 
-export class HelmRepositoryNode extends TreeNode {
+export class HelmRepository extends FluxResource {
   metadata: HelmRepositoryMetadata | null;
   isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
-    this.metadata = dto.helmRepositoryMetadata ? dto.helmRepositoryMetadata : null;
+    this.metadata = dto.helmRepositoryMetadata
+      ? dto.helmRepositoryMetadata
+      : null;
   }
 }
 
-export class GitRepositoryNode extends TreeNode implements Repository {
+export class GitRepository extends FluxResource implements Repository {
   metadata: GitRepositoryMetadata | null;
   isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
-    this.metadata = dto.gitRepositoryMetadata ? dto.gitRepositoryMetadata : null;
+    this.metadata = dto.gitRepositoryMetadata
+      ? dto.gitRepositoryMetadata
+      : null;
   }
 
   getURL(): string {
@@ -293,13 +316,15 @@ export class GitRepositoryNode extends TreeNode implements Repository {
   }
 }
 
-export class OCIRepositoryNode extends TreeNode implements Repository {
+export class OCIRepository extends FluxResource implements Repository {
   metadata: OCIRepositoryMetadata | null;
   isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
-    this.metadata = dto.ociRepositoryMetadata ? dto.ociRepositoryMetadata : null;
+    this.metadata = dto.ociRepositoryMetadata
+      ? dto.ociRepositoryMetadata
+      : null;
   }
 
   getURL(): string {
@@ -324,6 +349,34 @@ export class OCIRepositoryNode extends TreeNode implements Repository {
     }
 
     return "";
+  }
+}
+
+
+export class Pod extends KubeResource {
+  metadata: PodMetadata | null;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.metadata = dto.podMetadata ? dto.podMetadata : null;
+  }
+}
+
+export class Deployment extends KubeResource {
+  metadata: DeploymentMetadata | null;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.metadata = dto.deploymentMetadata ? dto.deploymentMetadata : null;
+  }
+}
+
+export class PersistentVolumeClaim extends KubeResource {
+  metadata: PersistentVolumeClaimMetadata | null;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.metadata = dto.pvcMetadata ? dto.pvcMetadata : null;
   }
 }
 
@@ -370,6 +423,7 @@ type DeploymentMetadata = {
   readyReplicas: number;
   updatedReplicas: number;
   availableReplicas: number;
+  images: string[];
 };
 
 type GitRepositoryMetadata = {
@@ -389,19 +443,11 @@ type OCIRepositoryMetadata = {
   semverFilter: string;
 };
 
+type HelmChartMetadata = unknown;
 
-type HelmChartMetadata = {
-};
+type HelmRepositoryMetadata = unknown;
 
-type HelmRepositoryMetadata = {
 
-};
-
-type FluxMetadata = {
-  lastHandledReconcileAt: Date;
-  isReconciling: boolean;
-  isSuspended: boolean;
-};
 
 export enum ResourceStatus {
   SUCCESS = "success",
@@ -425,9 +471,9 @@ export class Condition {
     this.message = dto.message;
     this.reason = dto.reason;
   }
-};
+}
 
-export class Log {
+export class PodLog {
   log: string;
   timestamp: Date;
   container: string;
@@ -436,6 +482,10 @@ export class Log {
     this.log = log;
     this.timestamp = new Date(timestamp);
     this.container = container;
+  }
+
+  static fromDto(dto: LogMessageDto): PodLog {
+    return new PodLog(dto.timestamp.toString(), dto.log, dto.container);
   }
 }
 
@@ -446,4 +496,4 @@ function stringToResourceStatus(status: string): ResourceStatus {
   throw new Error(`Invalid ResourceStatus: ${status}`);
 }
 
-export type VizualizationNodeData = Record<'treeNode', TreeNode>;
+export type VizualizationNodeData = Record<"treeNode", KubeResource>;

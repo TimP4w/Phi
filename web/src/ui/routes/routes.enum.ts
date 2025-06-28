@@ -1,4 +1,4 @@
 export enum ROUTES {
-  APPS = "/",
-  TREE = "/tree",
+  DASHBOARD = "/",
+  RESOURCE = "/resource",
 }

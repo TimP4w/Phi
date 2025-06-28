@@ -14,7 +14,7 @@
     },
     {
       "name": "Frontend - Debugger",
-      "type": "chrome",
+      "type": "pwa-chrome",
       "request": "launch",
       "url": "http://localhost:5173",
       "webRoot": "${workspaceFolder}/web",

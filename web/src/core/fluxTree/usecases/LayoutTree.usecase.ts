@@ -50,8 +50,8 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
           nodes: layoutedGraph.children.map((node) => ({
             ...node,
             position: {
-              x: input.currentLayout.find((n) => n.id === node.id)?.position.x || node.x, // Use the current position if it exists, otherwise use the layouted position.
-              y: input.currentLayout.find((n) => n.id === node.id)?.position.y || node.y
+              x: node.x!,
+              y: node.y!,
             },
           })) as Node<VizualizationNodeData>[],
           edges: layoutedGraph.edges as unknown[] as Edge[] || [],
@@ -66,7 +66,11 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
     const node = this.fluxTreeStore.tree.findNodeById(nodeId);
 
 
-    const resourcesToSkip = ["ClusterRole", "ClusterRoleBinding", "CustomResourceDefinition"]; // TODO: define if / what to skip. Maybe make it configurable
+    const resourcesToSkip = [
+      "ClusterRole",
+      "ClusterRoleBinding",
+      "CustomResourceDefinition"
+    ]; // TODO: define if / what to skip. Maybe make it configurable
 
 
     this.fluxTreeStore.tree.traverse(node, (n, layer): boolean => {

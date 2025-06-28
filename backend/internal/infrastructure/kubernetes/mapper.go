@@ -13,8 +13,9 @@ import (
 	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	appsV1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -67,10 +68,6 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 	}
 
 	switch el.Kind {
-	case "Pod":
-		mapPodData(&el, obj)
-	case "Deployment":
-		mapDeploymentData(&el, obj)
 	case "Kustomization":
 		mapKustomizationData(&el, obj)
 	case "HelmRelease":
@@ -83,11 +80,21 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		mapHelmRepositoryData(&el, obj)
 	case "OCIRepository":
 		mapOciRepositoryData(&el, obj)
+	// case "Bucket":
+	case "Pod": // TODO: these should be consts...
+		mapPodData(&el, obj)
+	case "Deployment":
+		mapDeploymentData(&el, obj)
 	case "PersistentVolumeClaim":
 		mapPVCData(&el, obj)
 	case "PersistentVolume":
 		mapPVData(&el, obj)
-	// case "Bucket":
+	case "Volume": // TODO: here we need to double check that this is indeed a longhorn Volume and not another driver that also calls them "Volume"
+		mapLonghornVolume(&el, obj)
+	case "Ingress":
+		mapIngressData(&el, obj)
+	case "StatefulSet":
+		mapStatefulSetData(&el, obj)
 	default:
 		// do nothing
 	}
@@ -129,7 +136,7 @@ func mapConditions(el *kube.Resource, conditions []metav1.Condition) []kube.Cond
 	return el.Conditions
 }
 
-func mapFluxMetadata(el *kube.Resource, annotations map[string]string, lastReconcileTimeStr string, isSuspended bool) {
+func mapFluxMetadata(el *kube.Resource, annotations map[string]string, lastReconcileTimeStr string, isSuspended bool, conditions []metav1.Condition) {
 	isReconciling := false
 	didManuallyReconcile, exists := annotations["reconcile.fluxcd.io/requestedAt"]
 	didManuallyReconcileTime, err := time.Parse(time.RFC3339Nano, didManuallyReconcile)
@@ -141,10 +148,22 @@ func mapFluxMetadata(el *kube.Resource, annotations map[string]string, lastRecon
 		}
 	}
 
+	var lastSyncAt time.Time
+	for _, cond := range conditions {
+		if cond.Type == "Ready" {
+			t, err := time.Parse(time.RFC3339Nano, cond.LastTransitionTime.Format(time.RFC3339Nano))
+			if err == nil {
+				lastSyncAt = t
+			}
+			break
+		}
+	}
+
 	el.FluxMetadata = kube.FluxMetadata{
 		IsReconciling:          isReconciling,
 		IsSuspended:            isSuspended,
 		LastHandledReconcileAt: lastReconcileTime,
+		LastSyncAt:             lastSyncAt,
 	}
 }
 
@@ -155,9 +174,10 @@ func mapHelmChartData(el *kube.Resource, obj unstructured.Unstructured) {
 		log.Default().Printf("Error converting unstructured to HelmChart: %v", err)
 		return
 	}
+	el.Status = mapFluxResourceStatusForCondition(&helmChart.Status.Conditions)
 
 	mapConditions(el, helmChart.Status.Conditions)
-	mapFluxMetadata(el, helmChart.GetAnnotations(), helmChart.Status.LastHandledReconcileAt, helmChart.Spec.Suspend)
+	mapFluxMetadata(el, helmChart.GetAnnotations(), helmChart.Status.LastHandledReconcileAt, helmChart.Spec.Suspend, helmChart.Status.Conditions)
 }
 
 func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
@@ -169,7 +189,9 @@ func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	mapConditions(el, gitRepository.Status.Conditions)
-	mapFluxMetadata(el, gitRepository.GetAnnotations(), gitRepository.Status.LastHandledReconcileAt, gitRepository.Spec.Suspend)
+	mapFluxMetadata(el, gitRepository.GetAnnotations(), gitRepository.Status.LastHandledReconcileAt, gitRepository.Spec.Suspend, gitRepository.Status.Conditions)
+
+	el.Status = mapFluxResourceStatusForCondition(&gitRepository.Status.Conditions)
 
 	el.GitRepositoryMetadata = kube.GitRepositoryMetadata{
 		URL:    gitRepository.Spec.URL,
@@ -182,6 +204,33 @@ func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 
 }
 
+func checkInList(s string, list []string) bool {
+	for _, item := range list {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+func mapFluxResourceStatusForCondition(conditions *[]metav1.Condition) kube.Status {
+	// https://github.com/fluxcd/source-controller/blob/main/api/v1/condition_types.go
+
+	for _, condition := range *conditions {
+		if condition.Type == "Ready" {
+			switch condition.Status {
+			case metav1.ConditionTrue:
+				return kube.StatusSuccess
+			case metav1.ConditionFalse:
+				return kube.StatusFailed
+			case metav1.ConditionUnknown:
+				return kube.StatusPending
+			}
+		}
+	}
+	return kube.StatusPending
+}
+
 func mapOciRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	ociRepository := &sourcev1beta2.OCIRepository{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), ociRepository)
@@ -191,7 +240,8 @@ func mapOciRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	mapConditions(el, ociRepository.Status.Conditions)
-	mapFluxMetadata(el, ociRepository.GetAnnotations(), ociRepository.Status.LastHandledReconcileAt, ociRepository.Spec.Suspend)
+	mapFluxMetadata(el, ociRepository.GetAnnotations(), ociRepository.Status.LastHandledReconcileAt, ociRepository.Spec.Suspend, ociRepository.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(&ociRepository.Status.Conditions)
 
 	el.OCIRepositoryMetadata = kube.OCIRepositoryMetadata{
 		URL:          ociRepository.Spec.URL,
@@ -211,7 +261,9 @@ func mapHelmRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 	mapConditions(el, helmRepository.Status.Conditions)
-	mapFluxMetadata(el, helmRepository.GetAnnotations(), helmRepository.Status.LastHandledReconcileAt, helmRepository.Spec.Suspend)
+	el.Status = mapFluxResourceStatusForCondition(&helmRepository.Status.Conditions)
+
+	mapFluxMetadata(el, helmRepository.GetAnnotations(), helmRepository.Status.LastHandledReconcileAt, helmRepository.Spec.Suspend, helmRepository.Status.Conditions)
 }
 
 func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
@@ -232,15 +284,22 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 		})
 	}
 
-	if (pod.Status.Phase == v1.PodRunning || pod.Status.Phase == v1.PodSucceeded) && pod.DeletionTimestamp == nil {
-		el.Status = kube.StatusSuccess
-	} else if pod.Status.Phase == v1.PodPending {
-		el.Status = kube.StatusPending
-	} else if pod.Status.Phase == v1.PodFailed {
-		el.Status = kube.StatusFailed
-	} else {
-		el.Status = kube.StatusWarning
+	mapPodStatus := func(pod *v1.Pod) kube.Status {
+		if pod.DeletionTimestamp != nil {
+			return kube.StatusPending
+		}
+		switch pod.Status.Phase {
+		case v1.PodRunning, v1.PodSucceeded:
+			return kube.StatusSuccess
+		case v1.PodPending:
+			return kube.StatusPending
+		case v1.PodFailed:
+			return kube.StatusFailed
+		default:
+			return kube.StatusWarning
+		}
 	}
+	el.Status = mapPodStatus(pod)
 
 	el.PodMetadata = kube.PodMetadata{
 		Phase: string(pod.Status.Phase),
@@ -274,14 +333,23 @@ func mapPVCData(el *kube.Resource, obj unstructured.Unstructured) {
 		el.PVCMetadata.Capacity[string(key)] = value.String()
 	}
 
-	switch pvc.Status.Phase {
-	case v1.ClaimBound:
-		el.Status = kube.StatusSuccess
-	case v1.ClaimPending:
-		el.Status = kube.StatusPending
-	case v1.ClaimLost:
-		el.Status = kube.StatusFailed
+	mapPVCStatus := func(pvc *v1.PersistentVolumeClaim) kube.Status {
+		if pvc.DeletionTimestamp != nil {
+			return kube.StatusPending
+		}
+		switch pvc.Status.Phase {
+		case v1.ClaimBound:
+			return kube.StatusSuccess
+		case v1.ClaimPending:
+			return kube.StatusPending
+		case v1.ClaimLost:
+			return kube.StatusFailed
+		default:
+			return kube.StatusWarning
+		}
 	}
+
+	el.Status = mapPVCStatus(pvc)
 }
 
 func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
@@ -292,7 +360,35 @@ func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 
+	mapPVStatus := func(pv *v1.PersistentVolume) kube.Status {
+		if pv.DeletionTimestamp != nil {
+			return kube.StatusPending
+		}
+		switch pv.Status.Phase {
+		case v1.VolumeAvailable, v1.VolumeBound:
+			return kube.StatusSuccess
+		case v1.VolumeReleased:
+			return kube.StatusWarning
+		case v1.VolumeFailed:
+			return kube.StatusFailed
+		default:
+			return kube.StatusPending
+		}
+	}
+
+	el.Status = mapPVStatus(pv)
+
 	el.ParentRefs = append(el.ParentRefs, pv.Spec.ClaimRef.Name+"_"+pv.Spec.ClaimRef.Namespace+"_"+pv.Spec.ClaimRef.Kind+"_"+GetRefVersion(pv.Spec.ClaimRef.APIVersion))
+}
+
+func mapLonghornVolume(el *kube.Resource, obj unstructured.Unstructured) {
+	volume := &unstructured.Unstructured{}
+	volume.Object = obj.UnstructuredContent()
+
+	pvName := obj.GetName()
+	parentRef := pvName + "__PersistentVolume_v1" // PV is cluster-scoped, so namespace is omitted or set to "_"
+
+	el.ParentRefs = append(el.ParentRefs, parentRef)
 }
 
 func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
@@ -311,19 +407,42 @@ func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 			Type:               string(condition.Type),
 			LastTransitionTime: condition.LastTransitionTime.Time,
 		})
+	}
 
-		if condition.Type == "Progressing" && condition.Status == "True" {
-			switch condition.Reason {
-			case "NewReplicaSetCreated", "FoundNewReplicaSet", "ReplicaSetUpdated":
-				el.Status = kube.StatusPending
-			case "NewReplicaSetAvailable":
-				el.Status = kube.StatusSuccess
-			}
-		} else if condition.Type == "Progressing" && condition.Status == "False" && condition.Reason == "ProgressDeadlineExceeded" {
-			el.Status = kube.StatusFailed
-		} else if condition.Type == "StateError" && condition.Status == "True" {
-			el.Status = kube.StatusFailed
+	mapDeploymentStatus := func(deploy *appsV1.Deployment) kube.Status {
+		if deploy.DeletionTimestamp != nil {
+			return kube.StatusPending
 		}
+
+		for _, cond := range deploy.Status.Conditions {
+			if cond.Type == appsV1.DeploymentProgressing && cond.Reason == "ProgressDeadlineExceeded" && cond.Status == v1.ConditionFalse {
+				return kube.StatusFailed
+			}
+			if cond.Type == appsV1.DeploymentReplicaFailure && cond.Status == v1.ConditionTrue {
+				return kube.StatusFailed
+			}
+		}
+
+		if deploy.Status.ObservedGeneration < deploy.Generation {
+			return kube.StatusPending
+		}
+
+		if deploy.Status.UnavailableReplicas > 0 {
+			return kube.StatusWarning
+		}
+
+		if deploy.Status.ReadyReplicas == *deploy.Spec.Replicas {
+			return kube.StatusSuccess
+		}
+
+		return kube.StatusPending
+	}
+
+	el.Status = mapDeploymentStatus(deployment)
+
+	var images []string
+	for _, container := range deployment.Spec.Template.Spec.Containers {
+		images = append(images, container.Image)
 	}
 
 	el.DeploymentMetadata = kube.DeploymentMetadata{
@@ -331,6 +450,7 @@ func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 		ReadyReplicas:     deployment.Status.ReadyReplicas,
 		UpdatedReplicas:   deployment.Status.UpdatedReplicas,
 		AvailableReplicas: deployment.Status.AvailableReplicas,
+		Images:            images,
 	}
 
 }
@@ -345,24 +465,9 @@ func mapKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	mapConditions(el, kustomization.Status.Conditions)
-	mapFluxMetadata(el, kustomization.GetAnnotations(), kustomization.Status.LastHandledReconcileAt, kustomization.Spec.Suspend)
+	mapFluxMetadata(el, kustomization.GetAnnotations(), kustomization.Status.LastHandledReconcileAt, kustomization.Spec.Suspend, kustomization.Status.Conditions)
 
-	status := kube.StatusSuccess
-	for _, condition := range kustomization.Status.Conditions {
-		if condition.Type == "Ready" && condition.Status != "True" {
-			if condition.Reason == "Progressing" || condition.Reason == "Suspended" || condition.Reason == "DependencyNotReady" {
-				status = kube.StatusPending
-			} else if condition.Reason == "ProgressingWithRetry" {
-				status = kube.StatusWarning
-			} else {
-				status = kube.StatusFailed
-			}
-		} else if condition.Type == "Stalled" {
-			status = kube.StatusWarning
-		}
-		// "Reconciling", "Healthy" can be ignored to evaluate status
-	}
-	el.Status = status
+	el.Status = mapFluxResourceStatusForCondition(&kustomization.Status.Conditions)
 
 	el.KustomizationMetadata = kube.KustomizationMetadata{
 		Path:          kustomization.Spec.Path,
@@ -388,35 +493,8 @@ func mapHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 	mapConditions(el, helmRelease.Status.Conditions)
-	mapFluxMetadata(el, helmRelease.GetAnnotations(), helmRelease.Status.LastHandledReconcileAt, helmRelease.Spec.Suspend)
-
-	// Status
-	status := kube.StatusSuccess
-	for _, condition := range helmRelease.Status.Conditions {
-		// https://github.com/fluxcd/helm-controller/blob/e05c4ffc4b2141f6f918329496df70e2c5ac1e6e/api/v2/condition_types.go#L37
-		if condition.Type == "Ready" && condition.Status != "True" {
-			if condition.Reason == "Progressing" || condition.Reason == "Suspended" {
-				status = kube.StatusPending
-			} else if condition.Reason == "ProgressingWithRetry" {
-				status = kube.StatusWarning
-			} else {
-				status = kube.StatusFailed
-			}
-		} else if condition.Type == "TestSuccess" {
-			if condition.Status != "True" {
-				status = kube.StatusFailed
-			}
-		} else if condition.Type == "Remediate" {
-			if condition.Status != "True" {
-				status = kube.StatusFailed
-			} else {
-				status = kube.StatusPending
-			}
-
-		}
-	}
-
-	el.Status = status
+	mapFluxMetadata(el, helmRelease.GetAnnotations(), helmRelease.Status.LastHandledReconcileAt, helmRelease.Spec.Suspend, helmRelease.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(&helmRelease.Status.Conditions)
 
 	el.HelmReleaseMetadata = kube.HelmReleaseMetadata{
 		ChartName:     helmRelease.GetHelmChartName(),
@@ -434,5 +512,62 @@ func mapHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 	} else {
 		el.HelmReleaseMetadata.ChartVersion = "unknown"
 	}
+}
 
+func mapIngressData(el *kube.Resource, obj unstructured.Unstructured) {
+	ing := &networkingv1.Ingress{}
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), ing)
+	if err != nil {
+		log.Default().Printf("Error converting unstructured to Ingress: %v", err)
+		return
+	}
+
+	mapIngressStatus := func(ing *networkingv1.Ingress) kube.Status {
+		if ing.DeletionTimestamp != nil {
+			return kube.StatusPending
+		}
+		if len(ing.Status.LoadBalancer.Ingress) == 0 {
+			return kube.StatusPending
+		}
+		return kube.StatusSuccess
+	}
+
+	el.Status = mapIngressStatus(ing)
+}
+
+func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
+	ss := &appsV1.StatefulSet{}
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), ss)
+	if err != nil {
+		log.Default().Printf("Error converting unstructured to StatefulSet: %v", err)
+		return
+	}
+
+	for _, condition := range ss.Status.Conditions {
+		el.Conditions = append(el.Conditions, kube.Condition{
+			Message:            condition.Message,
+			Reason:             condition.Reason,
+			Status:             string(condition.Status),
+			Type:               string(condition.Type),
+			LastTransitionTime: condition.LastTransitionTime.Time,
+		})
+	}
+
+	mapStatefulSetStatus := func(ss *appsV1.StatefulSet) kube.Status {
+		if ss.DeletionTimestamp != nil {
+			return kube.StatusPending
+		}
+		if ss.Status.ObservedGeneration < ss.Generation {
+			return kube.StatusPending
+		}
+		if ss.Status.ReadyReplicas == *ss.Spec.Replicas {
+			return kube.StatusSuccess
+		}
+		if ss.Status.CurrentReplicas < *ss.Spec.Replicas {
+			return kube.StatusPending
+		}
+		return kube.StatusWarning
+	}
+
+	el.Status = mapStatefulSetStatus(ss)
 }

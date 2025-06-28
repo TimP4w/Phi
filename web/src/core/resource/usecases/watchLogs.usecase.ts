@@ -3,14 +3,14 @@ import { TYPES } from "../../shared/types";
 import UseCase from "../../shared/usecase";
 import { WebSocketService } from "../../realtime/services/webSocket.service";
 import { REALTIME_CONST } from "../../realtime/constants/realtime.const";
-import { TreeNode } from "../../fluxTree/models/tree";
+import { KubeResource } from "../../fluxTree/models/tree";
 import { RESOURCE_TYPE } from "../../fluxTree/constants/resources.const";
 
-export class WatchLogsUseCase extends UseCase<TreeNode, Promise<void>> {
+export class WatchLogsUseCase extends UseCase<KubeResource, Promise<void>> {
 
   private readonly realtimeService = container.get<WebSocketService>(TYPES.WebSocket);
 
-  public async execute(node: TreeNode): Promise<void> {
+  public async execute(node: KubeResource): Promise<void> {
     try {
       if (!node) {
         return Promise.reject('Node is not defined');

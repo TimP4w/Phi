@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import {
-  PodNode,
+  Pod as PodResource,
   VizualizationNodeData,
 } from "../../../core/fluxTree/models/tree";
 import Resource from "./Resource";
@@ -12,7 +12,7 @@ type ResourceProps = NodeProps<Node<VizualizationNodeData>>;
 
 function Pod(props: ResourceProps) {
   const pod = useMemo(() => {
-    return props.data.treeNode as PodNode;
+    return props.data.treeNode as PodResource;
   }, [props.data]);
 
   return (

@@ -28,7 +28,7 @@ export const DescribeTab = observer(({ describe }: PanelProps) => {
   }, [describe]);
 
   if (!describe) {
-    return <div className="describe-tab">No Node</div>;
+    return <div className="describe-tab">No Resource</div>;
   }
 
   return (
