@@ -1,50 +1,93 @@
-# React + TypeScript + Vite
+# Phi Web Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the frontend for the Phi project, built with React, TypeScript, and Vite. It provides the user interface for interacting with the Phi backend and visualizing Kubernetes resources in real time.
 
-Currently, two official plugins are available:
+## Requirements
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js (>=18)
+- Yarn
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+### 1. Clone the repository
 
-- Configure the top-level `parserOptions` property like this:
-
-```js
-export default tseslint.config({
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+```sh
+git clone https://github.com/timp4w/phi.git
+cd phi/web
 ```
 
-- Replace `tseslint.configs.recommended` to `tseslint.configs.recommendedTypeChecked` or `tseslint.configs.strictTypeChecked`
-- Optionally add `...tseslint.configs.stylisticTypeChecked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and update the config:
+### 2. Development Environment (Recommended)
 
-```js
-// eslint.config.js
-import react from 'eslint-plugin-react'
+If you use [Nix flakes](https://nixos.wiki/wiki/Flakes):
 
-export default tseslint.config({
-  // Set the react version
-  settings: { react: { version: '18.3' } },
-  plugins: {
-    // Add the react plugin
-    react,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended rules
-    ...react.configs.recommended.rules,
-    ...react.configs['jsx-runtime'].rules,
-  },
-})
+```sh
+nix develop
 ```
+
+This provides Node.js, Yarn, and other dependencies.
+
+### 3. Install dependencies
+
+```sh
+yarn install
+```
+
+
+### 4. Set the `./web/.env` file values
+
+```
+VITE_VERSION=local
+VITE_URL=http://localhost:8080
+VITE_WS=http://localhost:8080/ws
+```
+
+
+### 5. Run the development server
+
+```sh
+yarn dev
+```
+
+The app will be available at [http://localhost:5173](http://localhost:5173) by default.
+
+### 6. Build for production
+
+```sh
+yarn build
+```
+
+### 7. Lint and format
+
+```sh
+yarn lint
+```
+
+## Project Structure
+
+- `src/` — Main source code for the frontend
+  - `core/` — Core application logic, organized by domain:
+    - `fluxTree/` — Flux tree models, services, and use cases
+    - `http/` — HTTP services
+    - `realtime/` — Real-time models and services
+    - `resource/` — Resource-related logic
+    - `shared/` — Shared utilities and types
+    - `utils/` — General-purpose utility functions
+  - `infrastructure/` — Backend integration utilities
+  - `ui/` — UI components and views
+    - `assets/` — Static assets (images, icons, etc.)
+    - `components/` — Reusable React components
+    - `routes/` — Application routes
+    - `shared/` — Shared UI components
+    - `views/` — Page-level views
+  - `index.scss` — Global styles
+  - `main.tsx` — Application entrypoint
+- `public/` — Static files served at the root
+- `vite.config.ts` — Vite configuration
+- `tsconfig*.json` — TypeScript configuration
+- `eslint.config.js` — ESLint configuration
+- `tailwind.config.js` — Tailwind CSS configuration
+- `postcss.config.js` — PostCSS configuration
+
+## API Integration
+
+The frontend communicates with the backend via REST and WebSocket APIs.

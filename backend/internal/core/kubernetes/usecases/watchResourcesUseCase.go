@@ -1,7 +1,6 @@
 package kubernetesusecases
 
 import (
-	"log"
 	"time"
 
 	"bytes"
@@ -10,11 +9,14 @@ import (
 	"encoding/json"
 
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
+	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/realtime"
 	shared "github.com/timp4w/phi/internal/core/shared"
 	"github.com/timp4w/phi/internal/core/tree"
 	"github.com/timp4w/phi/internal/core/utils"
 )
+
+type WatchResourcesInput struct{}
 
 type WatchResourcesUseCase struct {
 	kubeService     kube.KubeService
@@ -22,25 +24,43 @@ type WatchResourcesUseCase struct {
 	realtimeService realtime.RealtimeService
 	rateLimiter     *utils.RateLimiter
 	kubeStore       kube.KubeStore
+	logger          logging.PhiLogger
 }
 
-func NewWatchResourcesUseCase() shared.UseCase[struct{}, struct{}] {
+func NewWatchResourcesUseCase(
+	TreeService tree.TreeService,
+	RealtimeService realtime.RealtimeService,
+	KubeService kube.KubeService,
+	KubeStore kube.KubeStore,
+) shared.UseCase[WatchResourcesInput, struct{}] {
 	return &WatchResourcesUseCase{
-		treeService:     shared.GetTreeService(),
-		realtimeService: shared.GetRealtimeService(),
+		treeService:     TreeService,
+		realtimeService: RealtimeService,
 		rateLimiter:     utils.NewRateLimiter(150 * time.Millisecond),
-		kubeService:     shared.GetKubeService(),
-		kubeStore:       shared.GetKubeStore(),
+		kubeService:     KubeService,
+		kubeStore:       KubeStore,
+		logger:          *logging.Logger(),
 	}
 }
 
-func (uc *WatchResourcesUseCase) Execute(in struct{}) (struct{}, error) {
-	uniqueKinds := uc.treeService.GetUniqueKinds()
+func (uc *WatchResourcesUseCase) Execute(in WatchResourcesInput) (struct{}, error) {
+	uc.logger.Info("Starting resources watcher")
+
+	uniqueKinds := uc.treeService.GetUniqueResourceAPIRefs()
+	uc.logger.WithField("count", len(uniqueKinds)).Debug("Setting up resource watchers")
+
 	uc.kubeService.WatchResources(uniqueKinds, uc.onResourceAdd, uc.onResourceUpdate, uc.onResourceDelete)
 	return struct{}{}, nil
 }
 
 func (uc *WatchResourcesUseCase) rebuildTreeAtNode(el kube.Resource) {
+	logger := uc.logger.WithFields(map[string]interface{}{
+		"resource_kind":      el.Kind,
+		"resource_name":      el.Name,
+		"resource_namespace": el.Namespace,
+	})
+	logger.Debug("Rebuilding tree")
+
 	tree := uc.treeService.GetTree()
 	root := tree.Root
 	visited := make(map[string]bool)
@@ -49,26 +69,27 @@ func (uc *WatchResourcesUseCase) rebuildTreeAtNode(el kube.Resource) {
 	uc.findChildrenRec(&root, visited)
 
 	// Create new informers if needed
-	uniqueResources := uc.treeService.GetUniqueKinds()
+	uniqueResources := uc.treeService.GetUniqueResourceAPIRefs()
 	channels := uc.kubeService.GetInformerChannels()
-	for kind := range uniqueResources {
-		if _, ok := channels[kind]; !ok {
-			uc.kubeService.WatchResources(map[string]struct{}{kind: {}}, uc.onResourceAdd, uc.onResourceUpdate, uc.onResourceDelete)
+	for resourceKey := range uniqueResources {
+		if _, ok := channels[resourceKey]; !ok {
+			logger.WithField("resourceKey", resourceKey).Debug("Creating new informer for resource")
+			uc.kubeService.WatchResources(map[string]struct{}{resourceKey: {}}, uc.onResourceAdd, uc.onResourceUpdate, uc.onResourceDelete)
 		}
 	}
 
 	uc.treeService.SetTree(root)
-	compressedTree, err := compressTree(&root)
+	compressedTree, err := uc.compressTree(&root)
 	if err != nil {
-		log.Println("Error compressing tree", err)
+		logger.WithError(err).Error("Error compressing tree")
 		return
 	}
 	message := realtime.Message{
 		Message: compressedTree,
 		Type:    realtime.TREE,
 	}
+	logger.Debug("Broadcasting updated tree")
 	uc.realtimeService.Broadcast(message)
-
 }
 
 func (uc *WatchResourcesUseCase) findChildrenRec(root *kube.Resource, visited map[string]bool) *kube.Resource {
@@ -82,43 +103,79 @@ func (uc *WatchResourcesUseCase) findChildrenRec(root *kube.Resource, visited ma
 	return root
 }
 
-// Tree can be several megabytes in size, so we compress it before sending it to the client
-func compressTree(tree *kube.Resource) (string, error) {
+// compressTree compresses the Tree (that can be several megabytes in size) it before sending it to the client
+func (uc *WatchResourcesUseCase) compressTree(tree *kube.Resource) (string, error) {
 	res, err := json.Marshal(tree)
 	if err != nil {
+		uc.logger.WithError(err).Error("Failed to marshal tree")
 		return "", err
 	}
+
+	uc.logger.WithField("uncompressed_size", len(res)).Debug("Compressing tree")
 
 	var compressed bytes.Buffer
 	gz := gzip.NewWriter(&compressed)
 	if _, err := gz.Write([]byte(res)); err != nil {
+		uc.logger.WithError(err).Error("Failed to compress tree")
 		return "", err
 	}
 	if err := gz.Close(); err != nil {
+		uc.logger.WithError(err).Error("Failed to close gzip writer")
 		return "", err
 	}
 
 	// Encode to base64
-	return base64.StdEncoding.EncodeToString(compressed.Bytes()), nil
+	encoded := base64.StdEncoding.EncodeToString(compressed.Bytes())
+	uc.logger.WithFields(map[string]interface{}{
+		"compressed_size":   compressed.Len(),
+		"encoded_size":      len(encoded),
+		"compression_ratio": float64(len(res)) / float64(compressed.Len()),
+	}).Debug("Tree compressed and encoded")
+
+	return encoded, nil
 }
 
 func (uc *WatchResourcesUseCase) onResourceAdd(el kube.Resource) {
+	logger := uc.logger.WithFields(map[string]interface{}{
+		"resource_kind":      el.Kind,
+		"resource_name":      el.Name,
+		"resource_namespace": el.Namespace,
+		"resource_uid":       el.UID,
+	})
+	logger.Debug("Resource added")
+
 	addedEl := uc.kubeStore.UpdateResource(el)
 	uc.rateLimiter.Execute(func() {
 		uc.rebuildTreeAtNode(*addedEl)
-	})
+	}, "RebuildTree")
 }
 
 func (uc *WatchResourcesUseCase) onResourceUpdate(oldEl, newEl kube.Resource) {
+	logger := uc.logger.WithFields(map[string]interface{}{
+		"resource_kind":      newEl.Kind,
+		"resource_name":      newEl.Name,
+		"resource_namespace": newEl.Namespace,
+		"resource_uid":       newEl.UID,
+	})
+	logger.Debug("Resource updated")
+
 	updatedEl := uc.kubeStore.UpdateResource(newEl)
 	uc.rateLimiter.Execute(func() {
 		uc.rebuildTreeAtNode(*updatedEl)
-	})
+	}, "RebuildTree")
 }
 
 func (uc *WatchResourcesUseCase) onResourceDelete(el kube.Resource) {
+	logger := uc.logger.WithFields(map[string]interface{}{
+		"resource_kind":      el.Kind,
+		"resource_name":      el.Name,
+		"resource_namespace": el.Namespace,
+		"resource_uid":       el.UID,
+	})
+	logger.Debug("Resource deleted")
+
 	uc.kubeStore.RemoveResource(el.UID)
 	uc.rateLimiter.Execute(func() {
 		uc.rebuildTreeAtNode(el)
-	})
+	}, "RebuildTree")
 }

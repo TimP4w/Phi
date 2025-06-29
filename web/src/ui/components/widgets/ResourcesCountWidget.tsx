@@ -136,7 +136,12 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
                   <Button onPress={onOpen} size="sm">
                     Show
                   </Button>
-                  <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="4xl">
+                  <Modal
+                    isOpen={isOpen}
+                    onOpenChange={onOpenChange}
+                    scrollBehavior="inside"
+                    size="4xl"
+                  >
                     <ModalContent>
                       {(onClose) => (
                         <>
