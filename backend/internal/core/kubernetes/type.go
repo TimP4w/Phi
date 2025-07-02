@@ -37,22 +37,51 @@ type Resource struct {
 	OCIRepositoryMetadata OCIRepositoryMetadata `json:"ociRepositoryMetadata,omitempty"`
 }
 
+// Copy copies all fields from another Resource into the receiver
 func (e *Resource) Copy(other Resource) {
+	e.UID = other.UID
 	e.Kind = other.Kind
 	e.Version = other.Version
 	e.Namespace = other.Namespace
 	e.Name = other.Name
 	e.Resource = other.Resource
-	e.ParentIDs = other.ParentIDs
-	e.ParentRefs = other.ParentRefs
-	e.UID = other.UID
-	e.Labels = other.Labels
-	e.Annotations = other.Annotations
+
+	e.ParentIDs = append([]string(nil), other.ParentIDs...)
+	e.ParentRefs = append([]string(nil), other.ParentRefs...)
+
+	if other.Labels != nil {
+		e.Labels = make(map[string]string, len(other.Labels))
+		for k, v := range other.Labels {
+			e.Labels[k] = v
+		}
+	} else {
+		e.Labels = nil
+	}
+	if other.Annotations != nil {
+		e.Annotations = make(map[string]string, len(other.Annotations))
+		for k, v := range other.Annotations {
+			e.Annotations[k] = v
+		}
+	} else {
+		e.Annotations = nil
+	}
+
 	e.Group = other.Group
 	e.Status = other.Status
-	e.Conditions = other.Conditions
-	// e.Events = other.Events We don't copy events
-	e.Children = other.Children
+	e.Conditions = append([]Condition(nil), other.Conditions...)
+
+	// Merge Events without duplicates (by UID)
+	existingUIDs := make(map[string]struct{}, len(e.Events))
+	for _, ev := range e.Events {
+		existingUIDs[string(ev.UID)] = struct{}{}
+	}
+	for _, ev := range other.Events {
+		if _, found := existingUIDs[string(ev.UID)]; !found {
+			e.Events = append(e.Events, ev)
+			existingUIDs[string(ev.UID)] = struct{}{}
+		}
+	}
+	e.Children = append([]Resource(nil), other.Children...)
 	e.CreatedAt = other.CreatedAt
 	e.DeletedAt = other.DeletedAt
 	e.IsFluxManaged = other.IsFluxManaged

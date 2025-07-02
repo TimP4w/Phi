@@ -44,29 +44,22 @@ Prerequisites:
 * go (1.22.6)
 * node (20.15.1)
 * yarn (1.22.22)
+* mockery (2.53.3)
+
+This repo also provides a `direnv` ready `flake.nix` for `NixOS` to setup the dependencies automatically in the shell (just `direnv allow`)
 
 ## Frontend
+
+[See Frontend](./web/README.md)
 
 ```
 cd web
 yarn
 ```
 
-### Set the `./web/.env` file values
-
-```
-VITE_VERSION=local
-VITE_URL=http://localhost:8080
-VITE_WS=http://localhost:8080/ws
-```
-
 ## Backend
 
-```
-cd backend
-go mod tidy
-go mod download
-```
+[See Backend](./backend/README.md)
 
 ### VSCode
 

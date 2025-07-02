@@ -5,25 +5,26 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	kubernetesusecases "github.com/timp4w/phi/internal/core/kubernetes/usecases"
 	shared "github.com/timp4w/phi/internal/core/shared"
 )
 
 type ResourceController struct {
-	getResourceYAMLUseCase shared.UseCase[string, []byte]
-	reconcileUseCase       shared.UseCase[string, struct{}]
+	getResourceYAMLUseCase shared.UseCase[kubernetesusecases.GetResourceYAMLInput, []byte]
+	reconcileUseCase       shared.UseCase[kubernetesusecases.ReconcileInput, struct{}]
 	suspendUseCase         shared.UseCase[kubernetesusecases.SuspendUseCaseInput, struct{}]
 	resumeUseCase          shared.UseCase[kubernetesusecases.ResumeUseCaseInput, struct{}]
-	getEventsUseCase       shared.UseCase[struct{}, []kube.Event]
+	getEventsUseCase       shared.UseCase[kubernetesusecases.GetEventsInput, []kube.Event]
 }
 
 func NewResourceController(
-	getResourceYAMLUseCase shared.UseCase[string, []byte],
-	reconcileUseCase shared.UseCase[string, struct{}],
+	getResourceYAMLUseCase shared.UseCase[kubernetesusecases.GetResourceYAMLInput, []byte],
+	reconcileUseCase shared.UseCase[kubernetesusecases.ReconcileInput, struct{}],
 	suspendUseCase shared.UseCase[kubernetesusecases.SuspendUseCaseInput, struct{}],
 	resumeUseCase shared.UseCase[kubernetesusecases.ResumeUseCaseInput, struct{}],
-	getEventsUseCase shared.UseCase[struct{}, []kube.Event],
+	getEventsUseCase shared.UseCase[kubernetesusecases.GetEventsInput, []kube.Event],
 ) *ResourceController {
 	controller := ResourceController{
 		getResourceYAMLUseCase: getResourceYAMLUseCase,
@@ -33,13 +34,15 @@ func NewResourceController(
 		getEventsUseCase:       getEventsUseCase,
 	}
 
-	http.HandleFunc("/api/resource/{id}/describe", corsHandler(controller.GetDescribe))
-	http.HandleFunc("/api/resource/{id}/reconcile", corsHandler(controller.PatchReconcile))
-	http.HandleFunc("/api/resource/{id}/suspend", corsHandler(controller.PatchSuspend))
-	http.HandleFunc("/api/resource/{id}/resume", corsHandler(controller.PatchResume))
-	http.HandleFunc("/api/events", corsHandler(controller.GetEvents))
-
 	return &controller
+}
+
+func (rc *ResourceController) RegisterRoutes(r chi.Router) {
+	r.Get("/api/resource/{id}/describe", rc.GetDescribe)
+	r.Patch("/api/resource/{id}/reconcile", rc.PatchReconcile)
+	r.Patch("/api/resource/{id}/suspend", rc.PatchSuspend)
+	r.Patch("/api/resource/{id}/resume", rc.PatchResume)
+	r.Get("/api/events", rc.GetEvents)
 }
 
 // DescribeResource godoc
@@ -54,7 +57,7 @@ func (rc *ResourceController) GetDescribe(w http.ResponseWriter, r *http.Request
 		http.Error(w, "Pod uid is required", http.StatusBadRequest)
 		return
 	}
-	yamlData, err := rc.getResourceYAMLUseCase.Execute(resourceUid)
+	yamlData, err := rc.getResourceYAMLUseCase.Execute(kubernetesusecases.GetResourceYAMLInput{ResourceUid: resourceUid})
 	if err != nil {
 		// TODO: handle resource not found (404)
 		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
@@ -79,7 +82,7 @@ func (rc *ResourceController) PatchReconcile(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	_, err := rc.reconcileUseCase.Execute(resourceUid)
+	_, err := rc.reconcileUseCase.Execute(kubernetesusecases.ReconcileInput{ResourceUid: resourceUid})
 	if err != nil {
 		// TODO: handle resource not found (404)
 		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
@@ -164,23 +167,4 @@ func (rc *ResourceController) GetEvents(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(jsonEvents)
-}
-
-func corsHandler(f func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		headers := w.Header()
-		headers.Add("Access-Control-Allow-Origin", "*") // TODO: better allow origin?
-		headers.Add("Vary", "Origin")
-		headers.Add("Vary", "Access-Control-Request-Method")
-		headers.Add("Vary", "Access-Control-Request-Headers")
-		headers.Add("Access-Control-Allow-Headers", "Content-Type, Origin, Accept, token")
-		headers.Add("Access-Control-Allow-Methods", "GET, POST, PATCH, OPTIONS") // TODO: we'll probably use DELETE at some point
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		} else {
-			f(w, r)
-		}
-	}
 }

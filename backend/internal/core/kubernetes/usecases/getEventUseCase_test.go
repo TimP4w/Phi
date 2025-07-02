@@ -9,11 +9,12 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/timp4w/phi/internal/core/kubernetes"
-	"github.com/timp4w/phi/internal/core/kubernetes/mocks"
+	mocks "github.com/timp4w/phi/internal/testing/testdata"
 )
 
 func TestGetEventsUseCaseExecuteSuccess(t *testing.T) {
-	mockKubeService := new(mocks.MockKubeService)
+	mockKubeSvc := mocks.NewKubeService(t)
+
 	expectedEvents := []kubernetes.Event{
 		{
 			UID:           types.UID("123"),
@@ -30,28 +31,24 @@ func TestGetEventsUseCaseExecuteSuccess(t *testing.T) {
 			ResourceUID:   "res-123",
 		},
 	}
-	mockKubeService.On("GetEvents").Return(expectedEvents, nil)
+	mockKubeSvc.On("GetEvents").Return(expectedEvents, nil)
 
-	useCase := &GetEventsUseCase{
-		kubeService: mockKubeService,
-	}
+	useCase := NewGetEventsUseCase(mockKubeSvc)
 	result, err := useCase.Execute(struct{}{})
 
 	assert.NoError(t, err)
 	assert.Equal(t, expectedEvents, result)
-	mockKubeService.AssertExpectations(t)
+	mockKubeSvc.AssertExpectations(t)
 }
 
 func TestGetEventsUseCaseExecuteError(t *testing.T) {
-	mockKubeService := new(mocks.MockKubeService)
-	mockKubeService.On("GetEvents").Return([]kubernetes.Event{}, errors.New("kube error"))
+	mockKubeSvc := mocks.NewKubeService(t)
+	mockKubeSvc.On("GetEvents").Return([]kubernetes.Event{}, errors.New("kube error"))
 
-	useCase := &GetEventsUseCase{
-		kubeService: mockKubeService,
-	}
+	useCase := NewGetEventsUseCase(mockKubeSvc)
 	result, err := useCase.Execute(struct{}{})
 
 	assert.Error(t, err)
 	assert.Nil(t, result)
-	mockKubeService.AssertExpectations(t)
+	mockKubeSvc.AssertExpectations(t)
 }

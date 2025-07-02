@@ -1,9 +1,9 @@
 import { KubeEvent } from "../../../core/fluxTree/models/kubeEvent";
-import { formatDistance } from "date-fns";
 import { Button, Card, Chip, Link } from "@heroui/react";
 import { ExternalLink } from "lucide-react";
 import { colorByEventStatus } from "../../shared/helpers";
 import { ROUTES } from "../../routes/routes.enum";
+import TooltipedDate from "../tooltiped-date/TooltipedDate";
 
 type EventsTableProps = {
   events: KubeEvent[];
@@ -25,10 +25,7 @@ const EventsTable: React.FC<EventsTableProps> = ({ events }) => {
                 {event.type}
               </Chip>
               <span className="text-xs text-default-400">
-                {formatDistance(event.lastObserved, new Date(), {
-                  includeSeconds: true,
-                  addSuffix: true,
-                })}
+                <TooltipedDate date={event.lastObserved} />
               </span>
             </div>
             <div>

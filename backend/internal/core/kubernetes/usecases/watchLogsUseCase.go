@@ -3,10 +3,10 @@ package kubernetesusecases
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/timp4w/phi/internal/core/kubernetes"
+	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/realtime"
 	shared "github.com/timp4w/phi/internal/core/shared"
 	"github.com/timp4w/phi/internal/core/tree"
@@ -20,6 +20,7 @@ type WatchLogsUseCase struct {
 	rateLimiter     *utils.RateLimiter
 	watchers        map[string]context.CancelFunc // TODO: move to kubernetes service
 	kubeStore       kubernetes.KubeStore
+	logger          logging.PhiLogger
 }
 
 type WatchLogsUseCaseInput struct {
@@ -27,23 +28,34 @@ type WatchLogsUseCaseInput struct {
 	ResourceID string
 }
 
-func NewWatchLogsUseCase() shared.UseCase[WatchLogsUseCaseInput, struct{}] {
+func NewWatchLogsUseCase(
+	TreeService tree.TreeService,
+	RealtimeService realtime.RealtimeService,
+	KubeService kubernetes.KubeService,
+	KubeStore kubernetes.KubeStore,
+) shared.UseCase[WatchLogsUseCaseInput, struct{}] {
 	return &WatchLogsUseCase{
-		treeService:     shared.GetTreeService(),
-		realtimeService: shared.GetRealtimeService(),
+		treeService:     TreeService,
+		realtimeService: RealtimeService,
 		rateLimiter:     utils.NewRateLimiter(300 * time.Millisecond),
 		watchers:        make(map[string]context.CancelFunc),
-		kubeService:     shared.GetKubeService(),
-		kubeStore:       shared.GetKubeStore(),
+		kubeService:     KubeService,
+		kubeStore:       KubeStore,
+		logger:          *logging.Logger(),
 	}
 }
 
 func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) {
-	log.Println(fmt.Sprintf("Client: %s wants to subscribe to logs for resource %s", in.ClientID, in.ResourceID))
+	logger := uc.logger.WithFields(map[string]any{
+		"client_id":   in.ClientID,
+		"resource_id": in.ResourceID,
+	})
+
+	logger.Debug("Client subscribed to logs")
 
 	cancel, exists := uc.watchers[in.ClientID]
 	if exists {
-		log.Println(fmt.Sprintf("Client: %s was already subscribed to receive logs from a resource (%s). Will cancel current subscription.", in.ClientID, in.ResourceID))
+		logger.Debug("Client was already subscribed to logs, canceling previous subscription")
 		cancel()
 	}
 
@@ -54,7 +66,7 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 		ID: in.ClientID,
 		OnClose: func(clientID string) {
 			if clientID == in.ClientID {
-				log.Println(fmt.Sprintf("Cancelled log subscription for client: %s and resource %s.", in.ClientID, in.ResourceID))
+				logger.Debug("Cancelled log subscription")
 				cancel()
 			}
 		},
@@ -63,28 +75,42 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 
 	pod := uc.kubeStore.GetResourceByUID(in.ResourceID)
 	if pod == nil {
+		logger.Error("Resource not found")
 		return struct{}{}, fmt.Errorf("resource not found")
 	}
 	if pod.Kind != "Pod" {
+		logger.WithField("kind", pod.Kind).Error("Resource is not a pod")
 		return struct{}{}, fmt.Errorf("resource is not a pod")
 	}
 
-	go uc.kubeService.WatchLogs(*pod, ctx, func(log kubernetes.KubeLog) {
-		uc.onLog(in.ResourceID, log)
+	logger.WithFields(map[string]any{
+		"pod_name":      pod.Name,
+		"pod_namespace": pod.Namespace,
+	}).Info("Starting log watch")
+
+	go uc.kubeService.WatchLogs(*pod, ctx, func(logEntry kubernetes.KubeLog) {
+		uc.onLog(in.ResourceID, logEntry)
 	})
 
 	return struct{}{}, nil
 }
 
 func (uc *WatchLogsUseCase) onLog(uid string, log kubernetes.KubeLog) error {
+	message := LogMessage{
+		UID:       uid,
+		Timestamp: log.Timestamp,
+		Log:       log.Message,
+		Container: log.Container,
+	}
+
+	uc.logger.
+		WithField("resource_id", uid).
+		WithField("container", log.Container).
+		Debug("Received log entry")
+
 	uc.realtimeService.Broadcast(realtime.Message{
-		Type: realtime.LOG,
-		Message: LogMessage{
-			UID:       uid,
-			Timestamp: log.Timestamp,
-			Log:       log.Message,
-			Container: log.Container,
-		},
+		Type:    realtime.LOG,
+		Message: message,
 	})
 	return nil
 }

@@ -12,14 +12,13 @@ type ResourceWSController struct {
 
 func NewResourceWSController(
 	watchLogsUseCase shared.UseCase[kubernetesusecases.WatchLogsUseCaseInput, struct{}],
+	realtimeService realtime.RealtimeService, // Injected
 ) *ResourceWSController {
 	controller := ResourceWSController{
 		watchLogsUseCase: watchLogsUseCase,
 	}
 
-	wsManager := shared.GetRealtimeService()
-
-	wsManager.RegisterListener(realtime.MessageListener{
+	realtimeService.RegisterListener(realtime.MessageListener{
 		Type:      realtime.START_WATCH_LOGS,
 		OnMessage: controller.HandleWatchLogs,
 	})

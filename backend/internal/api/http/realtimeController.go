@@ -3,6 +3,8 @@ package controllers
 import (
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
+
 	realtimeusecases "github.com/timp4w/phi/internal/core/realtime/usecases"
 	shared "github.com/timp4w/phi/internal/core/shared"
 )
@@ -16,8 +18,11 @@ func NewRealtimeController(upgradeConnectionUseCase shared.UseCase[realtimeuseca
 		upgradeConnectionUseCase: upgradeConnectionUseCase,
 	}
 
-	http.HandleFunc("/ws", controller.HandleWs)
 	return &controller
+}
+
+func (rc *RealtimeController) RegisterRoutes(r chi.Router) {
+	r.Get("/ws", rc.HandleWs)
 }
 
 func (rc *RealtimeController) HandleWs(w http.ResponseWriter, r *http.Request) {

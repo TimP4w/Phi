@@ -1,11 +1,11 @@
 package kubernetes
 
 import (
-	"log"
 	"strings"
 	"time"
 
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
+	"github.com/timp4w/phi/internal/core/logging"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 	kustomizev1 "github.com/fluxcd/kustomize-controller/api/v1"
@@ -171,7 +171,7 @@ func mapHelmChartData(el *kube.Resource, obj unstructured.Unstructured) {
 	helmChart := &sourcev1.HelmChart{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), helmChart)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to HelmChart: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to HelmChart")
 		return
 	}
 	el.Status = mapFluxResourceStatusForCondition(&helmChart.Status.Conditions)
@@ -184,7 +184,7 @@ func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	gitRepository := &sourcev1.GitRepository{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), gitRepository)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to GitRepository: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to GitRepository")
 		return
 	}
 
@@ -235,7 +235,7 @@ func mapOciRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	ociRepository := &sourcev1beta2.OCIRepository{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), ociRepository)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to OCIRepository: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to OCIRepository")
 		return
 	}
 
@@ -257,7 +257,7 @@ func mapHelmRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	helmRepository := &sourcev1.HelmRepository{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), helmRepository)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to HelmRepository: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to HelmRepository")
 		return
 	}
 	mapConditions(el, helmRepository.Status.Conditions)
@@ -270,7 +270,7 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 	pod := &v1.Pod{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), pod)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to Pod: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to Pod")
 		return
 	}
 
@@ -312,7 +312,7 @@ func mapPVCData(el *kube.Resource, obj unstructured.Unstructured) {
 	pvc := &v1.PersistentVolumeClaim{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), pvc)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to PVC: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to PVC")
 		return
 	}
 
@@ -356,7 +356,7 @@ func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 	pv := &v1.PersistentVolume{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), pv)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to PV: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to PV")
 		return
 	}
 
@@ -395,7 +395,7 @@ func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 	deployment := &appsV1.Deployment{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), deployment)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to Deployment: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to Deployment")
 		return
 	}
 
@@ -460,7 +460,7 @@ func mapKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
 	kustomization := &kustomizev1.Kustomization{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), kustomization)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to Kustomization: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to Kustomization")
 		return
 	}
 
@@ -489,7 +489,7 @@ func mapHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 	helmRelease := &helmv2.HelmRelease{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), helmRelease)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to HelmRelease: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to HelmRelease")
 		return
 	}
 	mapConditions(el, helmRelease.Status.Conditions)
@@ -518,7 +518,7 @@ func mapIngressData(el *kube.Resource, obj unstructured.Unstructured) {
 	ing := &networkingv1.Ingress{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), ing)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to Ingress: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to Ingress")
 		return
 	}
 
@@ -539,7 +539,7 @@ func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
 	ss := &appsV1.StatefulSet{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), ss)
 	if err != nil {
-		log.Default().Printf("Error converting unstructured to StatefulSet: %v", err)
+		logging.Logger().WithError(err).Error("Error converting unstructured to StatefulSet")
 		return
 	}
 
