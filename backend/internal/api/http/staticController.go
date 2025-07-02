@@ -37,7 +37,7 @@ func (sc *StaticController) RegisterRoutes(r chi.Router) {
 		r.Handle(file, http.FileServer(http.Dir(sc.frontendDir)))
 	}
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, filepath.Join(sc.frontendDir, "index.html"))
 	})
 }
