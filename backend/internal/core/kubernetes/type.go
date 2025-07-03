@@ -164,6 +164,7 @@ type KustomizationMetadata struct {
 	LastAppliedRevision    string    `json:"lastAppliedRevision,omitempty"`
 	LastAttemptedRevision  string    `json:"lastAttemptedRevision,omitempty"`
 	LastHandledReconcileAt time.Time `json:"lastHandledReconcileAt,omitempty"`
+	DependsOn              []string  `json:"dependsOn,omitempty"`
 }
 
 type DeploymentMetadata struct {

@@ -2,7 +2,8 @@ import "reflect-metadata";
 
 import { makeAutoObservable } from "mobx";
 import { injectable } from "inversify";
-import { FluxResource, PodLog, Repository, SourceRef, Tree, KubeResource } from "../models/tree";
+import { FluxResource, PodLog, Repository, SourceRef, Tree, KubeResource, Kustomization } from "../models/tree";
+import { RESOURCE_TYPE } from "../constants/resources.const";
 
 @injectable()
 class FluxTreeStore {
@@ -27,6 +28,21 @@ class FluxTreeStore {
     return this.tree
       .getRepositories()
       .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  findKustomizationByName(name?: string): Kustomization | null {
+    if (!name) {
+      return null;
+    }
+    const fluxResource = this.applications.find(app => app.name === name && app.kind === RESOURCE_TYPE.KUSTOMIZATION) || null;
+    return fluxResource as Kustomization;
+  }
+
+  findRepositoryByNameAndKind(name?: string, kind?: string): Repository | null {
+    if (!name || !kind) {
+      return null;
+    }
+    return this.repositories.find(repo => repo.name === name && repo.kind === kind) || null;
   }
 
   findFluxParents(uid?: string): KubeResource[] {

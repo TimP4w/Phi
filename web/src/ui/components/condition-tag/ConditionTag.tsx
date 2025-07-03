@@ -1,7 +1,7 @@
 import { Condition } from "../../../core/fluxTree/models/tree";
 import { useEffect, useState } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { IconProp } from "@fortawesome/fontawesome-svg-core";
+import { DynamicIcon, IconName } from "lucide-react/dynamic";
+
 import {
   CONDITION_TYPE,
   ERROR_TYPES,
@@ -20,7 +20,7 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
   condition,
   key,
 }: ConditionTagProps) => {
-  const [icon, setIcon] = useState<string>("circle-info");
+  const [icon, setIcon] = useState<IconName>(ICONS.INFO);
   const [color, setColor] = useState<
     "default" | "success" | "danger" | "primary" | "warning"
   >("default");
@@ -36,7 +36,7 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
         setColor("success");
         return;
       }
-      setIcon(ICONS.ERROR);
+      setIcon(ICONS.WARNING);
       setColor("danger");
       return;
     }
@@ -101,7 +101,7 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
     ];
 
     if (failingReasons.includes(condition.reason)) {
-      setIcon(ICONS.ERROR);
+      setIcon(ICONS.WARNING);
       setColor("danger");
       return;
     }
@@ -123,11 +123,10 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
   }, [condition]);
 
   return (
-    <Tooltip content={condition.message} className="dark">
+    <Tooltip content={condition.message} className="dark" key={key}>
       <Chip
-        key={key}
         color={color}
-        startContent={<FontAwesomeIcon icon={icon as IconProp} size={"1x"} />}
+        startContent={<DynamicIcon name={icon} size={16} />}
         variant="faded"
       >
         {condition.type}

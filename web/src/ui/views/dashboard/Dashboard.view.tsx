@@ -231,8 +231,8 @@ const AppsView: React.FC = observer(() => {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      <main className="max-w-[1400px] py-6 px-8 transition-all duration-300 flex flex-col mr-auto ml-auto">
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+      <main className="max-w-[2400px] py-6 px-8 transition-all duration-300 flex flex-col mr-auto ml-auto">
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4 xxl:grid-cols-5">
           <FluxControllersWidget />
           <FluxApplicationsWidget
             filters={selectedStatusesToFilter}
@@ -306,7 +306,7 @@ const AppsView: React.FC = observer(() => {
           </Select>
         </div>
         <Spacer y={8} />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xxl:grid-cols-5 w-full">
           {(() => {
             const filtered = [
               ...fluxTreeStore.applications,

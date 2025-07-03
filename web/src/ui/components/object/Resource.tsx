@@ -62,22 +62,6 @@ function Resource({ data }: ResourceProps) {
                   <p className="text-small text-default-500">{treeNode.kind}</p>
                 </div>
               </div>
-
-              {/*<div className="">
-              <Dropdown className="dark">
-                <DropdownTrigger>
-                  <Button color="primary" variant="light" isIconOnly>
-                    <FontAwesomeIcon icon="ellipsis-vertical" />
-                  </Button>
-                </DropdownTrigger>
-                <DropdownMenu
-                  aria-label="Pause/Resume or reconcile flux managed resource"
-                  onAction={(k) => action(k as string)}
-                >
-                  <DropdownItem key="reconcile">Reconcile</DropdownItem>
-                </DropdownMenu>
-              </Dropdown>
-            </div>*/}
             </div>
           </CardBody>
         </Card>

@@ -131,7 +131,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
           {resourceCounts.notReady > 0 && (
             <div className="w-full">
               <Alert color="danger">
-                <div className="flex flex-row text-sm">
+                <div className="flex flex-row text-sm items-center justify-between gap-4">
                   There are {resourceCounts.notReady} Not Ready Resources
                   <Button onPress={onOpen} size="sm">
                     Show

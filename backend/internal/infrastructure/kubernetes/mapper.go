@@ -469,10 +469,17 @@ func mapKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
 
 	el.Status = mapFluxResourceStatusForCondition(&kustomization.Status.Conditions)
 
+	var dependsOnRefs []string
+	for _, dep := range kustomization.Spec.DependsOn {
+		dependsOnRefs = append(dependsOnRefs, dep.Name)
+	}
+
 	el.KustomizationMetadata = kube.KustomizationMetadata{
 		Path:          kustomization.Spec.Path,
 		IsReconciling: el.FluxMetadata.IsReconciling, // deprecated
 		IsSuspended:   el.FluxMetadata.IsSuspended,   // deprecated
+		DependsOn:     dependsOnRefs,
+
 		SourceRef: kube.SourceRef{
 			Kind:      kustomization.Spec.SourceRef.Kind,
 			Name:      kustomization.Spec.SourceRef.Name,

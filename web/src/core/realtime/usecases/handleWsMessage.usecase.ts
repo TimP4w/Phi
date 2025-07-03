@@ -5,11 +5,11 @@ import UseCase from "../../shared/usecase";
 import { PodLog, Tree } from "../../fluxTree/models/tree";
 import { LogMessageDto, TreeNodeDto } from "../../fluxTree/models/dtos/treeDto";
 import { FluxTreeStore } from "../../fluxTree/stores/fluxTree.store";
-import { toast, TypeOptions } from "react-toastify";
 import { EventsStore } from "../../fluxTree/stores/events.store";
 import { KubeEvent } from "../../fluxTree/models/kubeEvent";
 import pako from "pako";
 import { EventDto } from "../../fluxTree/models/dtos/eventDto";
+import { addToast } from "@heroui/react";
 
 export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
   private fluxTreeStore = container.get<FluxTreeStore>(FluxTreeStore);
@@ -42,21 +42,22 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
   }
 
   private async handleEventMessage(event: EventDto): Promise<void> {
-    let type: TypeOptions;
+    let type: "warning" | "danger" = "danger";
     switch (event.type) {
       case "Warning":
         type = "warning";
         break;
       default:
-        type = "error";
+        type = "danger";
         break;
     }
 
     if (event.type !== "Normal") {
-      toast(
-        `[${event.kind}] ${event.name} \n${event.reason} - ${event.message}`,
-        { type: type, theme: "dark" },
-      );
+      addToast({
+        title: `[${event.kind}] ${event.name} \n${event.reason}`,
+        description: event.message,
+        color: type,
+      });
     }
 
     this.eventsStore.addEvent(new KubeEvent(event));
