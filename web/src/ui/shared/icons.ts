@@ -1,6 +1,6 @@
 export enum ICONS {
-  INFO = "circle-info",
-  ERROR = "circle-xmark",
-  WARNING = "circle-exclamation",
-  SUCCESS = "circle-check",
+  INFO = "shield",
+  ERROR = "shield-x",
+  WARNING = "shield-alert",
+  SUCCESS = "shield-check",
 }

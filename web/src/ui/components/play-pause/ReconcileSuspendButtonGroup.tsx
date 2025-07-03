@@ -66,11 +66,11 @@ const ReconcileSuspendButtonGroup: React.FC<
   }, [isSuspended, resume, suspend]);
 
   return (
-    <div className="flex gap-2 w-full ">
+    <div className="flex gap-2 w-full">
       <Button
         size="sm"
         variant="flat"
-        className={`flex-1 ${
+        className={`w-full ${
           !isReconciling && !isSuspended
             ? "hover:bg-primary-400"
             : "cursor-not-allowed"
@@ -87,7 +87,7 @@ const ReconcileSuspendButtonGroup: React.FC<
       <Button
         size="sm"
         variant={isSuspended ? "solid" : "flat"}
-        className={`flex-1 ${
+        className={`w-full ${
           isSuspended ? "hover:bg-green-600" : "hover:bg-red-600"
         }`}
         onPress={toggle}

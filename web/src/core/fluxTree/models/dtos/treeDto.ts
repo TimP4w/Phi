@@ -62,6 +62,7 @@ type KustomizationMetadataDto = {
   lastAppliedRevision: string;
   lastAttemptedRevision: string;
   lastHandledReconcileAt: Date;
+  dependsOn: string[];
 };
 
 type SourceRefDto = {

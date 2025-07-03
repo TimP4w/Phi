@@ -14,28 +14,44 @@ I work on it when I have time and feel like it, focusing on what I need, so expe
 
 # Features
 
-- [X] Show sync status
-- [X] Show conditions
-- [X] Show ownership tree
-- [X] Manually sync
-- [X] Manually Suspend/Resume sync
-- [X] Show object events and all events
-- [X] Show Pod logs
-- [X] Filter by Kind, Status
+- [X] Filter by Kind, Status, Suspended/Resumed
+- [X] Show FluxCD version
+- [X] Show FluxCD controllers status
+- [X] Show all flux resources (kustomizations, helmreleases, ...) and their repositories
+- [X] Show all resources created
+
+  - [X] Show ANY resource that has a problem
+- [X] Resource
+
+  - [X] Show graph / tree view
+  - [X] Show resources created count and status
+  - [X] Show resources created count and status
+  - [X] Show Sync Status
+    - [X] Show conditions
+  - [X] Show Depends On for kustomizations
+  - [X] Show Dependency Chain for kustomizations
+  - [X] Show repositories for Kustomizations and Helmreleases
+  - [X] Manually reconcile
+  - [X] Manually Suspend/Resume
+  - [X] Show resource events
+  - [X] Describe resource
+  - [X] Show pod logs
+- [X] Events
+
+  - [X] Show Cluster Events
+  - [X] Show FluxCD Events
 
 # Backlog (for v1)
 
 - [ ] Ability to filter events (regression)
-- [X] Search bars (regression)
-- [X] Persist selections in session storage
 - [ ] Add symbol in the UI to show resources about to be deleted and finalizers
 - [ ] Handle more information which are resource specific (e.g. used space of a volume, TBD)
 - [ ] Allow for some resource specific actions (e.g. delete a pod, TBD)
-- [ ] Code Cleanup
+- [X] Code Cleanup
 - [ ] Unit / Integration tests
-- [ ] Actual error handling in backend
+- [X] Actual error handling in backend
 - [ ] Resync backend periodically
-- [ ] Finish redesign
+- [X] Finish redesign
 
 # Local Development
 

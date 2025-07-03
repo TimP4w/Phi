@@ -7,64 +7,19 @@ import reportWebVitals from "./reportWebVitals";
 import { BrowserRouter } from "react-router-dom";
 import { Provider } from "inversify-react";
 import { container } from "./core/shared/inversify.config";
+
+import Phi from "./ui/Phi";
+import { fetchEventsUseCase } from "./core/fluxTree/usecases/FetchEvents.usecase";
+import { Message } from "./core/realtime/models/message";
 import { WebSocketService } from "./core/realtime/services/webSocket.service";
+import { handleWsMessage } from "./core/realtime/usecases/handleWsMessage.usecase";
 import { TYPES } from "./core/shared/types";
 import { Listener } from "./infrastructure/backend/websocket/services/impl/webSocket.service.impl";
-import { handleWsMessage } from "./core/realtime/usecases/handleWsMessage.usecase";
-import { Message } from "./core/realtime/models/message";
-import "react-toastify/dist/ReactToastify.css";
-import { library } from "@fortawesome/fontawesome-svg-core";
-import { fab, faGithub } from "@fortawesome/free-brands-svg-icons";
-import {
-  faArrowsRotate,
-  faBell,
-  faBellSlash,
-  faCircleCheck,
-  faCircleExclamation,
-  faCircleInfo,
-  faCircleNotch,
-  faCircleXmark,
-  faCloud,
-  faCodeCommit,
-  faEnvelope,
-  faEnvelopeCircleCheck,
-  faMap,
-  faPause,
-  faPlay,
-  faFilter,
-  faXmark,
-  faEllipsisV,
-} from "@fortawesome/free-solid-svg-icons";
-import { fetchEventsUseCase } from "./core/fluxTree/usecases/FetchEvents.usecase";
-import Phi from "./ui/Phi";
 
-library.add(
-  fab,
-  faArrowsRotate,
-  faPlay,
-  faPause,
-  faCircleCheck,
-  faCircleInfo,
-  faCircleExclamation,
-  faCircleXmark,
-  faCodeCommit,
-  faCircleNotch,
-  faEnvelope,
-  faEnvelopeCircleCheck,
-  faBellSlash,
-  faBell,
-  faCloud,
-  faMap,
-  faGithub,
-  faFilter,
-  faXmark,
-  faEllipsisV
-);
 const root = ReactDOM.createRoot(
   document.getElementById("root") as HTMLElement
 );
 
-// TODO: i don't really like this initialization anymore. Maybe make own singleton "InitService"?
 const realtime = container.get<WebSocketService>(TYPES.WebSocket);
 realtime.connect();
 const listener: Listener = {

@@ -402,6 +402,7 @@ type KustomizationMetadata = {
   lastAppliedRevision: string;
   lastAttemptedRevision: string;
   lastHandledReconcileAt: Date;
+  dependsOn: string[];
 };
 
 export type SourceRef = {

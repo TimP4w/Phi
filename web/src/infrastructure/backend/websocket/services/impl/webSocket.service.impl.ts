@@ -3,7 +3,7 @@ import { Message } from "../../../../../core/realtime/models/message";
 import { REALTIME_CONST } from "../../../../../core/realtime/constants/realtime.const";
 import { env } from "../../../../../core/shared/env";
 import { WebSocketService } from "../../../../../core/realtime/services/webSocket.service";
-import { Id, toast } from "react-toastify";
+import { addToast } from "@heroui/react";
 
 export type Listener = {
   id: string;
@@ -19,7 +19,6 @@ class WebSocketServiceImpl implements WebSocketService {
   maxRetries = 10;
   pingInterval: NodeJS.Timeout | null = null;
   clientId: string = "";
-  currentToastId: Id | null = null;
 
   constructor() {
     console.log("Loading WebSocketService");
@@ -46,11 +45,10 @@ class WebSocketServiceImpl implements WebSocketService {
 
     this.socket.onopen = () => {
       console.log("Websocket connection opened");
-      if (this.currentToastId) {
-        toast.dismiss(this.currentToastId);
-        this.currentToastId = null;
-      }
-      toast("Websocket connection opened", { type: "success", theme: "dark" });
+      addToast({
+        title: "Websocket connection opened",
+        color: "success",
+      });
       this.retryCount = 0;
       this.startPing();
     };
@@ -70,14 +68,11 @@ class WebSocketServiceImpl implements WebSocketService {
     };
 
     this.socket.onclose = () => {
-      if (!this.currentToastId) {
-        toast("WebSocket connection closed", {
-          type: "error",
-          theme: "dark",
-          autoClose: false,
-          toastId: "websocket-error",
-        });
-      }
+      addToast({
+        title: "WebSocket connection closed",
+        color: "danger",
+      });
+
       this.clientId = "";
       this.stopPing();
       this.reconnect();
@@ -110,28 +105,18 @@ class WebSocketServiceImpl implements WebSocketService {
       const retryTimeout = Math.min(1000 * Math.pow(2, this.retryCount), 30000);
       setTimeout(() => {
         console.log(`Reconnection attempt #${this.retryCount}`);
-        if (!this.currentToastId) {
-          this.currentToastId = toast(
-            `Reconnection attempt #${this.retryCount}`,
-            { type: "info", theme: "dark", autoClose: false },
-          );
-        } else {
-          toast.update(this.currentToastId, {
-            render: `Reconnection attempt #${this.retryCount}`,
-          });
-        }
+        addToast({
+          title: `Reconnection attempt #${this.retryCount}`,
+          color: "default",
+        });
 
         this.connect();
       }, retryTimeout);
     } else {
-      if (this.currentToastId) {
-        toast.update(this.currentToastId, {
-          render: `Max reconnection attempts reached.`,
-          type: "error",
-          autoClose: false,
-        });
-        this.currentToastId = null;
-      }
+      addToast({
+        title: `Max reconnection attempts reached.`,
+        color: "danger",
+      });
       console.log("Max reconnection attempts reached.");
     }
   }

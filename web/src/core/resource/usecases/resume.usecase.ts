@@ -1,8 +1,8 @@
-import { toast } from "react-toastify";
 import { container } from "../../shared/inversify.config";
 import { TYPES } from "../../shared/types";
 import UseCase from "../../shared/usecase";
 import { ResourceService } from "../services/resource.service";
+import { addToast } from "@heroui/react";
 
 export class ResumeUseCase extends UseCase<string, Promise<void>> {
 
@@ -11,10 +11,16 @@ export class ResumeUseCase extends UseCase<string, Promise<void>> {
   public async execute(uid: string): Promise<void> {
     try {
       const result = await this.resourceService.resume(uid);
-      toast("Resumed sync", { type: "success", theme: "dark" });
+      addToast({
+        title: "Resumed sync",
+        color: "success",
+      });
       return result;
     } catch (error) {
-      toast("Failed to resume", { type: "error", theme: "dark" });
+      addToast({
+        title: "Failed to resume",
+        color: "danger",
+      });
       console.error('Failed to resume ', error);
       return Promise.reject(error);
     }

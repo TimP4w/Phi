@@ -5,8 +5,6 @@ import Widget from "./Widget";
 import {
   Alert,
   Button,
-  Card,
-  CardBody,
   Chip,
   Modal,
   ModalBody,
@@ -131,7 +129,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
           {resourceCounts.notReady > 0 && (
             <div className="w-full">
               <Alert color="danger">
-                <div className="flex flex-row text-sm">
+                <div className="flex flex-row text-sm items-center justify-between gap-4">
                   There are {resourceCounts.notReady} Not Ready Resources
                   <Button onPress={onOpen} size="sm">
                     Show
@@ -145,69 +143,68 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
                     <ModalContent>
                       {(onClose) => (
                         <>
-                          <ModalHeader className="flex flex-col gap-1">
-                            Not Ready Resources
-                          </ModalHeader>
+                          <ModalHeader>Not Ready Resources</ModalHeader>
                           <ModalBody>
-                            {failedResources.map((resource) => (
-                              <Card
-                                className="block w-full items-start border border-default-200"
-                                shadow="none"
-                              >
-                                <CardBody className="flex-1">
-                                  <div className="flex justify-between">
-                                    <div className="space-y-2">
-                                      <div className="flex items-center space-x-2">
-                                        <AppLogo kind={resource.kind} />
-                                        <div>
-                                          <span className="font-md font-bold truncate">
-                                            {resource.name}
-                                          </span>
-                                          <p className="text-sm text-default-400">
-                                            {resource.namespace}
-                                          </p>
+                            <div className="flex flex-col h-[400px] overflow-y-auto gap-4">
+                              {failedResources.map((resource) => (
+                                <div className="h-[104px] w-full border border-default-200 rounded-lg p-3">
+                                  <div className="w-full">
+                                    <div className="flex justify-between">
+                                      <div className="space-y-2">
+                                        <div className="flex items-center space-x-2">
+                                          <AppLogo kind={resource.kind} />
+                                          <div>
+                                            <span className="font-md font-bold truncate">
+                                              {resource.name}
+                                            </span>
+                                            <p className="text-sm text-default-400">
+                                              {resource.namespace}
+                                            </p>
+                                          </div>
+                                          <Chip
+                                            variant="faded"
+                                            className="text-xs"
+                                          >
+                                            {resource.kind}
+                                          </Chip>
+                                          <Chip
+                                            variant="faded"
+                                            className={`text-xs`}
+                                            color={colorByStatus(
+                                              resource.status
+                                            )}
+                                          >
+                                            {statusText(resource.status)}
+                                          </Chip>
                                         </div>
-                                        <Chip
-                                          variant="faded"
-                                          className="text-xs"
-                                        >
-                                          {resource.kind}
-                                        </Chip>
-                                        <Chip
-                                          variant="faded"
-                                          className={`text-xs`}
-                                          color={colorByStatus(resource.status)}
-                                        >
-                                          {statusText(resource.status)}
-                                        </Chip>
-                                      </div>
-                                      {resource.conditions.map(
-                                        (condition, key) => (
-                                          <ConditionTag
-                                            condition={condition}
-                                            key={key.toString()}
-                                          />
-                                        )
-                                      )}
-                                    </div>
-
-                                    <div className="flex flex-col justify-between">
-                                      <Button
-                                        variant="light"
-                                        size="sm"
-                                        onPress={() =>
-                                          navigate(
-                                            `${ROUTES.RESOURCE}/${resource.uid}`
+                                        {resource.conditions.map(
+                                          (condition, key) => (
+                                            <ConditionTag
+                                              condition={condition}
+                                              key={key.toString()}
+                                            />
                                           )
-                                        }
-                                      >
-                                        <ExternalLink className="w-4 h-4" />
-                                      </Button>
+                                        )}
+                                      </div>
+
+                                      <div className="flex flex-col justify-between">
+                                        <Button
+                                          variant="light"
+                                          size="sm"
+                                          onPress={() =>
+                                            navigate(
+                                              `${ROUTES.RESOURCE}/${resource.uid}`
+                                            )
+                                          }
+                                        >
+                                          <ExternalLink className="w-4 h-4" />
+                                        </Button>
+                                      </div>
                                     </div>
                                   </div>
-                                </CardBody>
-                              </Card>
-                            ))}
+                                </div>
+                              ))}
+                            </div>
                           </ModalBody>
                           <ModalFooter>
                             <Button

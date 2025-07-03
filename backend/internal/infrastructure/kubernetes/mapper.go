@@ -288,6 +288,17 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 		if pod.DeletionTimestamp != nil {
 			return kube.StatusPending
 		}
+
+		for _, cond := range pod.Status.Conditions {
+			if cond.Type == "Ready" && cond.Reason == "ContainersNotReady" {
+				return kube.StatusPending
+			}
+			if cond.Type == "Ready" && cond.Status == "ContainersNotReady" {
+				return kube.StatusPending
+			}
+
+		}
+
 		switch pod.Status.Phase {
 		case v1.PodRunning, v1.PodSucceeded:
 			return kube.StatusSuccess
@@ -421,6 +432,9 @@ func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 			if cond.Type == appsV1.DeploymentReplicaFailure && cond.Status == v1.ConditionTrue {
 				return kube.StatusFailed
 			}
+			if cond.Type == appsV1.DeploymentAvailable && cond.Status == v1.ConditionFalse {
+				return kube.StatusWarning
+			}
 		}
 
 		if deploy.Status.ObservedGeneration < deploy.Generation {
@@ -469,10 +483,17 @@ func mapKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
 
 	el.Status = mapFluxResourceStatusForCondition(&kustomization.Status.Conditions)
 
+	var dependsOnRefs []string
+	for _, dep := range kustomization.Spec.DependsOn {
+		dependsOnRefs = append(dependsOnRefs, dep.Name)
+	}
+
 	el.KustomizationMetadata = kube.KustomizationMetadata{
 		Path:          kustomization.Spec.Path,
 		IsReconciling: el.FluxMetadata.IsReconciling, // deprecated
 		IsSuspended:   el.FluxMetadata.IsSuspended,   // deprecated
+		DependsOn:     dependsOnRefs,
+
 		SourceRef: kube.SourceRef{
 			Kind:      kustomization.Spec.SourceRef.Kind,
 			Name:      kustomization.Spec.SourceRef.Name,

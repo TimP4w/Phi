@@ -8,6 +8,8 @@ export const colorByStatus = (status: ResourceStatus) => {
       return "danger";
     case ResourceStatus.PENDING:
       return "warning";
+    case ResourceStatus.WARNING:
+      return "warning";
     default:
       return "primary";
   }
@@ -31,6 +33,8 @@ export const statusText = (status: ResourceStatus) => {
     case ResourceStatus.FAILED:
       return "Not Ready";
     case ResourceStatus.PENDING:
+      return "Reconciling";
+    case ResourceStatus.WARNING:
       return "Reconciling";
     default:
       return "Unknown";

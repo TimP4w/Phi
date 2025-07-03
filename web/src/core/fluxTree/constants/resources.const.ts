@@ -48,5 +48,7 @@ export enum FLUX_CONTROLLER {
   SOURCE = "source-controller",
 };
 
+export const FLUX_VERSION_LABEL = "app.kubernetes.io/version";
+
 
 export const FLUX_NAMESPACE = "flux-system";
