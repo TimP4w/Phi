@@ -19,6 +19,8 @@ export type TreeNodeDto = {
   events: EventDto[];
   status: "unknown" | "success" | "failed" | "pending" | "warning";
   isFluxManaged: boolean;
+  parentIDs?: string[];
+  parentRefs?: string[];
   createdAt: Date;
   deletedAt: Date;
   podMetadata?: PodMetadataDto;
@@ -122,4 +124,10 @@ export type LogMessageDto = {
   log: string;
   timestamp: Date;
   container: string;
+};
+
+export type TreeOperationDto = {
+  type: string;
+  resource: TreeNodeDto;
+  oldResource: TreeNodeDto | null;
 };

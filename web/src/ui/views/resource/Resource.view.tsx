@@ -71,7 +71,7 @@ const ResourceView: React.FC = observer(() => {
         console.error(e);
       }
     }
-  }, [fluxTreeStore.tree, loading, nodeUid]);
+  }, [fluxTreeStore.tree, fluxTreeStore.tree.lastUpdatedAt, loading, nodeUid]);
 
   const showResourcesCountWidget = useMemo((): boolean => {
     if (!resource) {

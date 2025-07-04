@@ -46,8 +46,8 @@ func (e *Resource) Copy(other Resource) {
 	e.Name = other.Name
 	e.Resource = other.Resource
 
-	e.ParentIDs = append([]string(nil), other.ParentIDs...)
-	e.ParentRefs = append([]string(nil), other.ParentRefs...)
+	e.ParentIDs = append(e.ParentIDs, other.ParentIDs...)
+	e.ParentRefs = append(e.ParentRefs, other.ParentRefs...)
 
 	if other.Labels != nil {
 		e.Labels = make(map[string]string, len(other.Labels))
@@ -109,8 +109,99 @@ func (e *Resource) GetRefVersion() string {
 
 // TODO: rename to IsDeepEqual
 func (e *Resource) DeepEqual(other Resource) bool {
-	return false
-	//TODO: extend this...
+	if e.UID != other.UID ||
+		e.Kind != other.Kind ||
+		e.Version != other.Version ||
+		e.Namespace != other.Namespace ||
+		e.Name != other.Name ||
+		e.Resource != other.Resource ||
+		e.Group != other.Group ||
+		e.Status != other.Status ||
+		e.CreatedAt != other.CreatedAt ||
+		e.DeletedAt != other.DeletedAt ||
+		e.IsFluxManaged != other.IsFluxManaged ||
+		e.FluxMetadata != other.FluxMetadata ||
+		e.PodMetadata != other.PodMetadata ||
+		!deploymentMetadataEqual(e.DeploymentMetadata, other.DeploymentMetadata) ||
+		e.HelmReleaseMetadata != other.HelmReleaseMetadata ||
+		!kustomizationMetadataEqual(e.KustomizationMetadata, other.KustomizationMetadata) ||
+		!pvcMetadataEqual(e.PVCMetadata, other.PVCMetadata) ||
+		e.GitRepositoryMetadata != other.GitRepositoryMetadata ||
+		e.OCIRepositoryMetadata != other.OCIRepositoryMetadata {
+		return false
+	}
+
+	// Compare ParentIDs
+	if len(e.ParentIDs) != len(other.ParentIDs) {
+		return false
+	}
+	for i := range e.ParentIDs {
+		if e.ParentIDs[i] != other.ParentIDs[i] {
+			return false
+		}
+	}
+
+	// Compare ParentRefs
+	if len(e.ParentRefs) != len(other.ParentRefs) {
+		return false
+	}
+	for i := range e.ParentRefs {
+		if e.ParentRefs[i] != other.ParentRefs[i] {
+			return false
+		}
+	}
+
+	// Compare Labels
+	if len(e.Labels) != len(other.Labels) {
+		return false
+	}
+	for k, v := range e.Labels {
+		if ov, ok := other.Labels[k]; !ok || ov != v {
+			return false
+		}
+	}
+
+	// Compare Annotations
+	if len(e.Annotations) != len(other.Annotations) {
+		return false
+	}
+	for k, v := range e.Annotations {
+		if ov, ok := other.Annotations[k]; !ok || ov != v {
+			return false
+		}
+	}
+
+	// Compare Conditions
+	if len(e.Conditions) != len(other.Conditions) {
+		return false
+	}
+	for i := range e.Conditions {
+		if e.Conditions[i] != other.Conditions[i] {
+			return false
+		}
+	}
+
+	// Compare Events
+	if len(e.Events) != len(other.Events) {
+		return false
+	}
+	for i := range e.Events {
+		if e.Events[i] != other.Events[i] {
+			return false
+		}
+	}
+
+	// Compare Children
+	if len(e.Children) != len(other.Children) {
+		return false
+	}
+	for i := range e.Children {
+		if !e.Children[i].DeepEqual(other.Children[i]) {
+			return false
+		}
+	}
+
+	return true
 }
 
 func (e *Resource) IsReconcilable() bool {
@@ -278,3 +369,71 @@ func (rm *ResourceMap) Lookup(s string) []ApiResource {
 }
 
 func (rm *ResourceMap) Resources() []ApiResource { return rm.List }
+
+// deploymentMetadataEqual compares two DeploymentMetadata structs for equality.
+func deploymentMetadataEqual(a, b DeploymentMetadata) bool {
+	if a.Replicas != b.Replicas ||
+		a.ReadyReplicas != b.ReadyReplicas ||
+		a.UpdatedReplicas != b.UpdatedReplicas ||
+		a.AvailableReplicas != b.AvailableReplicas {
+		return false
+	}
+	if len(a.Images) != len(b.Images) {
+		return false
+	}
+	for i := range a.Images {
+		if a.Images[i] != b.Images[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// kustomizationMetadataEqual compares two KustomizationMetadata structs for equality.
+func kustomizationMetadataEqual(a, b KustomizationMetadata) bool {
+	if a.Path != b.Path ||
+		a.IsReconciling != b.IsReconciling ||
+		a.IsSuspended != b.IsSuspended ||
+		a.SourceRef != b.SourceRef ||
+		a.LastAppliedRevision != b.LastAppliedRevision ||
+		a.LastAttemptedRevision != b.LastAttemptedRevision ||
+		!a.LastHandledReconcileAt.Equal(b.LastHandledReconcileAt) {
+		return false
+	}
+	if len(a.DependsOn) != len(b.DependsOn) {
+		return false
+	}
+	for i := range a.DependsOn {
+		if a.DependsOn[i] != b.DependsOn[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// pvcMetadataEqual compares two PVCMetadata structs for equality.
+func pvcMetadataEqual(a, b PVCMetadata) bool {
+	if a.StorageClass != b.StorageClass ||
+		a.VolumeName != b.VolumeName ||
+		a.VolumeMode != b.VolumeMode ||
+		a.Phase != b.Phase {
+		return false
+	}
+	if len(a.AccessModes) != len(b.AccessModes) {
+		return false
+	}
+	for i := range a.AccessModes {
+		if a.AccessModes[i] != b.AccessModes[i] {
+			return false
+		}
+	}
+	if len(a.Capacity) != len(b.Capacity) {
+		return false
+	}
+	for k, v := range a.Capacity {
+		if bv, ok := b.Capacity[k]; !ok || bv != v {
+			return false
+		}
+	}
+	return true
+}

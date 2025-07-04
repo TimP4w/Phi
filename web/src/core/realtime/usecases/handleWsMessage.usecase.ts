@@ -2,8 +2,8 @@ import { REALTIME_CONST } from "../constants/realtime.const";
 import { Message } from "../models/message";
 import { container } from "../../shared/inversify.config";
 import UseCase from "../../shared/usecase";
-import { PodLog, Tree } from "../../fluxTree/models/tree";
-import { LogMessageDto, TreeNodeDto } from "../../fluxTree/models/dtos/treeDto";
+import { KubeResource, PodLog, Tree } from "../../fluxTree/models/tree";
+import { LogMessageDto, TreeNodeDto, TreeOperationDto } from "../../fluxTree/models/dtos/treeDto";
 import { FluxTreeStore } from "../../fluxTree/stores/fluxTree.store";
 import { EventsStore } from "../../fluxTree/stores/events.store";
 import { KubeEvent } from "../../fluxTree/models/kubeEvent";
@@ -15,10 +15,12 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
   private fluxTreeStore = container.get<FluxTreeStore>(FluxTreeStore);
   private eventsStore = container.get<EventsStore>(EventsStore);
 
+
+
   public execute(message: Message): Promise<void> {
     switch (message.type) {
       case REALTIME_CONST.TREE:
-        this.handleTreeMessage(message.message as string); // Not casting to specific DTO type, since the message is compressed
+        //Treethis.handleTreeMessage(message.message as string); // Not casting to specific DTO type, since the message is compressed
         break;
       case REALTIME_CONST.LOG: // TODO: this should be a different usecase
         this.handleLogMessage(message.message as LogMessageDto);
@@ -26,6 +28,18 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
       case REALTIME_CONST.EVENT: {
         // TODO: this should be a different usecase
         this.handleEventMessage(message.message as EventDto);
+        break;
+      }
+      case REALTIME_CONST.ADD_RESOURCE: {
+        this.handleAddMessage(message.message as TreeOperationDto);
+        break;
+      }
+      case REALTIME_CONST.UPDATE_RESOURCE: {
+        this.handleUpdateMessage(message.message as TreeOperationDto);
+        break;
+      }
+      case REALTIME_CONST.DELETE_RESOURCE: {
+        this.handleDeleteMessage(message.message as TreeOperationDto);
         break;
       }
       default:
@@ -73,6 +87,23 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
     const compressedTree = Buffer.from(message as string, "base64");
     const decompressed = pako.ungzip(compressedTree, { to: "string" });
     return JSON.parse(decompressed);
+  }
+
+  private async handleAddMessage(treeOperation: TreeOperationDto): Promise<void> {
+    const resource = KubeResource.fromDto(treeOperation.resource as TreeNodeDto);
+    this.fluxTreeStore.addResource(resource);
+  }
+
+  private async handleUpdateMessage(treeOperation: TreeOperationDto): Promise<void> {
+    const newResource = KubeResource.fromDto(treeOperation.resource as TreeNodeDto);
+    const oldResource = KubeResource.fromDto(treeOperation.oldResource as TreeNodeDto);
+
+    this.fluxTreeStore.updateResource(oldResource, newResource);
+  }
+
+  private async handleDeleteMessage(treeOperation: TreeOperationDto): Promise<void> {
+    const resource = KubeResource.fromDto(treeOperation.resource as TreeNodeDto);
+    this.fluxTreeStore.removeResource(resource);
   }
 }
 

@@ -10,7 +10,7 @@ import {
 } from "../../../core/fluxTree/models/tree";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import { Input, Select, SelectItem, Spacer } from "@heroui/react";
-import App from "../../components/flux-resource-card/FluxResourceCard";
+import FluxResourceCard from "../../components/flux-resource-card/FluxResourceCard";
 import FluxControllersWidget from "../../components/widgets/FluxControllersWidget";
 import FluxApplicationsWidget from "../../components/widgets/FluxApplicationsWidget";
 import FluxKindsWidget from "../../components/widgets/FluxKindsWidget";
@@ -314,7 +314,12 @@ const AppsView: React.FC = observer(() => {
             ].filter(filterFunction);
             return filtered.length > 0 ? (
               filtered.map((fluxResource) => (
-                <App key={fluxResource.uid} node={fluxResource} />
+                <FluxResourceCard
+                  key={`${
+                    fluxResource.uid
+                  }_${fluxResource.lastUpdatedAt?.toISOString()}`}
+                  node={fluxResource}
+                />
               ))
             ) : (
               <div className="text-default-400 text-lg py-12">

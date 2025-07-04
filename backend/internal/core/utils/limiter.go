@@ -7,11 +7,16 @@ import (
 	"github.com/timp4w/phi/internal/core/logging"
 )
 
+type rateLimitEntry struct {
+	lastCall time.Time
+	timer    *time.Timer
+	lastFunc func()
+}
+
 type RateLimiter struct {
-	mu          sync.Mutex
-	lastCall    time.Time
-	cooldown    time.Duration
-	skippedCall func()
+	mu       sync.Mutex
+	cooldown time.Duration
+	entries  map[string]*rateLimitEntry
 }
 
 func NewRateLimiter(cooldown time.Duration) *RateLimiter {
@@ -19,6 +24,7 @@ func NewRateLimiter(cooldown time.Duration) *RateLimiter {
 	logger.Debug("Creating new rate limiter")
 	return &RateLimiter{
 		cooldown: cooldown,
+		entries:  make(map[string]*rateLimitEntry),
 	}
 }
 
@@ -26,35 +32,42 @@ func (r *RateLimiter) Execute(f func(), name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	timeSinceLastCall := time.Since(r.lastCall)
+	entry, exists := r.entries[name]
+	now := time.Now()
+	if !exists {
+		entry = &rateLimitEntry{}
+		r.entries[name] = entry
+	}
+
+	timeSinceLastCall := now.Sub(entry.lastCall)
 	logger := logging.Logger().WithField("time_since_last_call_ms", timeSinceLastCall.Milliseconds()).WithField("name", name)
 
 	if timeSinceLastCall >= r.cooldown {
 		logger.Debug("Executing immediately")
-		r.lastCall = time.Now()
-		f()
+		entry.lastCall = now
+		go f()
+		if entry.timer != nil {
+			entry.timer.Stop()
+			entry.timer = nil
+		}
+		entry.lastFunc = nil
 	} else {
-		logger.Debug("Rate limited, scheduling for later execution")
-		r.skippedCall = f
-		go r.callSkippedAfterCooldown(name)
-	}
-}
-
-func (r *RateLimiter) callSkippedAfterCooldown(name string) {
-	waitTime := r.cooldown - time.Since(r.lastCall)
-	logging.Logger().WithField("wait_time_ms", waitTime.Milliseconds()).WithField("name", name).Debug("Waiting before executing skipped call")
-
-	time.Sleep(waitTime)
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.skippedCall != nil {
-		logging.Logger().WithField("name", name).Debug("Executing previously skipped call")
-		r.lastCall = time.Now()
-		r.skippedCall()
-		r.skippedCall = nil
-	} else {
-		logging.Logger().WithField("name", name).Debug("No skipped call to execute")
+		logger.Debug("Rate limited, will send last message after cooldown")
+		entry.lastFunc = f
+		if entry.timer == nil {
+			waitTime := r.cooldown - timeSinceLastCall
+			entry.timer = time.AfterFunc(waitTime, func() {
+				r.mu.Lock()
+				defer r.mu.Unlock()
+				e := r.entries[name]
+				if e != nil && e.lastFunc != nil {
+					logging.Logger().WithField("name", name).Debug("Executing last queued call")
+					e.lastCall = time.Now()
+					go e.lastFunc()
+					e.lastFunc = nil
+					e.timer = nil
+				}
+			})
+		}
 	}
 }

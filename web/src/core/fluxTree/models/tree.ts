@@ -1,12 +1,36 @@
 import { ConditionDto, LogMessageDto, TreeNodeDto } from "./dtos/treeDto";
 import { FLUX_NAMESPACE, RESOURCE_TYPE } from "../constants/resources.const";
 import { KubeEvent } from "./kubeEvent";
+import { action, makeObservable, observable } from "mobx";
 
 export class Tree {
   root: KubeResource;
+  lastUpdatedAt: Date;
 
   constructor(root: KubeResource) {
     this.root = root;
+    this.lastUpdatedAt = new Date();
+    makeObservable(this, {
+      root: observable,
+      lastUpdatedAt: observable,
+      getApplicationResources: action,
+      getRepositories: action,
+      getFluxControllersDeployments: action,
+      findNodeById: action,
+    });
+
+  }
+
+  public getSubtreeSnapshot(node: KubeResource): string {
+    const snapshot = [
+      node.lastUpdatedAt?.toISOString() || "",
+      ...node.children.flatMap(child => this.getSubtreeSnapshot(child)),
+    ].join(",");
+    return snapshot;
+  }
+
+  public setUpdatedAt(): void {
+    this.lastUpdatedAt = new Date();
   }
 
   public getApplicationResources(): FluxResource[] {
@@ -121,12 +145,14 @@ export class KubeResource {
   annotations: Map<string, string>;
   labels: Map<string, string>;
   parentId: string | null;
+  parentIds: string[] = [];
   status: ResourceStatus;
   conditions: Condition[] = [];
   events: KubeEvent[] = [];
   logs: PodLog[] = [];
-  isFluxManaged: boolean = false;
-  isReconcillable: boolean = false;
+  isFluxManaged: boolean;
+  isReconcillable: boolean;
+  lastUpdatedAt?: Date;
 
   constructor();
   constructor(dto: TreeNodeDto);
@@ -161,6 +187,10 @@ export class KubeResource {
         ? dto.events.map((event) => new KubeEvent(event))
         : [];
       this.isFluxManaged = dto.isFluxManaged;
+      this.isReconcillable = false;
+      this.parentIds = dto.parentIDs || [];
+      this.lastUpdatedAt = new Date();
+
     } else {
       this.uid = "";
       this.name = "";
@@ -175,7 +205,44 @@ export class KubeResource {
       this.createdAt = new Date();
       this.status = ResourceStatus.UNKNOWN;
       this.events = [];
+      this.isReconcillable = false;
+      this.isFluxManaged = false;
+      this.parentIds = [];
+      this.lastUpdatedAt = new Date();
+
     }
+
+    makeObservable(this, {
+      uid: observable,
+      name: observable,
+      kind: observable,
+      version: observable,
+      namespace: observable,
+      resource: observable,
+      group: observable,
+      createdAt: observable,
+      deletedAt: observable,
+      children: observable,
+      annotations: observable,
+      labels: observable,
+      parentId: observable,
+      parentIds: observable,
+      status: observable,
+      conditions: observable,
+      events: observable,
+      logs: observable,
+      isFluxManaged: observable,
+      isReconcillable: observable,
+      addChild: action,
+      removeChild: action,
+      update: action,
+      lastUpdatedAt: observable,
+
+    });
+  }
+
+  get updatedKey(): number {
+    return this.lastUpdatedAt?.getTime() ?? 0;
   }
 
   static fromDto(dto: TreeNodeDto): KubeResource {
@@ -202,10 +269,46 @@ export class KubeResource {
         return new KubeResource(dto);
     }
   }
+
+  addChild(child: KubeResource): void {
+    child.parentId = this.uid;
+    this.children.push(child);
+    this.lastUpdatedAt = new Date();
+  }
+
+  removeChild(child: KubeResource): void {
+    const index = this.children.findIndex(c => c.uid === child.uid);
+    if (index !== -1) {
+      this.children.splice(index, 1);
+    } else {
+      console.warn(`Child with UID ${child.uid} not found in children of ${this.uid}`);
+    }
+    this.lastUpdatedAt = new Date();
+  }
+
+  update(node: KubeResource): void {
+    this.name = node.name;
+    this.kind = node.kind;
+    this.version = node.version;
+    this.namespace = node.namespace;
+    this.resource = node.resource;
+    this.group = node.group;
+    this.createdAt = node.createdAt;
+    this.deletedAt = node.deletedAt;
+    this.annotations = new Map(node.annotations);
+    this.labels = new Map(node.labels);
+    this.status = node.status;
+    this.conditions = [...node.conditions];
+    this.events = [...node.events];
+    this.isFluxManaged = node.isFluxManaged;
+    this.isReconcillable = node.isReconcillable;
+    this.lastUpdatedAt = new Date();
+    this.parentId = node.parentId;
+    this.parentIds = [...node.parentIds];
+  }
 }
 
 export abstract class FluxResource extends KubeResource {
-  isReconcillable: boolean = true;
   lastHandledReconcileAt?: Date;
   isReconciling: boolean;
   isSuspended: boolean;
@@ -213,10 +316,19 @@ export abstract class FluxResource extends KubeResource {
 
   constructor(dto: TreeNodeDto) {
     super(dto);
+    this.isReconcillable = true;
     this.lastHandledReconcileAt = dto.fluxMetadata?.lastHandledReconcileAt;
     this.isReconciling = dto.fluxMetadata?.isReconciling || false;
     this.isSuspended = dto.fluxMetadata?.isSuspended || false;
     this.lastSyncAt = dto.fluxMetadata?.lastSyncAt;
+  }
+
+  update(node: FluxResource): void {
+    super.update(node);
+    this.lastHandledReconcileAt = node.lastHandledReconcileAt;
+    this.isReconciling = node.isReconciling;
+    this.isSuspended = node.isSuspended;
+    this.lastSyncAt = node.lastSyncAt;
   }
 }
 
@@ -237,9 +349,9 @@ export class HelmRelease extends FluxResource {
 }
 export class Kustomization extends FluxResource {
   metadata: KustomizationMetadata | null;
-  isReconcillable: boolean = true;
   constructor(dto: TreeNodeDto) {
     super(dto);
+    this.isReconcillable = true;
     this.metadata = dto.kustomizationMetadata
       ? dto.kustomizationMetadata
       : null;
@@ -256,20 +368,21 @@ export class Kustomization extends FluxResource {
 
 export class HelmChart extends FluxResource {
   metadata: HelmChartMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
+    this.isReconcillable = true;
+
     this.metadata = dto.helmChartMetadata ? dto.helmChartMetadata : null;
   }
 }
 
 export class HelmRepository extends FluxResource {
   metadata: HelmRepositoryMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
+    this.isReconcillable = true;
     this.metadata = dto.helmRepositoryMetadata
       ? dto.helmRepositoryMetadata
       : null;
@@ -278,10 +391,10 @@ export class HelmRepository extends FluxResource {
 
 export class GitRepository extends FluxResource implements Repository {
   metadata: GitRepositoryMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
+    this.isReconcillable = true;
     this.metadata = dto.gitRepositoryMetadata
       ? dto.gitRepositoryMetadata
       : null;
@@ -318,10 +431,10 @@ export class GitRepository extends FluxResource implements Repository {
 
 export class OCIRepository extends FluxResource implements Repository {
   metadata: OCIRepositoryMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
+    this.isReconcillable = true;
     this.metadata = dto.ociRepositoryMetadata
       ? dto.ociRepositoryMetadata
       : null;

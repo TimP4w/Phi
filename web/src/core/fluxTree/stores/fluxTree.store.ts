@@ -30,6 +30,47 @@ class FluxTreeStore {
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  addResource(resource: KubeResource) {
+    const parentUid = resource.parentIds && resource.parentIds.length > 0 ? resource.parentIds[0] : null;
+    if (parentUid) {
+      const parent = this.tree.findNodeById(parentUid);
+      if (parent) {
+        parent.addChild(resource);
+        this.tree.setUpdatedAt();
+      }
+    }
+  }
+
+  updateResource(oldResource: KubeResource, newResource: KubeResource) {
+    const parentUid = newResource.parentIds && newResource.parentIds.length > 0 ? newResource.parentIds[0] : null;
+    const parent = parentUid ? this.tree.findNodeById(parentUid) : this.tree.root;
+
+    if (newResource.name === "flux-system" && newResource.kind === RESOURCE_TYPE.KUSTOMIZATION) {
+      this.tree.root.update(newResource);
+      return;
+    }
+    const idx = parent.children.findIndex(child => child.uid === oldResource.uid);
+    if (idx !== -1) {
+      const existingResource = parent.children[idx];
+      existingResource.update(newResource);
+      parent.lastUpdatedAt = new Date();
+      this.tree.setUpdatedAt();
+    }
+  }
+
+  removeResource(resource: KubeResource) {
+    const parentUid = resource.parentIds && resource.parentIds.length > 0 ? resource.parentIds[0] : null;
+    if (!parentUid) {
+      return;
+    }
+
+    const parentNode = this.tree.findNodeById(parentUid);
+    if (parentNode) {
+      parentNode.removeChild(resource);
+      this.tree.setUpdatedAt();
+    };
+  }
+
   findKustomizationByName(name?: string): Kustomization | null {
     if (!name) {
       return null;

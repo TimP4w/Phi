@@ -25,6 +25,7 @@ type WatchResourcesUseCase struct {
 	rateLimiter     *utils.RateLimiter
 	kubeStore       kube.KubeStore
 	logger          logging.PhiLogger
+	prevTree        kube.Resource
 }
 
 func NewWatchResourcesUseCase(
@@ -36,10 +37,11 @@ func NewWatchResourcesUseCase(
 	return &WatchResourcesUseCase{
 		treeService:     TreeService,
 		realtimeService: RealtimeService,
-		rateLimiter:     utils.NewRateLimiter(150 * time.Millisecond),
+		rateLimiter:     utils.NewRateLimiter(1500 * time.Millisecond), // TODO: make configurable, maybe store in a DB and also make it editable via UI
 		kubeService:     KubeService,
 		kubeStore:       KubeStore,
 		logger:          *logging.Logger(),
+		prevTree:        kube.Resource{},
 	}
 }
 
@@ -62,6 +64,8 @@ func (uc *WatchResourcesUseCase) rebuildTreeAtNode(el kube.Resource) {
 	logger.Debug("Rebuilding tree")
 
 	tree := uc.treeService.GetTree()
+	uc.prevTree = tree.Root
+
 	root := tree.Root
 	visited := make(map[string]bool)
 	visited[root.GetRef()] = true
@@ -79,17 +83,101 @@ func (uc *WatchResourcesUseCase) rebuildTreeAtNode(el kube.Resource) {
 	}
 
 	uc.treeService.SetTree(root)
-	compressedTree, err := uc.compressTree(&root)
-	if err != nil {
-		logger.WithError(err).Error("Error compressing tree")
+
+	var treeOperations []TreeOperation
+	DiffTrees(&uc.prevTree, &root, &treeOperations)
+
+	for _, treeOperation := range treeOperations {
+		treeOperation.Resource.Children = nil
+		if treeOperation.OldResource != nil {
+			treeOperation.OldResource.Children = nil
+		}
+		msg := realtime.Message{
+			Type:    string(treeOperation.Type),
+			Message: treeOperation,
+		}
+
+		uc.rateLimiter.Execute(func() {
+			uc.realtimeService.Broadcast(msg)
+		}, "BroadcastTreeOperation_"+treeOperation.Resource.UID)
+	}
+	uc.prevTree = root
+	/*
+	   compressedTree, err := uc.compressTree(&root)
+
+	   	if err != nil {
+	   		logger.WithError(err).Error("Error compressing tree")
+	   		return
+	   	}
+
+	   	 message := realtime.Message{
+	   		Message: compressedTree,
+	   		Type:    realtime.TREE,
+	   	}
+
+	   logger.Debug("Broadcasting updated tree")
+	   uc.realtimeService.Broadcast(message)
+	*/
+}
+
+// TreeOperationType represents the type of operation performed on a tree node.
+type TreeOperationType string
+
+const (
+	ResourceAdd    TreeOperationType = "ADD_RESOURCE"
+	ResourceUpdate TreeOperationType = "UPDATE_RESOURCE"
+	ResourceDelete TreeOperationType = "DELETE_RESOURCE"
+)
+
+type TreeOperation struct {
+	Type        TreeOperationType `json:"type"`
+	Resource    kube.Resource     `json:"resource"`
+	OldResource *kube.Resource    `json:"oldResource,omitempty"`
+}
+
+// DiffTrees recursively compares old and new trees and returns treeOperations
+func DiffTrees(oldNode, newNode *kube.Resource, treeOperations *[]TreeOperation) {
+	if oldNode == nil && newNode != nil {
+		*treeOperations = append(*treeOperations, TreeOperation{Type: ResourceAdd, Resource: *newNode})
+		for i := range newNode.Children {
+			DiffTrees(nil, &newNode.Children[i], treeOperations)
+		}
 		return
 	}
-	message := realtime.Message{
-		Message: compressedTree,
-		Type:    realtime.TREE,
+	if oldNode != nil && newNode == nil {
+		*treeOperations = append(*treeOperations, TreeOperation{Type: ResourceDelete, Resource: *oldNode})
+		for i := range oldNode.Children {
+			DiffTrees(&oldNode.Children[i], nil, treeOperations)
+		}
+		return
 	}
-	logger.Debug("Broadcasting updated tree")
-	uc.realtimeService.Broadcast(message)
+	if oldNode != nil && newNode != nil {
+		if oldNode.UID != newNode.UID {
+			*treeOperations = append(*treeOperations, TreeOperation{Type: ResourceDelete, Resource: *oldNode})
+			*treeOperations = append(*treeOperations, TreeOperation{Type: ResourceAdd, Resource: *newNode})
+		} else if !oldNode.DeepEqual(*newNode) {
+			*treeOperations = append(*treeOperations, TreeOperation{Type: ResourceUpdate, Resource: *newNode, OldResource: oldNode})
+		}
+		// Map children by UID for comparison
+		oldChildren := make(map[string]*kube.Resource)
+		for i := range oldNode.Children {
+			oldChildren[oldNode.Children[i].UID] = &oldNode.Children[i]
+		}
+		newChildren := make(map[string]*kube.Resource)
+		for i := range newNode.Children {
+			newChildren[newNode.Children[i].UID] = &newNode.Children[i]
+		}
+		// Check for added/updated children
+		for uid, newChild := range newChildren {
+			DiffTrees(oldChildren[uid], newChild, treeOperations)
+		}
+		// Check for deleted children
+		for uid, oldChild := range oldChildren {
+			if _, found := newChildren[uid]; !found {
+				DiffTrees(oldChild, nil, treeOperations)
+			}
+		}
+	}
 }
 
 func (uc *WatchResourcesUseCase) findChildrenRec(root *kube.Resource, visited map[string]bool) *kube.Resource {
@@ -114,7 +202,7 @@ func (uc *WatchResourcesUseCase) compressTree(tree *kube.Resource) (string, erro
 	uc.logger.WithField("uncompressed_size", len(res)).Debug("Compressing tree")
 
 	var compressed bytes.Buffer
-	gz := gzip.NewWriter(&compressed)
+	gz := gzip.NewWriter(&compressed) // TODO: gzip.NewWriterLevel(&compressed, gzip.BestSpeed) or gzip.BestCompression
 	if _, err := gz.Write([]byte(res)); err != nil {
 		uc.logger.WithError(err).Error("Failed to compress tree")
 		return "", err

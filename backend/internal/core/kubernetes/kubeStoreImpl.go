@@ -69,6 +69,17 @@ func (k *KubeStoreImpl) addResourceToRef(ref string, resource *Resource) {
 		k.resourcesRefs[ref] = make([]*Resource, 0)
 		logger.WithField("ref", ref).Debug("Created new reference entry")
 	}
+	var parentUIDs []string
+	for _, parentRes := range k.resources {
+		if parentRes.GetRef() == ref {
+			parentUIDs = append(parentUIDs, parentRes.UID)
+		}
+	}
+	if len(parentUIDs) > 0 {
+		resource.ParentIDs = parentUIDs
+	} else {
+		resource.ParentIDs = nil
+	}
 	k.resourcesRefs[ref] = append(k.resourcesRefs[ref], resource)
 	logger.WithField("ref", ref).Debug("Registered resource as child of reference")
 }
