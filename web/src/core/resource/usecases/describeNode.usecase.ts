@@ -1,8 +1,8 @@
-import { toast } from "react-toastify";
 import { container } from "../../shared/inversify.config";
 import { TYPES } from "../../shared/types";
 import UseCase from "../../shared/usecase";
 import { ResourceService } from "../services/resource.service";
+import { addToast } from "@heroui/react";
 
 export class DescribeNodeUseCase extends UseCase<string, Promise<string>> {
 
@@ -12,7 +12,10 @@ export class DescribeNodeUseCase extends UseCase<string, Promise<string>> {
     try {
       return await this.resourceService.describe(uid);
     } catch (error) {
-      toast("Failed to fetch tree data", { type: "error", theme: "dark" });
+      addToast({
+        title: "Failed to fetch tree data",
+        color: "danger",
+      });
       console.error('Failed to fetch tree data:', error);
       return Promise.reject(error);
     }

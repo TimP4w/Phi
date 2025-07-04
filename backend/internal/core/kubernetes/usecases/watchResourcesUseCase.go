@@ -36,7 +36,7 @@ func NewWatchResourcesUseCase(
 	return &WatchResourcesUseCase{
 		treeService:     TreeService,
 		realtimeService: RealtimeService,
-		rateLimiter:     utils.NewRateLimiter(150 * time.Millisecond),
+		rateLimiter:     utils.NewRateLimiter(1500 * time.Millisecond), // TODO: make configurable, maybe store in a DB and also make it editable via UI
 		kubeService:     KubeService,
 		kubeStore:       KubeStore,
 		logger:          *logging.Logger(),
@@ -53,12 +53,8 @@ func (uc *WatchResourcesUseCase) Execute(in WatchResourcesInput) (struct{}, erro
 	return struct{}{}, nil
 }
 
-func (uc *WatchResourcesUseCase) rebuildTreeAtNode(el kube.Resource) {
-	logger := uc.logger.WithFields(map[string]interface{}{
-		"resource_kind":      el.Kind,
-		"resource_name":      el.Name,
-		"resource_namespace": el.Namespace,
-	})
+func (uc *WatchResourcesUseCase) rebuildTree() {
+	logger := uc.logger
 	logger.Debug("Rebuilding tree")
 
 	tree := uc.treeService.GetTree()
@@ -72,7 +68,7 @@ func (uc *WatchResourcesUseCase) rebuildTreeAtNode(el kube.Resource) {
 	uniqueResources := uc.treeService.GetUniqueResourceAPIRefs()
 	channels := uc.kubeService.GetInformerChannels()
 	for resourceKey := range uniqueResources {
-		if _, ok := channels[resourceKey]; !ok {
+		if _, channelExists := channels[resourceKey]; !channelExists {
 			logger.WithField("resourceKey", resourceKey).Debug("Creating new informer for resource")
 			uc.kubeService.WatchResources(map[string]struct{}{resourceKey: {}}, uc.onResourceAdd, uc.onResourceUpdate, uc.onResourceDelete)
 		}
@@ -84,6 +80,7 @@ func (uc *WatchResourcesUseCase) rebuildTreeAtNode(el kube.Resource) {
 		logger.WithError(err).Error("Error compressing tree")
 		return
 	}
+
 	message := realtime.Message{
 		Message: compressedTree,
 		Type:    realtime.TREE,
@@ -114,7 +111,7 @@ func (uc *WatchResourcesUseCase) compressTree(tree *kube.Resource) (string, erro
 	uc.logger.WithField("uncompressed_size", len(res)).Debug("Compressing tree")
 
 	var compressed bytes.Buffer
-	gz := gzip.NewWriter(&compressed)
+	gz := gzip.NewWriter(&compressed) // TODO: gzip.NewWriterLevel(&compressed, gzip.BestSpeed) or gzip.BestCompression
 	if _, err := gz.Write([]byte(res)); err != nil {
 		uc.logger.WithError(err).Error("Failed to compress tree")
 		return "", err
@@ -144,9 +141,9 @@ func (uc *WatchResourcesUseCase) onResourceAdd(el kube.Resource) {
 	})
 	logger.Debug("Resource added")
 
-	addedEl := uc.kubeStore.UpdateResource(el)
+	uc.kubeStore.UpdateResource(el)
 	uc.rateLimiter.Execute(func() {
-		uc.rebuildTreeAtNode(*addedEl)
+		uc.rebuildTree()
 	}, "RebuildTree")
 }
 
@@ -159,9 +156,14 @@ func (uc *WatchResourcesUseCase) onResourceUpdate(oldEl, newEl kube.Resource) {
 	})
 	logger.Debug("Resource updated")
 
-	updatedEl := uc.kubeStore.UpdateResource(newEl)
+	if newEl.IsDeepEqual(oldEl) {
+		// Avoid flooding by checking if there were meaningful changes
+		return
+	}
+
+	uc.kubeStore.UpdateResource(newEl)
 	uc.rateLimiter.Execute(func() {
-		uc.rebuildTreeAtNode(*updatedEl)
+		uc.rebuildTree()
 	}, "RebuildTree")
 }
 
@@ -176,6 +178,6 @@ func (uc *WatchResourcesUseCase) onResourceDelete(el kube.Resource) {
 
 	uc.kubeStore.RemoveResource(el.UID)
 	uc.rateLimiter.Execute(func() {
-		uc.rebuildTreeAtNode(el)
+		uc.rebuildTree()
 	}, "RebuildTree")
 }

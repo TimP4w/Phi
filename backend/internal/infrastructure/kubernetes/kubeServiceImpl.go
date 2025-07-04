@@ -256,10 +256,7 @@ func (k *KubeServiceImpl) defaultResourceEventHandler(resource string, addFunc f
 		UpdateFunc: func(oldObj, newObj any) {
 			newEl := k.mapper.ToResource(*newObj.(*unstructured.Unstructured), resource)
 			oldEl := k.mapper.ToResource(*oldObj.(*unstructured.Unstructured), resource)
-			/*if newEl.DeepEqual(oldEl) {
-				// Avoid flooding by checking if there were meaningful changes
-				return
-			}*/
+
 			updateFunc(oldEl, newEl)
 		},
 		DeleteFunc: func(obj any) {

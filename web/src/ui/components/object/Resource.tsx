@@ -1,31 +1,16 @@
 import { Card, Avatar, CardBody, Tooltip } from "@heroui/react";
 import { Link } from "react-router-dom";
-import {
-  ResourceStatus,
-  VizualizationNodeData,
-} from "../../../core/fluxTree/models/tree";
+import { VizualizationNodeData } from "../../../core/fluxTree/models/tree";
 import AppLogo from "../resource-icon/ResourceIcon";
 import "./resource.scss";
 import { Handle, NodeProps, Position, Node } from "@xyflow/react";
 import { ROUTES } from "../../routes/routes.enum";
+import { colorByStatus } from "../../shared/helpers";
 
 type ResourceProps = NodeProps<Node<VizualizationNodeData>>;
 
 function Resource({ data }: ResourceProps) {
   const treeNode = data.treeNode;
-
-  const colorByStatus = (status: ResourceStatus) => {
-    switch (status) {
-      case ResourceStatus.SUCCESS:
-        return "success";
-      case ResourceStatus.FAILED:
-        return "danger";
-      case ResourceStatus.PENDING:
-        return "warning";
-      default:
-        return "primary";
-    }
-  };
 
   return (
     <div>
@@ -62,22 +47,6 @@ function Resource({ data }: ResourceProps) {
                   <p className="text-small text-default-500">{treeNode.kind}</p>
                 </div>
               </div>
-
-              {/*<div className="">
-              <Dropdown className="dark">
-                <DropdownTrigger>
-                  <Button color="primary" variant="light" isIconOnly>
-                    <FontAwesomeIcon icon="ellipsis-vertical" />
-                  </Button>
-                </DropdownTrigger>
-                <DropdownMenu
-                  aria-label="Pause/Resume or reconcile flux managed resource"
-                  onAction={(k) => action(k as string)}
-                >
-                  <DropdownItem key="reconcile">Reconcile</DropdownItem>
-                </DropdownMenu>
-              </Dropdown>
-            </div>*/}
             </div>
           </CardBody>
         </Card>

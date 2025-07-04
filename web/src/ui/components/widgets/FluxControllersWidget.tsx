@@ -8,6 +8,8 @@ import { Link } from "react-router-dom";
 import { colorByStatus, statusText } from "../../shared/helpers";
 import WidgetCard from "./Widget";
 import { ROUTES } from "../../routes/routes.enum";
+import { useMemo } from "react";
+import { FLUX_VERSION_LABEL } from "../../../core/fluxTree/constants/resources.const";
 
 type FluxControllersWidgetProps = object;
 
@@ -22,6 +24,22 @@ const FluxControllersWidget: React.FC<FluxControllersWidgetProps> = observer(
       return parts.length > 1 ? parts.pop() : null;
     };
 
+    const fluxVersion = useMemo(() => {
+      if (fluxDeployments.length === 0) {
+        return "Unknown";
+      }
+      const versions = fluxDeployments
+        .map((dep) => dep.labels.get(FLUX_VERSION_LABEL))
+        .filter(Boolean) as string[];
+      if (versions.length === 0) return "Unknown";
+      const counts = versions.reduce<Record<string, number>>((acc, v) => {
+        acc[v] = (acc[v] || 0) + 1;
+        return acc;
+      }, {});
+      const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+      return mostCommon ? mostCommon[0] : "Unknown";
+    }, [fluxDeployments]);
+
     return (
       <WidgetCard
         span={2}
@@ -29,6 +47,10 @@ const FluxControllersWidget: React.FC<FluxControllersWidgetProps> = observer(
         subtitle="Status of core Flux controllers"
       >
         <div className="flex flex-col gap-3">
+          <span className="text-sm text-default-400">
+            Running FluxCD version <Chip>{fluxVersion}</Chip>
+          </span>
+
           {fluxDeployments.map((resource: Deployment) => (
             <Link key={resource.uid} to={`${ROUTES.RESOURCE}/${resource.uid}`}>
               <Card className="transition-transform duration-300 transition-colors hover:bg-default/50">
@@ -48,7 +70,10 @@ const FluxControllersWidget: React.FC<FluxControllersWidgetProps> = observer(
                     </div>
                     <div>
                       {resource.metadata?.images.map((img) => (
-                        <span className="text-sm text-default-400">
+                        <span
+                          className="text-sm text-default-400"
+                          key={resource.uid}
+                        >
                           {extractTag(img)}
                         </span>
                       ))}

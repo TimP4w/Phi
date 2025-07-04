@@ -22,7 +22,7 @@ const FluxSyncStatusWidget: React.FC<FluxSyncStatusWidgetProps> = observer(
     }
 
     return (
-      <Widget span={2} title="Sync Status" subtitle="">
+      <Widget span={1} title="Sync Status" subtitle="">
         <div className="space-y-3 text-sm">
           <div className="flex justify-between items-center">
             <span className="text-default-400">Status</span>

@@ -96,7 +96,7 @@ const App: React.FC<AppProps> = observer(({ node }) => {
         </div>
       </CardHeader>
       <CardBody>
-        <div className="flex space-y-2 gap-2 items-center">
+        <div className="flex space-y-2 gap-2 items-end">
           {node.conditions.map((condition, key) => (
             <ConditionTag condition={condition} key={key.toString()} />
           ))}

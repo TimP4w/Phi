@@ -1,8 +1,8 @@
-import { toast } from "react-toastify";
 import { container } from "../../shared/inversify.config";
 import { TYPES } from "../../shared/types";
 import UseCase from "../../shared/usecase";
 import { ResourceService } from "../services/resource.service";
+import { addToast } from "@heroui/react";
 
 export class SuspendUseCase extends UseCase<string, Promise<void>> {
 
@@ -10,13 +10,18 @@ export class SuspendUseCase extends UseCase<string, Promise<void>> {
 
   public async execute(uid: string): Promise<void> {
     try {
-
       const result = await this.resourceService.suspend(uid);
-      toast("Suspended sync", { type: "success", theme: "dark" });
+      addToast({
+        title: "Suspended sync",
+        color: "success",
+      });
       return result;
     } catch (error) {
       console.error('Failed to suspend ', error);
-      toast("Failed to suspend", { type: "error", theme: "dark" });
+      addToast({
+        title: "Failed to suspend",
+        color: "danger",
+      });
       return Promise.reject(error);
     }
   }

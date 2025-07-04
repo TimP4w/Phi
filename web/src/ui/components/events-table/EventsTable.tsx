@@ -14,9 +14,9 @@ const EventsTable: React.FC<EventsTableProps> = ({ events }) => {
     <div className="flex flex-col gap-3">
       {events
         .sort((a, b) => b.lastObserved.getTime() - a.lastObserved.getTime())
-        .map((event) => (
+        .map((event, index) => (
           <Card
-            key={event.uid}
+            key={`${event.uid}_${index}`}
             className="space-y-2 p-3 rounded-lg  hover:bg-default/50 transition-colors border border-default-200"
             shadow="none"
           >

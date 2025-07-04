@@ -19,7 +19,7 @@ const Header: React.FC<HeaderProps> = observer(
 
     return (
       <header className="backdrop-blur-sm">
-        <div className="max-w-[1400px] py-3 px-8 m-auto flex h-14 items-center">
+        <div className="max-w-[2400px] py-3 px-8 m-auto flex h-14 items-center">
           <div className="mr-4 flex items-center">
             <Link href="/" className="mr-6 flex items-center space-x-2">
               <span className="text-5xl text-white">Φ</span>{" "}

@@ -46,8 +46,6 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
   useLayoutEffect(() => {
     if (previousRootUid.current !== rootResource?.uid) {
       previousRootUid.current = rootResource?.uid ?? null;
-      console.log("New resource, reset!");
-
       setNodes([]);
       setEdges([]);
       fitView();

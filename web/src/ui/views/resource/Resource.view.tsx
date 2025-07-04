@@ -38,6 +38,7 @@ import HelmReleaseSourceWidget from "../../components/widgets/HelmReleaseSourceW
 import FluxSyncStatusWidget from "../../components/widgets/FluxSyncStatusWidget";
 import ResourceStatusWidget from "../../components/widgets/ResourceStatusWidget";
 import ResourceCountWidget from "../../components/widgets/ResourcesCountWidget";
+import KustomizationDependsOnWidget from "../../components/widgets/KustomizationDependsOnWidget";
 
 const ResourceView: React.FC = observer(() => {
   const [loading, setLoading] = useState(true);
@@ -107,11 +108,18 @@ const ResourceView: React.FC = observer(() => {
     return !(resource instanceof FluxResource);
   }, [resource]);
 
+  const showKustomizationDependsOnWidget = useMemo((): boolean => {
+    if (!resource) {
+      return false;
+    }
+    return resource instanceof Kustomization;
+  }, [resource]);
+
   return (
     <div className="min-h-screen bg-background">
       <Header showBackButton>
         {resource instanceof FluxResource && resource?.isReconcillable && (
-          <div>
+          <div className="min-w-[210px]">
             <ReconcileSuspendButtonGroup resource={resource as FluxResource} />
           </div>
         )}
@@ -127,7 +135,7 @@ const ResourceView: React.FC = observer(() => {
           Info
         </Button>
       </Header>
-      <main className="max-w-[1400px] py-6 px-8 transition-all duration-300 flex flex-col mr-auto ml-auto">
+      <main className="max-w-[2400px] py-6 px-8 transition-all duration-300 flex flex-col mr-auto ml-auto">
         <Breadcrumbs>
           <BreadcrumbItem href="/">Applications</BreadcrumbItem>
           <BreadcrumbItem>{resource?.name}</BreadcrumbItem>
@@ -145,7 +153,7 @@ const ResourceView: React.FC = observer(() => {
           </span>
         </div>
         <Spacer y={3} />
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 xxl:grid-cols-5">
           {showKustomizationSourceWidget && (
             <KustomizationSourceWidget resource={resource as Kustomization} />
           )}
@@ -153,6 +161,11 @@ const ResourceView: React.FC = observer(() => {
             <HelmReleaseSourceWidget resource={resource as Kustomization} />
           )}
           <FluxChainWidget resource={resource} />
+          {showKustomizationDependsOnWidget && (
+            <KustomizationDependsOnWidget
+              resource={resource as Kustomization}
+            />
+          )}
           {showFluxSyncStatusWidget && (
             <FluxSyncStatusWidget resource={resource as FluxResource} />
           )}
