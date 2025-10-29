@@ -52,6 +52,8 @@ const ResourceView: React.FC = observer(() => {
 
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
 
+  const fullChain = fluxTreeStore.findFluxParents(resource?.uid);
+
   useEffect(() => {
     if (resource) {
       // Don't fetch the tree if we already have a node, since the tree should be updated via WS anyway.
@@ -137,7 +139,12 @@ const ResourceView: React.FC = observer(() => {
       </Header>
       <main className="max-w-[2400px] py-6 px-8 transition-all duration-300 flex flex-col mr-auto ml-auto">
         <Breadcrumbs>
-          <BreadcrumbItem href="/">Applications</BreadcrumbItem>
+          <BreadcrumbItem href="/">Cluster</BreadcrumbItem>
+          {fullChain.map((res) => (
+            <BreadcrumbItem key={res.uid} href={`/resource/${res.uid}`}>
+              {res.name}
+            </BreadcrumbItem>
+          ))}
           <BreadcrumbItem>{resource?.name}</BreadcrumbItem>
         </Breadcrumbs>
         <Spacer y={8} />
