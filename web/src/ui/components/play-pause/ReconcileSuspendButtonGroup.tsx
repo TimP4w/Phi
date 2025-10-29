@@ -31,6 +31,12 @@ const ReconcileSuspendButtonGroup: React.FC<
     );
   }, [resource]);
 
+  useEffect(() => {
+    setIsSuspended(
+      (resource as Kustomization | HelmRelease).isSuspended ?? false
+    );
+  }, [resource]);
+
   const reconcile = useCallback(() => {
     if (isReconciling) return;
     setIsReconciling(true);
