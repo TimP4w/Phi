@@ -26,6 +26,8 @@ const KustomizationDependsOnWidget: React.FC<KustomizationDependsOnWidgetProps> 
           )
           .filter((dep) => dep !== undefined) as Kustomization[];
         setDependencies(deps);
+      } else {
+        setDependencies([]);
       }
     }, [resource, fluxTreeStore]);
 
