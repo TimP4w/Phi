@@ -68,11 +68,6 @@ This repo also provides a `direnv` ready `flake.nix` for `NixOS` to setup the de
 
 [See Frontend](./web/README.md)
 
-```
-cd web
-yarn
-```
-
 ## Backend
 
 [See Backend](./backend/README.md)
