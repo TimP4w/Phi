@@ -32,6 +32,12 @@ func NewFluxServiceImpl(KubeService KubeService) FluxService {
 func (k *FluxServiceImpl) Reconcile(resource Resource) (*Resource, error) {
 	logger := logging.Logger().WithResource(resource.Kind, resource.Name, resource.Namespace, resource.UID)
 
+	logger.WithFields(map[string]interface{}{
+		"is_reconcilable": resource.IsReconcilable(),
+		"is_suspended":    resource.FluxMetadata.IsSuspended,
+		"resource_data":   resource,
+	}).Debug("Starting reconcile operation")
+
 	if !resource.IsReconcilable() {
 		logger.Warn("Resource is not reconcilable")
 		return nil, fmt.Errorf("resource is not reconcilable")
@@ -56,13 +62,14 @@ func (k *FluxServiceImpl) Reconcile(resource Resource) (*Resource, error) {
 		}
 	*/
 
-	_, err := k.kubeService.PatchResource(patch)
+	patchedResource, err := k.kubeService.PatchResource(patch)
 	if err != nil {
 		logger.WithError(err).Error("Failed to reconcile resource")
 		return nil, fmt.Errorf("failed to reconcile resource: %w", err)
 	}
 
-	return &resource, nil
+	logger.WithField("patched_resource", patchedResource).Debug("Successfully reconciled resource")
+	return patchedResource, nil
 }
 
 func (k *FluxServiceImpl) Suspend(resource Resource) (*Resource, error) {
@@ -150,27 +157,46 @@ func (r ReconcilePatch) ResourceMeta() Resource {
 func (r ReconcilePatch) PatchJSON() ([]byte, error) {
 	ts := time.Now().Format(time.RFC3339Nano)
 
-	patchOps := []map[string]string{
-		{
-			"op":    "add",
-			"path":  "/metadata/annotations/" + escapeJSONPointer(meta.ReconcileRequestAnnotation),
-			"value": ts,
-		},
+	logger := logging.Logger().WithFields(map[string]interface{}{
+		"resource_kind":        r.Resource.Kind,
+		"resource_name":        r.Resource.Name,
+		"resource_namespace":   r.Resource.Namespace,
+		"resource_uid":         r.Resource.UID,
+		"timestamp":            ts,
+		"reconcile_annotation": meta.ReconcileRequestAnnotation,
+	})
+
+	annotations := map[string]string{
+		meta.ReconcileRequestAnnotation: ts,
 	}
 
 	if r.Resource.Kind == "HelmRelease" {
-		patchOps = append(patchOps, map[string]string{
-			"op":    "add",
-			"path":  "/metadata/annotations/" + escapeJSONPointer(helmv2.ForceRequestAnnotation),
-			"value": ts,
-		})
+		logger = logger.WithField("force_annotation", helmv2.ForceRequestAnnotation)
+		annotations[helmv2.ForceRequestAnnotation] = ts
 	}
 
-	return json.Marshal(patchOps)
+	patch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": annotations,
+		},
+	}
+
+	patchBytes, err := json.Marshal(patch)
+	if err != nil {
+		logger.WithError(err).Error("Failed to marshal merge patch")
+		return nil, err
+	}
+
+	logger.WithFields(map[string]interface{}{
+		"annotations": annotations,
+		"patch_json":  string(patchBytes),
+	}).Debug("Created reconcile patch")
+
+	return patchBytes, nil
 }
 
 func (s ReconcilePatch) PatchType() string {
-	return "application/json-patch+json"
+	return "application/merge-patch+json"
 }
 
 func escapeJSONPointer(s string) string {

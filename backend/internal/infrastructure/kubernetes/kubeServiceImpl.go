@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -197,7 +196,10 @@ func (k *KubeServiceImpl) WatchResources(resourceApiRefsSet map[string]struct{},
 	for encodedResourceApiRef := range resourceApiRefsSet {
 		resource, version, group, err := k.decodeResourceApiRef(encodedResourceApiRef)
 		if err != nil {
-			log.Printf("Error decoding resource api ref %s: %v", encodedResourceApiRef, err)
+			logging.Logger().WithFields(map[string]interface{}{
+				"encoded_resource_api_ref": encodedResourceApiRef,
+				"error":                    err,
+			}).Error("Error decoding resource api ref")
 			continue
 		}
 		gvr := schema.GroupVersionResource{Group: group, Version: version, Resource: resource}
@@ -323,8 +325,17 @@ func (k *KubeServiceImpl) PatchResource(pr kube.PatchableResource) (*kube.Resour
 	el := pr.ResourceMeta()
 	gvr := k.gvrFromResource(el)
 
+	logger := logging.Logger().WithFields(map[string]interface{}{
+		"resource_kind":      el.Kind,
+		"resource_name":      el.Name,
+		"resource_namespace": el.Namespace,
+		"resource_uid":       el.UID,
+		"gvr":                gvr,
+	})
+
 	patchBytes, err := pr.PatchJSON()
 	if err != nil {
+		logger.WithError(err).Error("Failed to marshal patch JSON")
 		return nil, fmt.Errorf("failed to marshal patch JSON: %w", err)
 	}
 
@@ -337,11 +348,23 @@ func (k *KubeServiceImpl) PatchResource(pr kube.PatchableResource) (*kube.Resour
 
 	patchType := types.PatchType(pr.PatchType())
 
+	logger.WithFields(map[string]interface{}{
+		"patch_type": string(patchType),
+		"patch_json": string(patchBytes),
+		"patch_size": len(patchBytes),
+	}).Debug("Sending patch request to Kubernetes API")
+
 	result, err := resourceInterface.Patch(context.TODO(), el.Name, patchType, patchBytes, metav1.PatchOptions{})
 	if err != nil {
+		logger.WithFields(map[string]interface{}{
+			"error":      err.Error(),
+			"patch_type": string(patchType),
+			"patch_json": string(patchBytes),
+		}).Error("Kubernetes API rejected patch request")
 		return nil, fmt.Errorf("failed to patch resource: %w", err)
 	}
 
+	logger.Debug("Successfully patched resource")
 	res := k.mapper.ToResource(*result, el.Resource)
 	return &res, nil
 }
