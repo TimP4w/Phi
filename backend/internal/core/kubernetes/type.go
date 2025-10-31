@@ -71,17 +71,8 @@ func (e *Resource) Copy(other Resource) {
 	e.Status = other.Status
 	e.Conditions = append([]Condition(nil), other.Conditions...)
 
-	// Merge Events without duplicates (by UID)
-	existingUIDs := make(map[string]struct{}, len(e.Events))
-	for _, ev := range e.Events {
-		existingUIDs[string(ev.UID)] = struct{}{}
-	}
-	for _, ev := range other.Events {
-		if _, found := existingUIDs[string(ev.UID)]; !found {
-			e.Events = append(e.Events, ev)
-			existingUIDs[string(ev.UID)] = struct{}{}
-		}
-	}
+	// Merge Events without duplicates (by UID) and with TTL cleanup
+	e.Events = e.mergeEventsWithCleanup(other.Events)
 	e.Children = append([]Resource(nil), other.Children...)
 	e.CreatedAt = other.CreatedAt
 	e.DeletedAt = other.DeletedAt
@@ -94,6 +85,52 @@ func (e *Resource) Copy(other Resource) {
 	e.PVCMetadata = other.PVCMetadata
 	e.GitRepositoryMetadata = other.GitRepositoryMetadata
 	e.OCIRepositoryMetadata = other.OCIRepositoryMetadata
+}
+
+// mergeEventsWithCleanup merges events from another resource with TTL and size limits
+// First it filter existing events by TTL, then adds new events if they're not duplicates
+// Finally, it limits the number of events
+func (e *Resource) mergeEventsWithCleanup(otherEvents []Event) []Event {
+	const eventTTL = 72 * time.Hour  // TODO: make configurable
+	const maxEventsPerResource = 100 // TODO: make configurable
+
+	existingUIDs := make(map[string]struct{}, len(e.Events))
+	var validEvents []Event
+
+	cutoffTime := time.Now().Add(-eventTTL)
+	for _, ev := range e.Events {
+		if ev.LastObserved.After(cutoffTime) {
+			validEvents = append(validEvents, ev)
+			existingUIDs[string(ev.UID)] = struct{}{}
+		}
+	}
+
+	for _, ev := range otherEvents {
+		if ev.LastObserved.After(cutoffTime) {
+			if _, found := existingUIDs[string(ev.UID)]; !found {
+				validEvents = append(validEvents, ev)
+				existingUIDs[string(ev.UID)] = struct{}{}
+			}
+		}
+	}
+
+	if len(validEvents) > maxEventsPerResource {
+		validEvents = e.sortAndLimitEvents(validEvents, maxEventsPerResource)
+	}
+
+	return validEvents
+}
+
+// sortAndLimitEvents sorts events by LastObserved time and keeps the most recent ones
+func (e *Resource) sortAndLimitEvents(events []Event, maxEvents int) []Event {
+	for i := 0; i < len(events)-1; i++ {
+		for j := i + 1; j < len(events); j++ {
+			if events[i].LastObserved.Before(events[j].LastObserved) {
+				events[i], events[j] = events[j], events[i]
+			}
+		}
+	}
+	return events[:maxEvents]
 }
 
 func (e *Resource) GetRef() string {
@@ -175,7 +212,6 @@ func (e *Resource) IsDeepEqual(other Resource) bool {
 		}
 	}
 
-	// Compare Children
 	if len(e.Children) != len(other.Children) {
 		return false
 	}

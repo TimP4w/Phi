@@ -6,6 +6,11 @@ import (
 	"github.com/timp4w/phi/internal/core/logging"
 )
 
+const (
+	defaultKustomizationVersion = "v1"
+	defaultHelmReleaseVersion   = "v2"
+)
+
 type KubeStoreImpl struct {
 	resources         map[string]*Resource
 	resourcesRefs     map[string][]*Resource
@@ -52,11 +57,11 @@ func (k *KubeStoreImpl) registerParentRefs(resource *Resource) {
 			resource.IsFluxManaged = false
 		}
 	} else if resource.Labels[KustomizationNameLabel] != "" {
-		parentRef := k.generateRef(resource.Labels[KustomizationNameLabel], resource.Labels[KustomizationNamespaceLabel], "Kustomization", "v1")
+		parentRef := k.generateRef(resource.Labels[KustomizationNameLabel], resource.Labels[KustomizationNamespaceLabel], "Kustomization", defaultKustomizationVersion)
 		k.addResourceToRef(parentRef, resource)
 		resource.IsFluxManaged = true
 	} else if resource.Labels[HelmNameLabel] != "" {
-		parentRef := k.generateRef(resource.Labels[HelmNameLabel], resource.Labels[HelmNamespaceLabel], "HelmRelease", "v2")
+		parentRef := k.generateRef(resource.Labels[HelmNameLabel], resource.Labels[HelmNamespaceLabel], "HelmRelease", defaultHelmReleaseVersion)
 		k.addResourceToRef(parentRef, resource)
 		resource.IsFluxManaged = true
 	}
@@ -98,11 +103,55 @@ func (k *KubeStoreImpl) RemoveResource(uid string) {
 		return
 	}
 
-	delete(k.resourcesRefs, res.GetRef())
+	// Remove the resource from the main resources map
 	delete(k.resources, uid)
-	logger.Debug("Removed resource and its reference")
+	logger.Debug("Removed resource from main store")
 
+	// Remove this resource from any refs it owns (as a parent)
+	k.removeOwnedResourceRefs(res)
+
+	// Remove this resource from parent references
 	k.removeFromParentRefs(res, uid)
+}
+
+// removeOwnedResourceRefs removes any resourcesRefs entries where this resource was the owner/parent
+func (k *KubeStoreImpl) removeOwnedResourceRefs(res *Resource) {
+	logger := logging.Logger().WithResource(res.Kind, res.Name, res.Namespace, res.UID)
+
+	ref := res.GetRef()
+	refResources, exists := k.resourcesRefs[ref]
+	if !exists {
+		return
+	}
+
+	if k.isOnlyOwnerOfRef(res, ref) {
+		delete(k.resourcesRefs, ref)
+		logger.WithField("ref", ref).Debug("Removed owned resourcesRefs entry")
+	} else {
+		k.filterChildrenFromRef(res, ref, refResources)
+		logger.WithField("ref", ref).Debug("Filtered children from resourcesRefs entry")
+	}
+}
+
+// isOnlyOwnerOfRef checks if this resource is the only one with the given ref
+func (k *KubeStoreImpl) isOnlyOwnerOfRef(res *Resource, ref string) bool {
+	for otherUID, otherResource := range k.resources {
+		if otherUID != res.UID && otherResource.GetRef() == ref {
+			return false
+		}
+	}
+	return true
+}
+
+// filterChildrenFromRef removes this resource's children from the ref
+func (k *KubeStoreImpl) filterChildrenFromRef(res *Resource, ref string, refResources []*Resource) {
+	var filteredRefs []*Resource
+	for _, childRes := range refResources {
+		if childRes.UID != res.UID {
+			filteredRefs = append(filteredRefs, childRes)
+		}
+	}
+	k.resourcesRefs[ref] = filteredRefs
 }
 
 // removeFromParentRefs removes the resource from all parent references.
@@ -112,10 +161,10 @@ func (k *KubeStoreImpl) removeFromParentRefs(res *Resource, uid string) {
 			k.removeResourceFromRef(parentRef, uid)
 		}
 	} else if res.Labels[KustomizationNameLabel] != "" {
-		parentRef := res.Labels[KustomizationNameLabel] + "_" + res.Labels[KustomizationNamespaceLabel] + "_" + "Kustomization" + "_" + "v1" // TODO: do we want to hardcode the version?
+		parentRef := k.generateRef(res.Labels[KustomizationNameLabel], res.Labels[KustomizationNamespaceLabel], "Kustomization", defaultKustomizationVersion)
 		k.removeResourceFromRef(parentRef, uid)
 	} else if res.Labels[HelmNameLabel] != "" {
-		parentRef := res.Labels[HelmNameLabel] + "_" + res.Labels[HelmNamespaceLabel] + "_" + "HelmRelease" + "_" + "v2" // TODO: do we want to hardcode the version?
+		parentRef := k.generateRef(res.Labels[HelmNameLabel], res.Labels[HelmNamespaceLabel], "HelmRelease", defaultHelmReleaseVersion)
 		k.removeResourceFromRef(parentRef, uid)
 	}
 }

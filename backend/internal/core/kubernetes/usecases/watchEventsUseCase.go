@@ -51,6 +51,9 @@ func (uc *WatchEventsUseCase) Execute(in WatchEventsInput) (struct{}, error) {
 }
 
 func (uc *WatchEventsUseCase) onEvent(event *kubernetes.Event) {
+	const eventTTL = 72 * time.Hour  // TODO: make configurable
+	const maxEventsPerResource = 100 // TODO: make configurable
+
 	logger := uc.logger.WithFields(map[string]any{
 		"event_name":      event.Name,
 		"event_kind":      event.Kind,
@@ -72,12 +75,26 @@ func (uc *WatchEventsUseCase) onEvent(event *kubernetes.Event) {
 		return
 	}
 
+	if time.Since(event.LastObserved) > eventTTL {
+		logger.Debug("Event is older than TTL, skipping")
+		return
+	}
+
 	// Check if we already have this event to avoid duplicates
 	for _, existingEvent := range resource.Events {
 		if existingEvent.Name == event.Name && existingEvent.LastObserved.Equal(event.LastObserved) {
 			logger.Debug("Event already exists for resource, skipping duplicate")
 			return
 		}
+	}
+
+	// Clean up old events before adding new one
+	resource.Events = uc.cleanupOldEvents(resource.Events)
+
+	// Limit the number of events per resource
+	if len(resource.Events) >= maxEventsPerResource {
+		logger.Debug("Resource has reached max events limit, removing oldest")
+		resource.Events = uc.removeOldestEvent(resource.Events)
 	}
 
 	resource.Events = append(resource.Events, *event)
@@ -95,4 +112,45 @@ func (uc *WatchEventsUseCase) onEvent(event *kubernetes.Event) {
 
 	logger.Debug("Broadcasting event via realtime service")
 	uc.realtimeService.Broadcast(message)
+}
+
+// cleanupOldEvents removes events older than the TTL
+func (uc *WatchEventsUseCase) cleanupOldEvents(events []kubernetes.Event) []kubernetes.Event {
+	const eventTTL = 24 * time.Hour
+	cutoffTime := time.Now().Add(-eventTTL)
+
+	var validEvents []kubernetes.Event
+	for _, event := range events {
+		if event.LastObserved.After(cutoffTime) {
+			validEvents = append(validEvents, event)
+		}
+	}
+
+	if len(validEvents) != len(events) {
+		uc.logger.WithFields(map[string]any{
+			"removed_events":   len(events) - len(validEvents),
+			"remaining_events": len(validEvents),
+		}).Debug("Cleaned up old events")
+	}
+
+	return validEvents
+}
+
+// removeOldestEvent removes the oldest event from the slice
+func (uc *WatchEventsUseCase) removeOldestEvent(events []kubernetes.Event) []kubernetes.Event {
+	if len(events) == 0 {
+		return events
+	}
+
+	oldestIndex := 0
+	oldestTime := events[0].LastObserved
+
+	for i, event := range events {
+		if event.LastObserved.Before(oldestTime) {
+			oldestIndex = i
+			oldestTime = event.LastObserved
+		}
+	}
+
+	return append(events[:oldestIndex], events[oldestIndex+1:]...)
 }

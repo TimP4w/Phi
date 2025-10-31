@@ -85,7 +85,7 @@ func (uc *WatchResourcesUseCase) rebuildTree() {
 		Message: compressedTree,
 		Type:    realtime.TREE,
 	}
-	logger.Debug("Broadcasting updated tree")
+
 	uc.realtimeService.Broadcast(message)
 }
 
@@ -176,7 +176,26 @@ func (uc *WatchResourcesUseCase) onResourceDelete(el kube.Resource) {
 	})
 	logger.Debug("Resource deleted")
 
+	// Verify the resource exists before trying to remove it
+	existingResource := uc.kubeStore.GetResourceByUID(el.UID)
+	if existingResource == nil {
+		logger.Warn("Attempted to delete resource that doesn't exist in store")
+		return
+	}
+
+	childCount := len(uc.kubeStore.FindChildrenResourcesByRef(el.GetRef()))
+	if childCount > 0 {
+		logger.WithField("child_count", childCount).Info("Removing resource with children")
+	}
+
 	uc.kubeStore.RemoveResource(el.UID)
+
+	if uc.kubeStore.GetResourceByUID(el.UID) != nil {
+		logger.Error("Resource removal failed - resource still exists in store")
+	} else {
+		logger.Debug("Resource successfully removed from store")
+	}
+
 	uc.rateLimiter.Execute(func() {
 		uc.rebuildTree()
 	}, "RebuildTree")
