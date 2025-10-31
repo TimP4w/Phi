@@ -21,7 +21,7 @@ func createSampleResource() Resource {
 		Group:         "sample-group",
 		Status:        "Active",
 		Conditions:    []Condition{{Type: "condition1", Status: "True"}},
-		Events:        []Event{{UID: "event-uid", Message: "event-message"}},
+		Events:        []Event{{UID: "event-uid", Message: "event-message", LastObserved: time.Now().Add(-1 * time.Hour)}},
 		Children:      []Resource{{Kind: "ChildKind", Name: "child-name", UID: "child-uid"}},
 		CreatedAt:     time.Date(2024, 01, 01, 0, 0, 0, 0, time.UTC),
 		DeletedAt:     time.Date(2024, 02, 01, 0, 0, 0, 0, time.UTC),
@@ -51,18 +51,20 @@ func TestCopy(t *testing.T) {
 		t.Errorf("Copy() failed, expected %v, got %v", original, copy)
 	}
 }
+
 func TestCopyEventsMerging(t *testing.T) {
 	original := createSampleResource()
 
+	now := time.Now()
 	original.Events = []Event{
-		{UID: "event-uid-1", Message: "event-message-1"},
-		{UID: "event-uid-2", Message: "event-message-2"},
+		{UID: "event-uid-1", Message: "event-message-1", LastObserved: now.Add(-1 * time.Hour)},
+		{UID: "event-uid-2", Message: "event-message-2", LastObserved: now.Add(-2 * time.Hour)},
 	}
 
 	copy := Resource{
 		Events: []Event{
-			{UID: "event-uid-2", Message: "event-message-2"}, // duplicate
-			{UID: "event-uid-3", Message: "event-message-3"}, // unique
+			{UID: "event-uid-2", Message: "event-message-2", LastObserved: now.Add(-2 * time.Hour)}, // duplicate
+			{UID: "event-uid-3", Message: "event-message-3", LastObserved: now.Add(-3 * time.Hour)}, // unique
 		},
 	}
 
