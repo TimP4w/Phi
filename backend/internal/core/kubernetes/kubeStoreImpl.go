@@ -1,7 +1,9 @@
 package kubernetes
 
 import (
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/timp4w/phi/internal/core/logging"
 )
@@ -9,6 +11,8 @@ import (
 const (
 	defaultKustomizationVersion = "v1"
 	defaultHelmReleaseVersion   = "v2"
+	fluxKustomizeGroup          = "kustomize.toolkit.fluxcd.io"
+	fluxHelmGroup               = "helm.toolkit.fluxcd.io"
 )
 
 type KubeStoreImpl struct {
@@ -57,11 +61,11 @@ func (k *KubeStoreImpl) registerParentRefs(resource *Resource) {
 			resource.IsFluxManaged = false
 		}
 	} else if resource.Labels[KustomizationNameLabel] != "" {
-		parentRef := k.generateRef(resource.Labels[KustomizationNameLabel], resource.Labels[KustomizationNamespaceLabel], "Kustomization", defaultKustomizationVersion)
+		parentRef := k.generateRef(resource.Labels[KustomizationNameLabel], resource.Labels[KustomizationNamespaceLabel], "Kustomization", defaultKustomizationVersion, fluxKustomizeGroup)
 		k.addResourceToRef(parentRef, resource)
 		resource.IsFluxManaged = true
 	} else if resource.Labels[HelmNameLabel] != "" {
-		parentRef := k.generateRef(resource.Labels[HelmNameLabel], resource.Labels[HelmNamespaceLabel], "HelmRelease", defaultHelmReleaseVersion)
+		parentRef := k.generateRef(resource.Labels[HelmNameLabel], resource.Labels[HelmNamespaceLabel], "HelmRelease", defaultHelmReleaseVersion, fluxHelmGroup)
 		k.addResourceToRef(parentRef, resource)
 		resource.IsFluxManaged = true
 	}
@@ -161,10 +165,10 @@ func (k *KubeStoreImpl) removeFromParentRefs(res *Resource, uid string) {
 			k.removeResourceFromRef(parentRef, uid)
 		}
 	} else if res.Labels[KustomizationNameLabel] != "" {
-		parentRef := k.generateRef(res.Labels[KustomizationNameLabel], res.Labels[KustomizationNamespaceLabel], "Kustomization", defaultKustomizationVersion)
+		parentRef := k.generateRef(res.Labels[KustomizationNameLabel], res.Labels[KustomizationNamespaceLabel], "Kustomization", defaultKustomizationVersion, fluxKustomizeGroup)
 		k.removeResourceFromRef(parentRef, uid)
 	} else if res.Labels[HelmNameLabel] != "" {
-		parentRef := k.generateRef(res.Labels[HelmNameLabel], res.Labels[HelmNamespaceLabel], "HelmRelease", defaultHelmReleaseVersion)
+		parentRef := k.generateRef(res.Labels[HelmNameLabel], res.Labels[HelmNamespaceLabel], "HelmRelease", defaultHelmReleaseVersion, fluxHelmGroup)
 		k.removeResourceFromRef(parentRef, uid)
 	}
 }
@@ -185,8 +189,13 @@ func (k *KubeStoreImpl) removeResourceFromRef(ref, uid string) {
 
 // generateRef creates a unique reference string for a resource based on its name, namespace, kind, and version.
 // The format is `name_namespace_kind_version`.
-func (k *KubeStoreImpl) generateRef(name, namespace, kind, version string) string {
-	return name + "_" + namespace + "_" + kind + "_" + version
+func (k *KubeStoreImpl) generateRef(name, namespace, kind, version, group string) string {
+	if group == "" {
+		group = "core"
+	}
+	parts := strings.Split(version, "/")
+	v := parts[len(parts)-1]
+	return group + "/" + v + "/" + kind + ":" + namespace + "/" + name
 }
 
 func (k *KubeStoreImpl) FindChildrenResourcesByRef(ref string) []Resource {
@@ -240,15 +249,97 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	logger := logging.Logger().WithResource(newResource.Kind, newResource.Name, newResource.Namespace, newResource.UID)
-	if _, exists := k.resources[newResource.UID]; !exists {
-		k.resources[newResource.UID] = &newResource
-		k.mu.Unlock()
+	existing, exists := k.resources[newResource.UID]
+	if !exists {
 		logger.Debug("Resource not found, registering new resource")
-		k.RegisterResource(&newResource)
-		k.mu.Lock()
-	} else {
-		k.resources[newResource.UID].Copy(newResource)
-		logger.Debug("Resource found, updated existing resource")
+		k.resources[newResource.UID] = &newResource
+		selfRef := newResource.GetRef()
+		if _, ok := k.resourcesRefs[selfRef]; !ok {
+			k.resourcesRefs[selfRef] = []*Resource{}
+		}
+		k.registerParentRefs(&newResource)
+		return &newResource
 	}
-	return k.resources[newResource.UID]
+
+	logger.Debug("Resource found, updated existing resource")
+	oldSelfRef := existing.GetRef()
+	oldParentRefs := append([]string(nil), existing.ParentRefs...)
+	existing.Copy(newResource)
+	updated := existing
+	newSelfRef := updated.GetRef()
+
+	if len(oldParentRefs) > 0 {
+		for _, parentRef := range oldParentRefs {
+			k.removeResourceFromRef(parentRef, updated.UID)
+		}
+	} else {
+		k.removeFromParentRefs(updated, updated.UID)
+	}
+	if oldSelfRef != newSelfRef {
+		if children, ok := k.resourcesRefs[oldSelfRef]; ok {
+			k.resourcesRefs[newSelfRef] = children
+			delete(k.resourcesRefs, oldSelfRef)
+		} else if _, ok := k.resourcesRefs[newSelfRef]; !ok {
+			k.resourcesRefs[newSelfRef] = []*Resource{}
+		}
+	}
+
+	k.registerParentRefs(updated)
+	return updated
+}
+
+func (k *KubeStoreImpl) AddEvent(resourceUID string, event Event, ttl time.Duration, max int) bool {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+
+	logger := logging.Logger().WithFields(map[string]any{
+		"event_name":      event.Name,
+		"event_kind":      event.Kind,
+		"event_namespace": event.Namespace,
+		"resource_uid":    event.ResourceUID,
+	})
+
+	res := k.resources[resourceUID]
+	if res == nil {
+		logger.Debug("Resource not found for event")
+		return false
+	}
+
+	if time.Since(event.LastObserved) > ttl {
+		logger.Debug("Event is older than TTL, not adding")
+		return false
+	}
+
+	for _, ex := range res.Events {
+		if ex.Name == event.Name && ex.LastObserved.Equal(event.LastObserved) {
+			logger.Debug("Duplicate event found, not adding")
+			return false
+		}
+	}
+
+	cutoff := time.Now().Add(-ttl)
+	eventList := res.Events[:0]
+	for _, e := range res.Events {
+		if e.LastObserved.After(cutoff) {
+			logger.Debug("Event is within TTL, adding to active events")
+			eventList = append(eventList, e)
+		}
+	}
+	res.Events = eventList
+
+	if len(res.Events) >= max {
+		logger.Debug("Max events reached, removing oldest event")
+		oldestIdx := 0
+		oldest := res.Events[0].LastObserved
+		for i := range res.Events {
+			if res.Events[i].LastObserved.Before(oldest) {
+				oldestIdx = i
+				oldest = res.Events[i].LastObserved
+			}
+		}
+		res.Events = append(res.Events[:oldestIdx], res.Events[oldestIdx+1:]...)
+	}
+
+	res.Events = append(res.Events, event)
+	return true
 }

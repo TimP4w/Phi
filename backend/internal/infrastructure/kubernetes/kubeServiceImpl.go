@@ -226,23 +226,41 @@ func (k *KubeServiceImpl) GetEvents() ([]kube.Event, error) {
 
 func (k *KubeServiceImpl) WatchEvents(onEvent func(*kube.Event)) {
 	logger := logging.Logger()
-	// TODO: implement a way to stop the channel (cancellable context)
-	watch, err := k.clientSet.CoreV1().Events("").Watch(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		logger.WithError(err).Fatal("Error creating event watch")
-	}
 
-	logger.Info("Started watching Kubernetes events")
 	go func() {
-		// Process events
-		for event := range watch.ResultChan() {
-			e, ok := event.Object.(*corev1.Event)
-			if !ok {
-				logger.Warn("Received unexpected type in event watch")
+		backoff := time.Second
+
+		for {
+			watch, err := k.clientSet.CoreV1().Events("").Watch(context.Background(), metav1.ListOptions{})
+			if err != nil {
+				logger.WithError(err).Error("Error creating event watch")
+				time.Sleep(backoff)
+				if backoff < 30*time.Second {
+					backoff *= 2
+				}
 				continue
 			}
-			event := k.mapper.ToEvent(e)
-			onEvent(&event)
+
+			backoff = time.Second
+			logger.Info("Started watching Kubernetes events")
+
+			channel := watch.ResultChan()
+			for event := range channel {
+				event, ok := event.Object.(*corev1.Event)
+				if !ok {
+					logger.Warn("Received unexpected type in event watch")
+					continue
+				}
+				mapped := k.mapper.ToEvent(event)
+				onEvent(&mapped)
+			}
+
+			watch.Stop()
+			logger.Warn("Kubernetes event watch closed, restarting...")
+			time.Sleep(backoff)
+			if backoff < 30*time.Second {
+				backoff *= 2
+			}
 		}
 	}()
 }

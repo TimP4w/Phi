@@ -134,7 +134,11 @@ func (e *Resource) sortAndLimitEvents(events []Event, maxEvents int) []Event {
 }
 
 func (e *Resource) GetRef() string {
-	return e.Name + "_" + e.Namespace + "_" + e.Kind + "_" + e.GetRefVersion()
+	group := e.Group
+	if group == "" {
+		group = "core"
+	}
+	return group + "/" + e.GetRefVersion() + "/" + e.Kind + ":" + e.Namespace + "/" + e.Name
 }
 
 func (e *Resource) GetRefVersion() string {
