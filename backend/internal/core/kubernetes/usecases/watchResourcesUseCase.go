@@ -1,12 +1,11 @@
 package kubernetesusecases
 
 import (
-	"time"
-
 	"bytes"
 	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
+	"time"
 
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/timp4w/phi/internal/core/logging"
@@ -58,11 +57,15 @@ func (uc *WatchResourcesUseCase) rebuildTree() {
 	logger.Debug("Rebuilding tree")
 
 	tree := uc.treeService.GetTree()
+	if tree == nil {
+		logger.Warn("Tree is nil")
+		return
+	}
+
 	root := tree.Root
-	visited := make(map[string]bool)
-	visited[root.GetRef()] = true
-	root.Children = []kube.Resource{}
-	uc.findChildrenRec(&root, visited)
+	rootKey := root.UID
+	visited := map[string]bool{rootKey: true}
+	root = uc.findChildrenRec(root, visited)
 
 	// Create new informers if needed
 	uniqueResources := uc.treeService.GetUniqueResourceAPIRefs()
@@ -70,7 +73,12 @@ func (uc *WatchResourcesUseCase) rebuildTree() {
 	for resourceKey := range uniqueResources {
 		if _, channelExists := channels[resourceKey]; !channelExists {
 			logger.WithField("resourceKey", resourceKey).Debug("Creating new informer for resource")
-			uc.kubeService.WatchResources(map[string]struct{}{resourceKey: {}}, uc.onResourceAdd, uc.onResourceUpdate, uc.onResourceDelete)
+			uc.kubeService.WatchResources(
+				map[string]struct{}{resourceKey: {}},
+				uc.onResourceAdd,
+				uc.onResourceUpdate,
+				uc.onResourceDelete,
+			)
 		}
 	}
 
@@ -81,26 +89,29 @@ func (uc *WatchResourcesUseCase) rebuildTree() {
 		return
 	}
 
-	message := realtime.Message{
+	uc.realtimeService.Broadcast(realtime.Message{
 		Message: compressedTree,
 		Type:    realtime.TREE,
-	}
-
-	uc.realtimeService.Broadcast(message)
+	})
 }
 
-func (uc *WatchResourcesUseCase) findChildrenRec(root *kube.Resource, visited map[string]bool) *kube.Resource {
+func (uc *WatchResourcesUseCase) findChildrenRec(root kube.Resource, visited map[string]bool) kube.Resource {
 	children := uc.kubeStore.FindChildrenResourcesByRef(root.GetRef())
-	for _, child := range children {
-		if !visited[child.GetRef()] {
-			visited[child.GetRef()] = true
-			root.Children = append(root.Children, *uc.findChildrenRec(&child, visited))
+	root.Children = nil
+	for i := range children {
+		child := children[i]
+		key := child.UID
+		if visited[key] {
+			continue
 		}
+		visited[key] = true
+		child = uc.findChildrenRec(child, visited)
+		root.Children = append(root.Children, child)
 	}
 	return root
 }
 
-// compressTree compresses the Tree (that can be several megabytes in size) it before sending it to the client
+// compressTree compresses the Tree (that can be several megabytes in size) before sending it to the client.
 func (uc *WatchResourcesUseCase) compressTree(tree *kube.Resource) (string, error) {
 	res, err := json.Marshal(tree)
 	if err != nil {
@@ -142,9 +153,7 @@ func (uc *WatchResourcesUseCase) onResourceAdd(el kube.Resource) {
 	logger.Debug("Resource added")
 
 	uc.kubeStore.UpdateResource(el)
-	uc.rateLimiter.Execute(func() {
-		uc.rebuildTree()
-	}, "RebuildTree")
+	uc.rateLimiter.Execute(func() { uc.rebuildTree() }, "RebuildTree")
 }
 
 func (uc *WatchResourcesUseCase) onResourceUpdate(oldEl, newEl kube.Resource) {
@@ -162,9 +171,7 @@ func (uc *WatchResourcesUseCase) onResourceUpdate(oldEl, newEl kube.Resource) {
 	}
 
 	uc.kubeStore.UpdateResource(newEl)
-	uc.rateLimiter.Execute(func() {
-		uc.rebuildTree()
-	}, "RebuildTree")
+	uc.rateLimiter.Execute(func() { uc.rebuildTree() }, "RebuildTree")
 }
 
 func (uc *WatchResourcesUseCase) onResourceDelete(el kube.Resource) {
@@ -196,7 +203,5 @@ func (uc *WatchResourcesUseCase) onResourceDelete(el kube.Resource) {
 		logger.Debug("Resource successfully removed from store")
 	}
 
-	uc.rateLimiter.Execute(func() {
-		uc.rebuildTree()
-	}, "RebuildTree")
+	uc.rateLimiter.Execute(func() { uc.rebuildTree() }, "RebuildTree")
 }

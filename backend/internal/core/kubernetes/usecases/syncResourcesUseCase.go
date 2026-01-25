@@ -1,7 +1,7 @@
 package kubernetesusecases
 
 import (
-	"github.com/timp4w/phi/internal/core/kubernetes"
+	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/timp4w/phi/internal/core/logging"
 	shared "github.com/timp4w/phi/internal/core/shared"
 	"github.com/timp4w/phi/internal/core/tree"
@@ -10,17 +10,17 @@ import (
 type SyncResourcesInput struct{}
 
 type SyncResourcesUseCase struct {
-	kubeService kubernetes.KubeService
+	kubeService kube.KubeService
 	treeService tree.TreeService
-	kubeStore   kubernetes.KubeStore
+	kubeStore   kube.KubeStore
 	logger      logging.PhiLogger
 }
 
 func NewSyncResourcesUseCase(
-	kubeService kubernetes.KubeService,
+	kubeService kube.KubeService,
 	treeService tree.TreeService,
-	kubeStore kubernetes.KubeStore,
-) shared.UseCase[SyncResourcesInput, map[string]*kubernetes.Resource] {
+	kubeStore kube.KubeStore,
+) shared.UseCase[SyncResourcesInput, map[string]*kube.Resource] {
 	return &SyncResourcesUseCase{
 		treeService: treeService,
 		kubeService: kubeService,
@@ -29,7 +29,7 @@ func NewSyncResourcesUseCase(
 	}
 }
 
-func (uc *SyncResourcesUseCase) Execute(in SyncResourcesInput) (map[string]*kubernetes.Resource, error) {
+func (uc *SyncResourcesUseCase) Execute(in SyncResourcesInput) (map[string]*kube.Resource, error) {
 	uc.logger.Info("Starting resource synchronization")
 
 	// TODO: reset informers, reset watchers, etc.
@@ -42,16 +42,17 @@ func (uc *SyncResourcesUseCase) Execute(in SyncResourcesInput) (map[string]*kube
 	resources, err := uc.kubeService.DiscoverResources(rm)
 	if err != nil {
 		uc.logger.WithError(err).Error("Error getting resources")
+		return nil, err
 	}
 
 	uc.logger.WithField("resource_count", len(resources)).Info("Discovered resources")
 	uc.kubeStore.SetResources(resources)
 
-	var root kubernetes.Resource
+	var root kube.Resource
 	rootFound := false
 	for _, resource := range resources {
 		uc.kubeStore.RegisterResource(resource)
-		if resource.Kind == "Kustomization" && resource.Name == "flux-system" {
+		if resource.Kind == "Kustomization" && resource.Name == "flux-system" && resource.Namespace == "flux-system" {
 			root = *resource
 			rootFound = true
 		}
@@ -59,26 +60,32 @@ func (uc *SyncResourcesUseCase) Execute(in SyncResourcesInput) (map[string]*kube
 
 	if !rootFound {
 		uc.logger.Warn("Root Kustomization (flux-system) not found")
-	} else {
-		uc.logger.Debug("Root Kustomization (flux-system) found")
+		return resources, nil
 	}
 
-	visited := make(map[string]bool)
-	visited[root.GetRef()] = true
-	uc.findChildrenRec(&root, visited)
+	uc.logger.Debug("Root Kustomization (flux-system) found")
+
+	rootKey := root.UID
+	visited := map[string]bool{rootKey: true}
+	root = uc.findChildrenRec(root, visited)
 	uc.treeService.SetTree(root)
 
 	uc.logger.Info("Resource synchronization completed")
 	return resources, nil
 }
 
-func (uc *SyncResourcesUseCase) findChildrenRec(root *kubernetes.Resource, visited map[string]bool) *kubernetes.Resource {
+func (uc *SyncResourcesUseCase) findChildrenRec(root kube.Resource, visited map[string]bool) kube.Resource {
 	children := uc.kubeStore.FindChildrenResourcesByRef(root.GetRef())
-	for _, child := range children {
-		if !visited[child.GetRef()] {
-			visited[child.GetRef()] = true
-			root.Children = append(root.Children, *uc.findChildrenRec(&child, visited))
+	root.Children = nil
+	for i := range children {
+		child := children[i]
+		key := child.UID
+		if visited[key] {
+			continue
 		}
+		visited[key] = true
+		child = uc.findChildrenRec(child, visited)
+		root.Children = append(root.Children, child)
 	}
 	return root
 }

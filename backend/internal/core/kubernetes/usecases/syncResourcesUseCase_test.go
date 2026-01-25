@@ -18,9 +18,10 @@ func TestSyncResourcesUseCaseExecuteSuccess(t *testing.T) {
 	apis := &kubernetes.ResourceMap{}
 	resources := map[string]*kubernetes.Resource{
 		"flux-system": {
+			UID:       "uid-1",
 			Kind:      "Kustomization",
 			Name:      "flux-system",
-			Namespace: "default",
+			Namespace: "flux-system",
 			Version:   "v1",
 		},
 	}

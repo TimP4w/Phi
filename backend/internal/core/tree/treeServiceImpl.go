@@ -24,8 +24,8 @@ func NewTreeService() TreeService {
 var _ TreeService = (*TreeServiceImpl)(nil)
 
 func (treeService *TreeServiceImpl) GetTree() *Tree {
-	treeService.mu.Lock()
-	defer treeService.mu.Unlock()
+	treeService.mu.RLock()
+	defer treeService.mu.RUnlock()
 	logger := logging.Logger()
 	if treeService.tree == nil {
 		logger.Warn("Tree is nil in GetTree")
@@ -47,8 +47,8 @@ func (treeService *TreeServiceImpl) SetTree(root kube.Resource) {
 }
 
 func (treeService *TreeServiceImpl) FindNodeByUID(uid string) *kube.Resource {
-	treeService.mu.Lock()
-	defer treeService.mu.Unlock()
+	treeService.mu.RLock()
+	defer treeService.mu.RUnlock()
 	logger := logging.Logger().WithField("uid", uid)
 	if treeService.tree == nil {
 		logger.Warn("Tree is nil in FindNodeByUID")
@@ -66,10 +66,10 @@ func (treeService *TreeServiceImpl) findNodeByUIDRecursive(node *kube.Resource, 
 	if node.UID == uid {
 		return node
 	}
-	for _, child := range node.Children {
-		foundNode := treeService.findNodeByUIDRecursive(&child, uid)
-		if foundNode != nil {
-			return foundNode
+	for i := range node.Children {
+		found := treeService.findNodeByUIDRecursive(&node.Children[i], uid)
+		if found != nil {
+			return found
 		}
 	}
 	return nil

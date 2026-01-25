@@ -27,12 +27,22 @@ func NewKubeMapper() *KubeMapper {
 	return &KubeMapper{}
 }
 
-func GetRefVersion(version string) string {
-	versionParts := strings.Split(version, "/")
-	if len(versionParts) > 1 {
-		return versionParts[1]
+func refGroupAndVersion(apiVersion string) (group, version string) {
+	parts := strings.Split(apiVersion, "/")
+	if len(parts) == 1 {
+		return "core", parts[0]
 	}
-	return version
+	return parts[0], parts[len(parts)-1]
+}
+
+func makeRef(name, namespace, kind, apiVersion string) string {
+	group, version := refGroupAndVersion(apiVersion)
+	return group + "/" + version + "/" + kind + ":" + namespace + "/" + name
+}
+
+func GetRefVersion(version string) string {
+	parts := strings.Split(version, "/")
+	return parts[len(parts)-1]
 }
 
 func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource string) kube.Resource {
@@ -63,8 +73,7 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 	}
 
 	for _, ownerRef := range obj.GetOwnerReferences() {
-		ref := ownerRef.Name + "_" + obj.GetNamespace() + "_" + ownerRef.Kind + "_" + GetRefVersion(ownerRef.APIVersion)
-		el.ParentRefs = append(el.ParentRefs, ref)
+		el.ParentRefs = append(el.ParentRefs, makeRef(ownerRef.Name, obj.GetNamespace(), ownerRef.Kind, ownerRef.APIVersion))
 	}
 
 	switch el.Kind {
@@ -80,8 +89,8 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		mapHelmRepositoryData(&el, obj)
 	case "OCIRepository":
 		mapOciRepositoryData(&el, obj)
-	// case "Bucket":
-	case "Pod": // TODO: these should be consts...
+		// case "Bucket":
+	case "Pod":
 		mapPodData(&el, obj)
 	case "Deployment":
 		mapDeploymentData(&el, obj)
@@ -96,7 +105,6 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 	case "StatefulSet":
 		mapStatefulSetData(&el, obj)
 	default:
-		// do nothing
 	}
 
 	return el
@@ -119,8 +127,7 @@ func (mapper *KubeMapper) ToEvent(k8event *v1.Event) kube.Event {
 	}
 }
 
-type KubeResourceWithConditions struct {
-}
+type KubeResourceWithConditions struct{}
 
 func mapConditions(el *kube.Resource, conditions []metav1.Condition) []kube.Condition {
 	for _, condition := range conditions {
@@ -132,7 +139,6 @@ func mapConditions(el *kube.Resource, conditions []metav1.Condition) []kube.Cond
 			LastTransitionTime: condition.LastTransitionTime.Time,
 		})
 	}
-
 	return el.Conditions
 }
 
@@ -389,17 +395,21 @@ func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 
 	el.Status = mapPVStatus(pv)
 
-	el.ParentRefs = append(el.ParentRefs, pv.Spec.ClaimRef.Name+"_"+pv.Spec.ClaimRef.Namespace+"_"+pv.Spec.ClaimRef.Kind+"_"+GetRefVersion(pv.Spec.ClaimRef.APIVersion))
+	el.ParentRefs = append(el.ParentRefs, makeRef(
+		pv.Spec.ClaimRef.Name,
+		pv.Spec.ClaimRef.Namespace,
+		pv.Spec.ClaimRef.Kind,
+		pv.Spec.ClaimRef.APIVersion,
+	))
 }
 
 func mapLonghornVolume(el *kube.Resource, obj unstructured.Unstructured) {
-	volume := &unstructured.Unstructured{}
-	volume.Object = obj.UnstructuredContent()
-
-	pvName := obj.GetName()
-	parentRef := pvName + "__PersistentVolume_v1" // PV is cluster-scoped, so namespace is omitted or set to "_"
-
-	el.ParentRefs = append(el.ParentRefs, parentRef)
+	el.ParentRefs = append(el.ParentRefs, makeRef(
+		obj.GetName(),
+		"", // cluster-scoped
+		"PersistentVolume",
+		"v1",
+	))
 }
 
 func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {

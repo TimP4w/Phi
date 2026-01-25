@@ -1,5 +1,7 @@
 package kubernetes
 
+import "time"
+
 type KubeStore interface {
 	// GetResourceByUID retrieves a resource from the resources map by its UID.
 	// Returns nil if the resource does not exist.
@@ -24,4 +26,6 @@ type KubeStore interface {
 	FindChildrenResourcesByRef(ref string) []Resource
 	// RegisterResource registers a resource and its parent/owner references in the store.
 	RegisterResource(resource *Resource)
+
+	AddEvent(resourceUID string, ev Event, ttl time.Duration, max int) bool
 }
