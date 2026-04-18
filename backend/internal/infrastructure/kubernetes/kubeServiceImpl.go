@@ -336,7 +336,7 @@ func (k *KubeServiceImpl) runInformer(encodedResourceApiRef string, resource str
 	}
 
 	logger.Debug("Synced cache")
-	select {}
+	<-*newChannel
 }
 
 func (k *KubeServiceImpl) PatchResource(pr kube.PatchableResource) (*kube.Resource, error) {

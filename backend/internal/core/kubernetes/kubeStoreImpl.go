@@ -227,10 +227,11 @@ func (k *KubeStoreImpl) GetResourceByUID(uid string) *Resource {
 }
 
 func (k *KubeStoreImpl) SetResources(resources map[string]*Resource) map[string]*Resource {
-	k.mu.RLock()
-	defer k.mu.RUnlock()
+	k.mu.Lock()
+	defer k.mu.Unlock()
 	logging.Logger().WithField("resource_count", len(resources)).Debug("Setting resources map")
 	k.resources = resources
+	k.resourcesRefs = make(map[string][]*Resource)
 	return resources
 }
 

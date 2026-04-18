@@ -3,6 +3,7 @@ package kubernetesusecases
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/timp4w/phi/internal/core/kubernetes"
@@ -18,7 +19,8 @@ type WatchLogsUseCase struct {
 	treeService     tree.TreeService
 	realtimeService realtime.RealtimeService
 	rateLimiter     *utils.RateLimiter
-	watchers        map[string]context.CancelFunc // TODO: move to kubernetes service
+	mu              sync.Mutex
+	watchers        map[string]context.CancelFunc
 	kubeStore       kubernetes.KubeStore
 	logger          logging.PhiLogger
 }
@@ -53,14 +55,14 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 
 	logger.Debug("Client subscribed to logs")
 
-	cancel, exists := uc.watchers[in.ClientID]
-	if exists {
+	uc.mu.Lock()
+	if cancel, exists := uc.watchers[in.ClientID]; exists {
 		logger.Debug("Client was already subscribed to logs, canceling previous subscription")
 		cancel()
 	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 	uc.watchers[in.ClientID] = cancel
+	uc.mu.Unlock()
 
 	listener := realtime.Listener{
 		ID: in.ClientID,
@@ -68,6 +70,9 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 			if clientID == in.ClientID {
 				logger.Debug("Cancelled log subscription")
 				cancel()
+				uc.mu.Lock()
+				delete(uc.watchers, in.ClientID)
+				uc.mu.Unlock()
 			}
 		},
 	}

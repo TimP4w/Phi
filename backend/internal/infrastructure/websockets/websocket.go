@@ -101,25 +101,33 @@ func (wm *WebSocketManagerImpl) addClient(conn *websocket.Conn) string {
 	return clientId
 }
 
-func (wm *WebSocketManagerImpl) RemoveClientById(id string) {
-	wm.lock.Lock()
-	defer wm.lock.Unlock()
-	if _, exists := wm.clients[id]; exists {
-		conn := wm.clients[id]
+func (wm *WebSocketManagerImpl) removeClientLocked(id string) {
+	if conn, exists := wm.clients[id]; exists {
 		delete(wm.clients, id)
 		for listenerID := range wm.connectionListeners {
 			wm.connectionListeners[listenerID].OnClose(id)
 		}
+		delete(wm.connectionListeners, id)
 		conn.Close()
 		logging.Logger().WithClient(id).Debug("Removed WebSocket client")
 	}
 }
 
+func (wm *WebSocketManagerImpl) RemoveClientById(id string) {
+	wm.lock.Lock()
+	defer wm.lock.Unlock()
+	wm.removeClientLocked(id)
+}
+
 func (wm *WebSocketManagerImpl) AddConnectionListener(listener realtime.Listener) {
+	wm.lock.Lock()
+	defer wm.lock.Unlock()
 	wm.connectionListeners[listener.ID] = &listener
 }
 
 func (wm *WebSocketManagerImpl) RemoveConnectionListener(ID string) {
+	wm.lock.Lock()
+	defer wm.lock.Unlock()
 	delete(wm.connectionListeners, ID)
 }
 
@@ -146,7 +154,7 @@ func (wm *WebSocketManagerImpl) Broadcast(message realtime.Message) error {
 				string(logging.ClientID): id,
 				"error":                  err.Error(),
 			}).Debug("Error broadcasting to client, removing")
-			wm.RemoveClientById(id)
+			wm.removeClientLocked(id)
 		}
 	}
 	return nil
@@ -174,7 +182,7 @@ func (wm *WebSocketManagerImpl) SendMessage(message realtime.Message, clientId s
 
 		if err != nil {
 			logger.WithError(err).Debug("Failed to send message to client, removing client")
-			wm.RemoveClientById(clientId)
+			wm.removeClientLocked(clientId)
 			return err
 		}
 
