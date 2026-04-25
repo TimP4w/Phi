@@ -1,92 +1,79 @@
 import { observer } from "mobx-react-lite";
-
-import { Card, CardBody, Chip } from "@heroui/react";
-import { Deployment } from "../../../core/fluxTree/models/tree";
+import { Chip } from "@heroui/react";
+import { Deployment, ResourceStatus } from "../../../core/fluxTree/models/tree";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
 import { Link } from "react-router-dom";
-import { colorByStatus, statusText } from "../../shared/helpers";
 import WidgetCard from "./Widget";
 import { ROUTES } from "../../routes/routes.enum";
 import { useMemo } from "react";
 import { FLUX_VERSION_LABEL } from "../../../core/fluxTree/constants/resources.const";
 
-type FluxControllersWidgetProps = object;
-
-const FluxControllersWidget: React.FC<FluxControllersWidgetProps> = observer(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  (_: FluxControllersWidgetProps) => {
-    const fluxTreeStore = useInjection(FluxTreeStore);
-    const fluxDeployments = fluxTreeStore.tree.getFluxControllersDeployments();
-
-    const extractTag = (imageName: string) => {
-      const parts = imageName.split(":");
-      return parts.length > 1 ? parts.pop() : null;
-    };
-
-    const fluxVersion = useMemo(() => {
-      if (fluxDeployments.length === 0) {
-        return "Unknown";
-      }
-      const versions = fluxDeployments
-        .map((dep) => dep.labels.get(FLUX_VERSION_LABEL))
-        .filter(Boolean) as string[];
-      if (versions.length === 0) return "Unknown";
-      const counts = versions.reduce<Record<string, number>>((acc, v) => {
-        acc[v] = (acc[v] || 0) + 1;
-        return acc;
-      }, {});
-      const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-      return mostCommon ? mostCommon[0] : "Unknown";
-    }, [fluxDeployments]);
-
-    return (
-      <WidgetCard
-        span={2}
-        title="FluxCD Controllers"
-        subtitle="Status of core Flux controllers"
-      >
-        <div className="flex flex-col gap-3">
-          <span className="text-sm text-default-400">
-            Running FluxCD version <Chip>{fluxVersion}</Chip>
-          </span>
-
-          {fluxDeployments.map((resource: Deployment) => (
-            <Link key={resource.uid} to={`${ROUTES.RESOURCE}/${resource.uid}`}>
-              <Card className="transition-transform duration-300 transition-colors hover:bg-default/50">
-                <CardBody>
-                  <div className="flex-1 min-w-0 ">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground truncate">
-                        {resource.name}
-                      </span>
-                      <Chip
-                        variant="faded"
-                        className={`text-xs`}
-                        color={colorByStatus(resource.status)}
-                      >
-                        {statusText(resource.status)}
-                      </Chip>
-                    </div>
-                    <div>
-                      {resource.metadata?.images.map((img) => (
-                        <span
-                          className="text-sm text-default-400"
-                          key={resource.uid}
-                        >
-                          {extractTag(img)}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                </CardBody>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      </WidgetCard>
-    );
+const dotClass = (status: ResourceStatus): string => {
+  switch (status) {
+    case ResourceStatus.SUCCESS: return "bg-success";
+    case ResourceStatus.FAILED: return "bg-danger";
+    case ResourceStatus.PENDING:
+    case ResourceStatus.WARNING: return "bg-warning";
+    default: return "bg-default-400";
   }
-);
+};
+
+const extractTag = (imageName: string) => {
+  const parts = imageName.split(":");
+  return parts.length > 1 ? parts[parts.length - 1] : null;
+};
+
+const FluxControllersWidget: React.FC = observer(() => {
+  const fluxTreeStore = useInjection(FluxTreeStore);
+  const fluxDeployments = fluxTreeStore.tree.getFluxControllersDeployments();
+
+  const fluxVersion = useMemo(() => {
+    if (fluxDeployments.length === 0) return "Unknown";
+    const versions = fluxDeployments
+      .map((dep) => dep.labels.get(FLUX_VERSION_LABEL))
+      .filter(Boolean) as string[];
+    if (versions.length === 0) return "Unknown";
+    const counts = versions.reduce<Record<string, number>>((acc, v) => {
+      acc[v] = (acc[v] || 0) + 1;
+      return acc;
+    }, {});
+    const mostCommon = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return mostCommon ? mostCommon[0] : "Unknown";
+  }, [fluxDeployments]);
+
+  return (
+    <WidgetCard span={2} title="FluxCD Controllers">
+      <div className="flex flex-col gap-0.5">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-xs text-default-400">Version</span>
+          <Chip size="sm" variant="flat" className="font-mono text-xs h-5">
+            {fluxVersion}
+          </Chip>
+        </div>
+
+        {fluxDeployments.map((resource: Deployment) => (
+          <Link key={resource.uid} to={`${ROUTES.RESOURCE}/${resource.uid}`}>
+            <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-content2 transition-colors group">
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass(resource.status)}`} />
+              <span className="text-sm flex-1 min-w-0 truncate text-default-300 group-hover:text-foreground transition-colors">
+                {resource.name}
+              </span>
+              {resource.metadata?.images.map((img) => (
+                <span key={img} className="text-xs text-default-500 font-mono flex-shrink-0">
+                  {extractTag(img)}
+                </span>
+              ))}
+            </div>
+          </Link>
+        ))}
+
+        {fluxDeployments.length === 0 && (
+          <span className="text-sm text-default-400 py-2 px-2">No controllers found</span>
+        )}
+      </div>
+    </WidgetCard>
+  );
+});
 
 export default FluxControllersWidget;

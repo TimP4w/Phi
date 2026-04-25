@@ -1,0 +1,19 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Backend (flake)",
+      "type": "shell",
+      "command": "direnv exec ${workspaceFolder} go build -gcflags 'all=-N -l' -o ${workspaceFolder}/backend/cmd/phi/__debug_bin ${workspaceFolder}/backend/cmd/phi/main.go",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      },
+      "problemMatcher": "$go"
+    }
+  ]
+}

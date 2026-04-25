@@ -17,23 +17,25 @@ body {
 
   &,
   div {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+
     &::-webkit-scrollbar {
-      width: 12px;
-      height: 12px;
+      width: 5px;
+      height: 5px;
     }
 
     &::-webkit-scrollbar-track {
-      background: colors.$main;
-      border-radius: .5rem;
+      background: transparent;
     }
 
     &::-webkit-scrollbar-thumb {
-      background: colors.$accent; 
-      border-radius: .5rem;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 9999px;
     }
 
     &::-webkit-scrollbar-thumb:hover {
-      background: colors.$accent;
+      background: rgba(255, 255, 255, 0.2);
     }
   }
 }

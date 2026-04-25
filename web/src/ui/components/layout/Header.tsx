@@ -2,7 +2,6 @@ import { Button, Chip, Link } from "@heroui/react";
 import { ArrowLeft } from "lucide-react";
 import { observer } from "mobx-react-lite";
 import { env } from "../../../core/shared/env";
-import { EventsPanel } from "../events-panel/EventsPanel";
 import { ReactNode } from "react";
 import { SiGithub } from "@icons-pack/react-simple-icons";
 import { ROUTES } from "../../routes/routes.enum";
@@ -36,7 +35,6 @@ const Header: React.FC<HeaderProps> = observer(
           </div>
           <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
             {children}
-            <EventsPanel />
             {showBackButton && (
               <Button
                 size="sm"

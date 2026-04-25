@@ -35,7 +35,7 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
         targetPosition: isHorizontal ? "left" : "top", // Adjust the target and source handle positions based on the layout direction.
         sourcePosition: isHorizontal ? "right" : "bottom",
         width: 240, // Hardcode a width and height for elk to use when layouting.
-        height: 80,
+        height: 96,
       })),
       edges: edges as unknown[] as ElkExtendedEdge[],
     };
@@ -60,6 +60,34 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
   };
 
 
+  public relayout(nodes: Node<VizualizationNodeData>[], edges: Edge[]): Promise<Output> {
+    const isHorizontal = this.elkOptions["elk.direction"] === "RIGHT";
+
+    const graph: ElkNode = {
+      id: "root",
+      layoutOptions: this.elkOptions,
+      children: nodes.map((node) => ({
+        ...node,
+        targetPosition: isHorizontal ? "left" : "top",
+        sourcePosition: isHorizontal ? "right" : "bottom",
+        width: 240,
+        height: 96,
+      })),
+      edges: edges as unknown[] as ElkExtendedEdge[],
+    };
+
+    return this.elk.layout(graph).then((layoutedGraph) => {
+      if (!layoutedGraph.children) return { nodes: [], edges: [] };
+      return {
+        nodes: layoutedGraph.children.map((node) => ({
+          ...node,
+          position: { x: node.x!, y: node.y! },
+        })) as Node<VizualizationNodeData>[],
+        edges: layoutedGraph.edges as unknown[] as Edge[] || [],
+      };
+    });
+  }
+
   private buildNodesAndEdges(nodeId: string): Output {
     const nodes: Node<VizualizationNodeData>[] = [];
     let edges: Edge[] = [];
@@ -73,7 +101,7 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
     ]; // TODO: define if / what to skip. Maybe make it configurable
 
 
-    this.fluxTreeStore.tree.traverse(node, (n, layer): boolean => {
+    this.fluxTreeStore.tree.traverse(node, (n, _layer): boolean => {
 
       // Skip duplicates
       if (nodes.find((existingNode) => existingNode.id === n.uid)) {
@@ -109,10 +137,6 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
           y: 0,
         },
       });
-
-      if ((n.kind === RESOURCE_TYPE.KUSTOMIZATION || n.kind === RESOURCE_TYPE.HELM_RELEASE) && layer > 0) {
-        return true;
-      }
 
       // Create edges
       for (const child of n.children) {
