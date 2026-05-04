@@ -34,11 +34,11 @@ clean-be:
 
 test-be:
 	@echo "Running backend tests..."
-	cd $(BACKEND_DIR) && $(GOTEST) -v ./...
+	cd $(BACKEND_DIR) && CGO_ENABLED=0 $(GOTEST) -race -v ./...
 
 test-be-coverage:
 	@echo "Running backend tests with coverage..."
-	cd $(BACKEND_DIR) && $(GOTEST) -v -coverprofile=coverage.out ./...
+	cd $(BACKEND_DIR) && CGO_ENABLED=0 $(GOTEST) -race -v -coverprofile=coverage.out ./...
 	cd $(BACKEND_DIR) && $(GOCMD) tool cover -html=coverage.out -o coverage.html
 
 deps-be:
