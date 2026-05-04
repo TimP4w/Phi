@@ -4,6 +4,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func createSampleResource() Resource {
@@ -87,4 +89,85 @@ func TestCopyEventsMerging(t *testing.T) {
 	if len(copy.Events) != 3 {
 		t.Errorf("Expected 3 unique events after Copy, got %d", len(copy.Events))
 	}
+}
+
+func TestIsDeepEqual_EqualResources(t *testing.T) {
+	r := Resource{UID: "uid1", Kind: "Pod", Name: "my-pod", Status: StatusPending}
+	assert.True(t, r.IsDeepEqual(r))
+}
+
+func TestIsDeepEqual_DifferentStatus(t *testing.T) {
+	a := Resource{UID: "uid1", Status: StatusPending}
+	b := Resource{UID: "uid1", Status: StatusFailed}
+	assert.False(t, a.IsDeepEqual(b))
+}
+
+func TestIsDeepEqual_DifferentLabels(t *testing.T) {
+	a := Resource{UID: "uid1", Labels: map[string]string{"env": "prod"}}
+	b := Resource{UID: "uid1", Labels: map[string]string{"env": "dev"}}
+	assert.False(t, a.IsDeepEqual(b))
+}
+
+func TestIsDeepEqual_DifferentParentIDs(t *testing.T) {
+	a := Resource{UID: "uid1", ParentIDs: []string{"p1"}}
+	b := Resource{UID: "uid1", ParentIDs: []string{"p2"}}
+	assert.False(t, a.IsDeepEqual(b))
+}
+
+func TestIsDeepEqual_DifferentConditions(t *testing.T) {
+	a := Resource{UID: "uid1", Conditions: []Condition{{Type: "Ready", Status: "True"}}}
+	b := Resource{UID: "uid1", Conditions: []Condition{{Type: "Ready", Status: "False"}}}
+	assert.False(t, a.IsDeepEqual(b))
+}
+
+func TestIsDeepEqual_DifferentDeploymentMetadata(t *testing.T) {
+	a := Resource{UID: "uid1", DeploymentMetadata: DeploymentMetadata{Replicas: 1}}
+	b := Resource{UID: "uid1", DeploymentMetadata: DeploymentMetadata{Replicas: 2}}
+	assert.False(t, a.IsDeepEqual(b))
+}
+
+func TestIsDeepEqual_DifferentKustomizationMetadata(t *testing.T) {
+	a := Resource{UID: "uid1", KustomizationMetadata: KustomizationMetadata{Path: "./apps"}}
+	b := Resource{UID: "uid1", KustomizationMetadata: KustomizationMetadata{Path: "./infra"}}
+	assert.False(t, a.IsDeepEqual(b))
+}
+
+func TestIsDeepEqual_DifferentPVCMetadata(t *testing.T) {
+	a := Resource{UID: "uid1", PVCMetadata: PVCMetadata{StorageClass: "standard"}}
+	b := Resource{UID: "uid1", PVCMetadata: PVCMetadata{StorageClass: "fast"}}
+	assert.False(t, a.IsDeepEqual(b))
+}
+
+func TestSortAndLimitEvents(t *testing.T) {
+	r := &Resource{}
+	now := time.Now()
+	events := []Event{
+		{Name: "old", LastObserved: now.Add(-2 * time.Hour)},
+		{Name: "newest", LastObserved: now},
+		{Name: "middle", LastObserved: now.Add(-1 * time.Hour)},
+	}
+	result := r.sortAndLimitEvents(events, 2)
+	assert.Len(t, result, 2)
+	assert.Equal(t, "newest", result[0].Name)
+	assert.Equal(t, "middle", result[1].Name)
+}
+
+func TestResourceMap_LookupFound(t *testing.T) {
+	rm := &ResourceMap{}
+	rm.M.Store("pod", []ApiResource{{Kind: "Pod"}})
+
+	result := rm.Lookup("Pod")
+	assert.Len(t, result, 1)
+	assert.Equal(t, "Pod", result[0].Kind)
+}
+
+func TestResourceMap_LookupNotFound(t *testing.T) {
+	rm := &ResourceMap{}
+	result := rm.Lookup("Deployment")
+	assert.Nil(t, result)
+}
+
+func TestResourceMap_Resources(t *testing.T) {
+	rm := &ResourceMap{List: []ApiResource{{Kind: "Pod"}, {Kind: "Service"}}}
+	assert.Len(t, rm.Resources(), 2)
 }
