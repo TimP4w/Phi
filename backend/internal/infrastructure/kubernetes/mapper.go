@@ -318,9 +318,13 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 	el.Status = mapPodStatus(pod)
 
+	image := ""
+	if len(pod.Spec.Containers) > 0 {
+		image = pod.Spec.Containers[0].Image
+	}
 	el.PodMetadata = kube.PodMetadata{
 		Phase: string(pod.Status.Phase),
-		Image: pod.Spec.Containers[0].Image,
+		Image: image,
 	}
 
 }
@@ -333,10 +337,18 @@ func mapPVCData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 
+	storageClass := ""
+	if pvc.Spec.StorageClassName != nil {
+		storageClass = *pvc.Spec.StorageClassName
+	}
+	volumeMode := ""
+	if pvc.Spec.VolumeMode != nil {
+		volumeMode = string(*pvc.Spec.VolumeMode)
+	}
 	el.PVCMetadata = kube.PVCMetadata{
-		StorageClass: *pvc.Spec.StorageClassName,
+		StorageClass: storageClass,
 		VolumeName:   pvc.Spec.VolumeName,
-		VolumeMode:   string(*pvc.Spec.VolumeMode),
+		VolumeMode:   volumeMode,
 		AccessModes:  []string{},
 		Capacity:     map[string]string{},
 		Phase:        string(pvc.Status.Phase),
@@ -395,12 +407,14 @@ func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 
 	el.Status = mapPVStatus(pv)
 
-	el.ParentRefs = append(el.ParentRefs, makeRef(
-		pv.Spec.ClaimRef.Name,
-		pv.Spec.ClaimRef.Namespace,
-		pv.Spec.ClaimRef.Kind,
-		pv.Spec.ClaimRef.APIVersion,
-	))
+	if pv.Spec.ClaimRef != nil {
+		el.ParentRefs = append(el.ParentRefs, makeRef(
+			pv.Spec.ClaimRef.Name,
+			pv.Spec.ClaimRef.Namespace,
+			pv.Spec.ClaimRef.Kind,
+			pv.Spec.ClaimRef.APIVersion,
+		))
+	}
 }
 
 func mapLonghornVolume(el *kube.Resource, obj unstructured.Unstructured) {
