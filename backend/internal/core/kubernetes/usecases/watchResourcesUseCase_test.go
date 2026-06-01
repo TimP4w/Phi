@@ -1,47 +1,51 @@
 package kubernetesusecases
 
 import (
+	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/timp4w/phi/internal/core/realtime"
-	kubeTree "github.com/timp4w/phi/internal/core/tree"
-	"github.com/timp4w/phi/internal/core/utils"
 	mocks "github.com/timp4w/phi/internal/testing/testdata"
 )
 
-func makeWatchResourcesUseCase(t *testing.T) (*WatchResourcesUseCase, *mocks.KubeService, *mocks.KubeStore, *mocks.RealtimeService, *mocks.TreeService) {
+func makeWatchResourcesUseCase(t *testing.T) (*WatchResourcesUseCase, *mocks.KubeService, *mocks.KubeStore, *mocks.RealtimeService) {
 	kubeSvc := mocks.NewKubeService(t)
 	store := mocks.NewKubeStore(t)
 	rtSvc := mocks.NewRealtimeService(t)
-	treeSvc := mocks.NewTreeService(t)
 
-	uc := NewWatchResourcesUseCase(treeSvc, rtSvc, kubeSvc, store).(*WatchResourcesUseCase)
-	uc.rateLimiter = utils.NewRateLimiter(0)
+	uc := NewWatchResourcesUseCase(rtSvc, kubeSvc, store).(*WatchResourcesUseCase)
+	return uc, kubeSvc, store, rtSvc
+}
 
-	// Short-circuit rebuildTree in all tests by default
-	treeSvc.On("GetTree").Return((*kubeTree.Tree)(nil)).Maybe()
-
-	return uc, kubeSvc, store, rtSvc, treeSvc
+func expectBroadcastPatch(rtSvc *mocks.RealtimeService, op string) {
+	rtSvc.On("Broadcast", mock.MatchedBy(func(msg realtime.Message) bool {
+		if msg.Type != realtime.RESOURCE_PATCH {
+			return false
+		}
+		patch, ok := msg.Message.(realtime.ResourcePatch)
+		return ok && patch.Op == op
+	})).Return(nil).Maybe()
 }
 
 func TestWatchResources_onResourceAdd_UpdatesStore(t *testing.T) {
-	uc, _, store, _, _ := makeWatchResourcesUseCase(t)
+	uc, kubeSvc, store, rtSvc := makeWatchResourcesUseCase(t)
 
 	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod"}
-	store.On("UpdateResource", res).Return((*kube.Resource)(nil))
+	store.On("UpdateResource", res).Return(&res)
+	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{})
+	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
 
 	uc.onResourceAdd(res)
 
-	time.Sleep(10 * time.Millisecond)
 	store.AssertCalled(t, "UpdateResource", res)
 }
 
 func TestWatchResources_onResourceUpdate_DeepEqual_Skips(t *testing.T) {
-	uc, _, store, _, _ := makeWatchResourcesUseCase(t)
+	uc, _, store, _ := makeWatchResourcesUseCase(t)
 
 	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod"}
 
@@ -51,35 +55,35 @@ func TestWatchResources_onResourceUpdate_DeepEqual_Skips(t *testing.T) {
 }
 
 func TestWatchResources_onResourceUpdate_Changed_Updates(t *testing.T) {
-	uc, _, store, _, _ := makeWatchResourcesUseCase(t)
+	uc, _, store, rtSvc := makeWatchResourcesUseCase(t)
 
 	old := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Status: kube.StatusPending}
-	new := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Status: kube.StatusFailed}
-	store.On("UpdateResource", new).Return((*kube.Resource)(nil))
+	updated := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Status: kube.StatusFailed}
+	store.On("UpdateResource", updated).Return(&updated)
+	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
 
-	uc.onResourceUpdate(old, new)
+	uc.onResourceUpdate(old, updated)
 
-	time.Sleep(10 * time.Millisecond)
-	store.AssertCalled(t, "UpdateResource", new)
+	store.AssertCalled(t, "UpdateResource", updated)
 }
 
 func TestWatchResources_onResourceDelete_Existing(t *testing.T) {
-	uc, _, store, _, _ := makeWatchResourcesUseCase(t)
+	uc, _, store, rtSvc := makeWatchResourcesUseCase(t)
 
 	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod"}
 	store.On("GetResourceByUID", "pod-uid").Return(&res).Once()
 	store.On("FindChildrenResourcesByRef", mock.Anything).Return([]kube.Resource{})
 	store.On("RemoveResource", "pod-uid").Return()
 	store.On("GetResourceByUID", "pod-uid").Return((*kube.Resource)(nil)).Once()
+	expectBroadcastPatch(rtSvc, realtime.PatchOpDelete)
 
 	uc.onResourceDelete(res)
 
-	time.Sleep(10 * time.Millisecond)
 	store.AssertCalled(t, "RemoveResource", "pod-uid")
 }
 
 func TestWatchResources_onResourceDelete_NonExistent(t *testing.T) {
-	uc, _, store, _, _ := makeWatchResourcesUseCase(t)
+	uc, _, store, _ := makeWatchResourcesUseCase(t)
 
 	res := kube.Resource{UID: "missing-uid", Kind: "Pod", Name: "my-pod"}
 	store.On("GetResourceByUID", "missing-uid").Return((*kube.Resource)(nil))
@@ -90,10 +94,10 @@ func TestWatchResources_onResourceDelete_NonExistent(t *testing.T) {
 }
 
 func TestWatchResources_Execute_CallsWatchResources(t *testing.T) {
-	uc, kubeSvc, _, _, treeSvc := makeWatchResourcesUseCase(t)
+	uc, kubeSvc, store, _ := makeWatchResourcesUseCase(t)
 
-	kinds := map[string]struct{}{"pods.v1": {}}
-	treeSvc.On("GetUniqueResourceAPIRefs").Return(kinds)
+	kinds := map[string]struct{}{"pods_v1_": {}}
+	store.On("GetKnownResourceAPIRefs").Return(kinds)
 	kubeSvc.On("WatchResources", kinds, mock.Anything, mock.Anything, mock.Anything).Return()
 
 	_, err := uc.Execute(WatchResourcesInput{})
@@ -102,27 +106,64 @@ func TestWatchResources_Execute_CallsWatchResources(t *testing.T) {
 	kubeSvc.AssertCalled(t, "WatchResources", kinds, mock.Anything, mock.Anything, mock.Anything)
 }
 
-func TestWatchResources_RebuildTree_BroadcastsTree(t *testing.T) {
-	kubeSvc := mocks.NewKubeService(t)
-	store := mocks.NewKubeStore(t)
-	rtSvc := mocks.NewRealtimeService(t)
-	treeSvc := mocks.NewTreeService(t)
+func TestWatchResources_onResourceAdd_InformerAlreadyRunning_SkipsWatchResources(t *testing.T) {
+	uc, kubeSvc, store, rtSvc := makeWatchResourcesUseCase(t)
 
-	uc := NewWatchResourcesUseCase(treeSvc, rtSvc, kubeSvc, store).(*WatchResourcesUseCase)
+	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Resource: "pods", Version: "v1", Group: ""}
+	store.On("UpdateResource", res).Return(&res)
+	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{"pods_v1_": make(chan struct{})})
+	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
 
-	root := kube.Resource{UID: "root", Kind: "Namespace", Name: "flux-system"}
-	treeSvc.On("GetTree").Return(&kubeTree.Tree{Root: root})
-	store.On("FindChildrenResourcesByRef", mock.Anything).Return([]kube.Resource{})
-	treeSvc.On("GetUniqueResourceAPIRefs").Return(map[string]struct{}{})
+	uc.onResourceAdd(res)
+
+	kubeSvc.AssertNotCalled(t, "WatchResources")
+}
+
+func TestWatchResources_onResourceAdd_ConcurrentCallsSameType_StartsInformerOnce(t *testing.T) {
+	uc, kubeSvc, store, rtSvc := makeWatchResourcesUseCase(t)
+
+	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Resource: "pods", Version: "v1", Group: ""}
+	store.On("UpdateResource", res).Return(&res)
+	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
+
+	// First call sees absent channel; second (serialized by mutex) sees it present.
+	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{}).Once()
+	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{"pods_v1_": make(chan struct{})})
+	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Once()
+
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			uc.onResourceAdd(res)
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	kubeSvc.AssertNumberOfCalls(t, "WatchResources", 1)
+}
+
+func TestWatchResources_BroadcastsPatch(t *testing.T) {
+	uc, kubeSvc, store, rtSvc := makeWatchResourcesUseCase(t)
+
+	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Status: kube.StatusSuccess}
+	store.On("UpdateResource", res).Return(&res)
 	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{})
-	treeSvc.On("SetTree", mock.Anything).Return()
+	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+
 	rtSvc.On("Broadcast", mock.MatchedBy(func(msg realtime.Message) bool {
-		return msg.Type == realtime.TREE
+		if msg.Type != realtime.RESOURCE_PATCH {
+			return false
+		}
+		patch, ok := msg.Message.(realtime.ResourcePatch)
+		return ok && patch.Op == realtime.PatchOpUpsert
 	})).Return(nil)
 
-	uc.rebuildTree()
+	uc.onResourceAdd(res)
 
-	rtSvc.AssertCalled(t, "Broadcast", mock.MatchedBy(func(msg realtime.Message) bool {
-		return msg.Type == realtime.TREE
-	}))
+	rtSvc.AssertExpectations(t)
 }

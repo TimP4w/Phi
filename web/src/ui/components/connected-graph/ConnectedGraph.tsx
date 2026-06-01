@@ -23,12 +23,14 @@ type ConnectedGraphProps = {
   rootResource?: KubeResource;
   onResourceClick: (resource: KubeResource) => void;
   filter?: ResourceFilter;
+  treeSize?: number;
 };
 
 const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
   rootResource,
   onResourceClick,
   filter,
+  treeSize,
 }: ConnectedGraphProps) => {
   const [rawNodes, setRawNodes] = useState<Node<VizualizationNodeData>[]>([]);
   const [rawEdges, setRawEdges] = useState<Edge[]>([]);
@@ -46,6 +48,8 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
   const previousRootUid = useRef<string | null>(null);
   const prevFilterRef = useRef<ResourceFilter | undefined>(undefined);
   const fitAfterLayoutRef = useRef(false);
+  const isLayingOut = useRef(false);
+  const layoutDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reset tree when navigating to new node
   useLayoutEffect(() => {
@@ -61,27 +65,36 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
     }
   }, [rootResource?.uid, setNodes, setEdges, fitView]);
 
-  // Trigger layout only when rootResource is set and nodes have changed
+  // Trigger layout only when rootResource is set and shouldLayout is requested
   useEffect(() => {
-    if (rootResource && shouldLayout) {
+    if (rootResource && shouldLayout && !isLayingOut.current) {
+      isLayingOut.current = true;
       layoutTreeUseCase
-        .execute({ nodeId: rootResource.uid || "", currentLayout: nodes })
+        .execute({ nodeId: rootResource.uid || "", currentLayout: [] })
         .then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
           setRawNodes(layoutedNodes);
           setRawEdges(layoutedEdges);
         })
         .finally(() => {
           setShouldLayout(false);
+          isLayingOut.current = false;
         });
     }
-  }, [shouldLayout, rootResource, nodes, setNodes, setEdges]);
+  }, [shouldLayout, rootResource]);
 
-  // Trigger layout when node count changes after root is set
+  // Re-layout when the store's resource count changes (driven by incremental patches).
+  // Debounced so rapid patches settle before triggering an expensive ELK run.
   useEffect(() => {
     if (rootResource && previousRootUid.current === rootResource.uid) {
-      setShouldLayout(true);
+      if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
+      layoutDebounceRef.current = setTimeout(() => {
+        setShouldLayout(true);
+      }, 300);
     }
-  }, [nodes.length, rootResource]);
+    return () => {
+      if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
+    };
+  }, [treeSize, rootResource]);
 
   // Apply filter: re-run ELK on visible subset so layout is tight (no gaps).
   // Bridge edges reconnect visible nodes through removed intermediates.

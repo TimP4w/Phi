@@ -26,7 +26,6 @@ import RenderTreeNode from "../../components/resource-tree/ResourceTree";
 import { ResourceFilter } from "../../shared/resourceFilter";
 import ReconcileSuspendButtonGroup from "../../components/play-pause/ReconcileSuspendButtonGroup";
 import { Bell, BellOff, Check, ChevronDown, Info, List, Network, PanelRightClose, PanelRightOpen, X } from "lucide-react";
-import { fetchTreeUseCase } from "../../../core/fluxTree/usecases/FetchTree.usecase";
 import StatusChip from "../../components/status-chip/StatusChip";
 import FluxChainWidget from "../../components/widgets/FluxChainWidget";
 import ConnectedGraph from "../../components/connected-graph/ConnectedGraph";
@@ -50,9 +49,11 @@ const STATUS_FILTER_OPTIONS: { value: ResourceStatus; label: string; dot: string
   { value: ResourceStatus.SUCCESS, label: "Ready", dot: "bg-success" },
 ];
 
-function collectKinds(node: KubeResource, kinds: Set<string>) {
+function collectKinds(node: KubeResource, kinds: Set<string>, visited = new Set<string>()) {
+  if (visited.has(node.uid)) return;
+  visited.add(node.uid);
   kinds.add(node.kind);
-  for (const child of node.children ?? []) collectKinds(child, kinds);
+  for (const child of node.children ?? []) collectKinds(child, kinds, visited);
 }
 
 type KindFilterSelectProps = {
@@ -168,8 +169,6 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
 }
 
 const ResourceView: React.FC = observer(() => {
-  const [loading, setLoading] = useState(true);
-  const [resource, setResource] = useState<KubeResource | undefined>();
   const [activeView, setActiveView] = useState<"graph" | "tree">("graph");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [eventSidebarOpen, setEventSidebarOpen] = useState(false);
@@ -179,25 +178,11 @@ const ResourceView: React.FC = observer(() => {
   const { nodeUid } = useParams();
   const fluxTreeStore = useInjection(FluxTreeStore);
 
+  const resource = fluxTreeStore.findResourceByUid(nodeUid ?? "");
+
   const [selectedNode, setSelectedNode] = useState<KubeResource | undefined>(undefined);
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
-  const fullChain = fluxTreeStore.findFluxParents(resource?.uid);
-
-  useEffect(() => {
-    if (resource) return;
-    fetchTreeUseCase.execute().finally(() => setLoading(false));
-  }, [nodeUid, resource]);
-
-  useEffect(() => {
-    if (!loading) {
-      try {
-        const foundNode = fluxTreeStore.tree.findNodeById(nodeUid);
-        setResource(foundNode);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  }, [fluxTreeStore.tree, loading, nodeUid]);
+  const fullChain = useMemo(() => fluxTreeStore.findFluxParents(resource?.uid), [fluxTreeStore, resource]);
 
   const showFluxSyncStatusWidget = useMemo(
     () => !!resource && resource instanceof FluxResource,
@@ -300,12 +285,79 @@ const ResourceView: React.FC = observer(() => {
           </div>
         </div>
 
+        {/* Mobile toolbar — static row with view toggle + filter bar (replaces floating overlays) */}
+        <div className="md:hidden flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-default-100">
+          <div className="flex items-center gap-1 flex-shrink-0 bg-content1 rounded-lg p-1 border border-default-200">
+            <Button
+              size="sm"
+              variant={activeView === "graph" ? "solid" : "light"}
+              onPress={() => setActiveView("graph")}
+              startContent={<Network className="w-3.5 h-3.5" />}
+            >
+              Graph
+            </Button>
+            <Button
+              size="sm"
+              variant={activeView === "tree" ? "solid" : "light"}
+              onPress={() => setActiveView("tree")}
+              startContent={<List className="w-3.5 h-3.5" />}
+            >
+              Tree
+            </Button>
+          </div>
+          <div className="flex-1 min-w-0 overflow-x-auto">
+            <div className="flex items-center gap-1 w-max">
+              {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
+                const active = statusFilters.includes(value);
+                return (
+                  <button
+                    key={value}
+                    onClick={() => toggleStatus(value)}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors flex-shrink-0 ${
+                      active
+                        ? "bg-content3 text-foreground"
+                        : "text-default-400 hover:text-foreground hover:bg-content2"
+                    }`}
+                  >
+                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+                    {label}
+                  </button>
+                );
+              })}
+              {availableKinds.length > 0 && (
+                <>
+                  <div className="w-px h-4 bg-default-200 mx-0.5 flex-shrink-0" />
+                  <KindFilterSelect
+                    availableKinds={availableKinds}
+                    selectedKinds={kindFilters}
+                    onChange={setKindFilters}
+                  />
+                </>
+              )}
+              {hasActiveFilter && (
+                <>
+                  <div className="w-px h-4 bg-default-200 mx-0.5 flex-shrink-0" />
+                  <button
+                    onClick={clearFilters}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-default-400 hover:text-foreground hover:bg-content2 transition-colors flex-shrink-0"
+                  >
+                    <X className="w-3 h-3" />
+                    Clear
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Graph + sidebars row */}
-        <div className="flex-1 flex flex-row overflow-hidden min-h-0">
+        <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden min-h-0">
+
           {/* Graph / Tree area */}
-          <div className="flex-1 min-w-0 relative">
-            {/* Floating view controls — top right */}
-            <div className="absolute top-3 right-4 z-10 flex items-center gap-1 bg-content1/90 backdrop-blur-sm rounded-lg p-1 border border-default-200 shadow-sm">
+          <div className="flex-shrink-0 h-[60vh] md:h-auto md:flex-1 md:min-w-0 relative">
+
+            {/* Floating view controls — desktop only */}
+            <div className="hidden md:flex absolute top-3 right-4 z-10 items-center gap-1 bg-content1/90 backdrop-blur-sm rounded-lg p-1 border border-default-200 shadow-sm">
               <Button
                 size="sm"
                 variant={activeView === "graph" ? "solid" : "light"}
@@ -338,8 +390,8 @@ const ResourceView: React.FC = observer(() => {
               </Button>
             </div>
 
-            {/* Filter bar — top left */}
-            <div className="absolute top-3 left-4 z-10 flex items-center gap-1 bg-content1/90 backdrop-blur-sm rounded-lg px-2 py-1 border border-default-200 shadow-sm">
+            {/* Filter bar — desktop only */}
+            <div className="hidden md:flex absolute top-3 left-4 z-10 items-center gap-1 bg-content1/90 backdrop-blur-sm rounded-lg px-2 py-1 border border-default-200 shadow-sm">
               {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
                 const active = statusFilters.includes(value);
                 return (
@@ -390,12 +442,13 @@ const ResourceView: React.FC = observer(() => {
                 onResourceClick={(node) => openInfo(node)}
                 rootResource={resource}
                 filter={activeFilter}
+                treeSize={fluxTreeStore.resourceCount}
               />
             </div>
 
             {/* Tree */}
             {activeView === "tree" && (
-              <div className="absolute inset-0 overflow-y-auto px-6 pb-6 pt-16">
+              <div className="absolute inset-0 overflow-y-auto px-6 pb-6 pt-4 md:pt-16">
                 <RenderTreeNode
                   resource={resource}
                   level={0}
@@ -408,11 +461,11 @@ const ResourceView: React.FC = observer(() => {
 
           {/* Widget sidebar */}
           <div
-            className={`flex-shrink-0 border-l border-default-100 overflow-hidden transition-all duration-300 ${
-              sidebarOpen ? "w-[320px]" : "w-0"
+            className={`flex-shrink-0 border-t border-default-100 md:border-t-0 md:flex-shrink-0 md:border-l md:border-default-100 md:overflow-hidden md:transition-all md:duration-300 ${
+              sidebarOpen ? "md:w-[320px]" : "md:w-0"
             }`}
           >
-            <div className="w-[320px] h-full flex flex-col">
+            <div className="w-full md:w-[320px] md:h-full flex flex-col">
               {/* Action bar */}
               <div className="flex-shrink-0 px-3 py-3 border-b border-default-100 flex items-center gap-2">
                 <Button
@@ -455,13 +508,12 @@ const ResourceView: React.FC = observer(() => {
             </div>
           </div>
 
-          {/* Events sidebar */}
+          {/* Desktop events sidebar */}
           <aside
-            className={`flex-shrink-0 border-l border-default-100 flex flex-col overflow-hidden transition-all duration-300 ${
-              eventSidebarOpen ? "w-[360px]" : "w-0"
+            className={`hidden md:flex-shrink-0 md:flex md:flex-col md:overflow-hidden md:transition-all md:duration-300 md:border-l md:border-default-100 ${
+              eventSidebarOpen ? "md:w-[360px]" : "md:w-0"
             }`}
           >
-            {/* Sidebar header */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-default-100 flex-shrink-0">
               <span className="text-sm font-semibold">Events</span>
               {warningCount > 0 && (
@@ -484,8 +536,6 @@ const ResourceView: React.FC = observer(() => {
                 ))}
               </div>
             </div>
-
-            {/* Event list */}
             <div className="flex-1 overflow-y-auto">
               {displayedEvents.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-2 text-default-400">
@@ -539,6 +589,98 @@ const ResourceView: React.FC = observer(() => {
             </div>
           </aside>
         </div>
+
+        {/* Mobile events bottom sheet */}
+        {eventSidebarOpen && (
+          <>
+            <div
+              className="md:hidden fixed inset-0 z-40 bg-black/40"
+              onClick={() => setEventSidebarOpen(false)}
+            />
+            <aside className="md:hidden fixed inset-x-0 bottom-0 z-50 h-[60vh] flex flex-col bg-background border-t-2 border-default-200 shadow-2xl rounded-t-xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-default-100 flex-shrink-0">
+                <span className="text-sm font-semibold">Events</span>
+                {warningCount > 0 && (
+                  <Chip size="sm" color="warning" variant="flat" className="text-xs h-5">
+                    {warningCount}
+                  </Chip>
+                )}
+                <div className="ml-auto flex items-center gap-1">
+                  {(["all", "Warning", "Normal"] as EventFilter[]).map((f) => (
+                    <Chip
+                      key={f}
+                      size="sm"
+                      variant={eventFilter === f ? "solid" : "flat"}
+                      color={eventFilter === f && f === "Warning" ? "warning" : "default"}
+                      className="cursor-pointer select-none"
+                      onClick={() => setEventFilter(f)}
+                    >
+                      {f === "all" ? "All" : f}
+                    </Chip>
+                  ))}
+                  <button
+                    className="ml-1 p-1 rounded-md text-default-400 hover:text-foreground hover:bg-content2 transition-colors"
+                    onClick={() => setEventSidebarOpen(false)}
+                    aria-label="Close events"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {displayedEvents.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full gap-2 text-default-400">
+                    <BellOff className="w-8 h-8 opacity-30" />
+                    <span className="text-sm">
+                      {allEvents.length === 0 ? "No events" : "No matching events"}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-default-100">
+                    {displayedEvents.map((event, i) => (
+                      <div
+                        key={`${event.uid}_${i}`}
+                        className={`px-4 py-2.5 hover:bg-content2 transition-colors ${
+                          event.type === "Warning" ? "bg-warning/[0.04]" : ""
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <div
+                            className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                              event.type === "Warning" ? "bg-warning" : "bg-primary"
+                            }`}
+                          />
+                          <span className="text-xs font-medium flex-1 min-w-0 truncate">
+                            {event.reason}
+                          </span>
+                          <span className="text-xs text-default-500 flex-shrink-0 tabular-nums">
+                            {format(event.lastObserved, "HH:mm:ss")}
+                          </span>
+                        </div>
+                        <p className="text-xs text-default-400 line-clamp-2 pl-3.5 leading-relaxed">
+                          {event.message}
+                        </p>
+                        {event.count > 1 && (
+                          <p className="text-xs text-default-600 pl-3.5 mt-0.5">
+                            ×{event.count}
+                          </p>
+                        )}
+                        <div className="pl-3.5 mt-1">
+                          <Link
+                            to={`${ROUTES.RESOURCE}/${event.resourceUID}`}
+                            className="text-xs font-mono text-default-500 hover:text-foreground transition-colors truncate block"
+                          >
+                            {event.source}
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </aside>
+          </>
+        )}
       </main>
 
       <ResourceDrawer

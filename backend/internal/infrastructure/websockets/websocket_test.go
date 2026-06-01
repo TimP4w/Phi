@@ -53,13 +53,13 @@ func TestWebSocket_Upgrade_SendsConnectedMessage(t *testing.T) {
 
 func TestWebSocket_Broadcast_NoClients(t *testing.T) {
 	wm := NewWebSocketManager().(*WebSocketManagerImpl)
-	err := wm.Broadcast(realtime.Message{Type: realtime.TREE, Message: "hello"})
+	err := wm.Broadcast(realtime.Message{Type: realtime.RESOURCE_SYNC, Message: "hello"})
 	assert.NoError(t, err)
 }
 
 func TestWebSocket_SendMessage_ClientNotFound(t *testing.T) {
 	wm := NewWebSocketManager().(*WebSocketManagerImpl)
-	err := wm.SendMessage(realtime.Message{Type: realtime.TREE}, "nonexistent-id")
+	err := wm.SendMessage(realtime.Message{Type: realtime.RESOURCE_SYNC}, "nonexistent-id")
 	assert.ErrorContains(t, err, "not found")
 }
 
@@ -134,15 +134,40 @@ func TestWebSocket_Ping_ReturnsPong(t *testing.T) {
 	assert.Equal(t, realtime.PONG, msg.Type)
 }
 
+func TestWebSocket_OnClose_CanCallRemoveConnectionListener(t *testing.T) {
+	wm, srv := newTestServer(t)
+	conn := dialWS(t, srv)
+	clientId := readMsg(t, conn).Message.(string)
+
+	done := make(chan struct{})
+	wm.AddConnectionListener(realtime.Listener{
+		ID: "self-removing",
+		OnClose: func(id string) {
+			if id == clientId {
+				wm.RemoveConnectionListener("self-removing")
+				close(done)
+			}
+		},
+	})
+
+	conn.Close()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("OnClose did not complete (possible deadlock)")
+	}
+}
+
 func TestWebSocket_Broadcast_ReachesClient(t *testing.T) {
 	wm, srv := newTestServer(t)
 	conn := dialWS(t, srv)
 	readMsg(t, conn) // drain CONNECTED
 
 	time.Sleep(5 * time.Millisecond) // let addClient finish
-	err := wm.Broadcast(realtime.Message{Type: realtime.TREE, Message: "payload"})
+	err := wm.Broadcast(realtime.Message{Type: realtime.RESOURCE_PATCH, Message: "payload"})
 	require.NoError(t, err)
 
 	msg := readMsg(t, conn)
-	assert.Equal(t, realtime.TREE, msg.Type)
+	assert.Equal(t, realtime.RESOURCE_PATCH, msg.Type)
 }

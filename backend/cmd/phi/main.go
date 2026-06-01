@@ -15,7 +15,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/timp4w/phi/internal/core/logging"
-	"github.com/timp4w/phi/internal/core/tree"
 	"go.uber.org/fx"
 
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -28,7 +27,6 @@ import (
 	"github.com/timp4w/phi/internal/core/realtime"
 	realtimeusecases "github.com/timp4w/phi/internal/core/realtime/usecases"
 	shared "github.com/timp4w/phi/internal/core/shared"
-	treeusecases "github.com/timp4w/phi/internal/core/tree/usecases"
 	kubeInfra "github.com/timp4w/phi/internal/infrastructure/kubernetes"
 	websocket "github.com/timp4w/phi/internal/infrastructure/websockets"
 )
@@ -36,7 +34,6 @@ import (
 type UseCases struct {
 	fx.In
 	SyncResources     shared.UseCase[kubernetesusecases.SyncResourcesInput, map[string]*kubernetes.Resource]
-	GetTree           shared.UseCase[treeusecases.GetTreeInput, *kubernetes.Resource]
 	WatchLogs         shared.UseCase[kubernetesusecases.WatchLogsUseCaseInput, struct{}]
 	GetResourceYAML   shared.UseCase[kubernetesusecases.GetResourceYAMLInput, []byte]
 	UpgradeConnection shared.UseCase[realtimeusecases.UpgradeConnectionInput, bool]
@@ -71,13 +68,11 @@ func main() {
 			// Service providers
 			kubeInfra.NewKubeServiceImpl,
 			kubernetes.NewKubeStoreImpl,
-			tree.NewTreeService,
 			websocket.NewWebSocketManager,
 			kubernetes.NewFluxServiceImpl,
 
 			// Usecase providers
 			kubernetesusecases.NewSyncResourcesUseCase,
-			treeusecases.NewGetTreeUseCase,
 			kubernetesusecases.NewWatchLogsUseCase,
 			kubernetesusecases.NewGetResourceYAMlUseCase,
 			realtimeusecases.NewUpgradeConnectionUseCase,
@@ -119,7 +114,9 @@ func initBackgroundTasks(uc UseCases) {
 	logger.Info("Initializing background tasks")
 
 	logger.Debug("Starting resource synchronization")
-	uc.SyncResources.Execute(struct{}{})
+	if _, err := uc.SyncResources.Execute(struct{}{}); err != nil {
+		logger.WithError(err).Error("Resource synchronization failed; watchers will start with empty store")
+	}
 
 	logger.Debug("Starting resource watching")
 	uc.WatchResources.Execute(struct{}{})
@@ -164,7 +161,6 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.RealtimeService, frontendDir string) {
 	staticController := controllers.NewStaticController(frontendDir)
-	treeController := controllers.NewTreeController(uc.GetTree)
 	resourceController := controllers.NewResourceController(
 		uc.GetResourceYAML,
 		uc.Reconcile,
@@ -178,7 +174,6 @@ func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.Realtim
 	wscontrollers.NewResourceWSController(uc.WatchLogs, realtimeService)
 
 	// Register routes
-	treeController.RegisterRoutes(r)
 	resourceController.RegisterRoutes(r)
 	realtimeController.RegisterRoutes(r)
 	staticController.RegisterRoutes(r)

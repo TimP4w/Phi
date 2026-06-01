@@ -28,4 +28,7 @@ type KubeStore interface {
 	RegisterResource(resource *Resource)
 
 	AddEvent(resourceUID string, ev Event, ttl time.Duration, max int) bool
+	// GetKnownResourceAPIRefs returns the set of resource API ref keys (resource_version_group)
+	// for all resources currently in the store. Used to determine which K8s resource types to watch.
+	GetKnownResourceAPIRefs() map[string]struct{}
 }

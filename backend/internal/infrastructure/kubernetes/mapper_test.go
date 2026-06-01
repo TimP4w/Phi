@@ -689,6 +689,41 @@ func TestRefGroupAndVersion_CustomGroup(t *testing.T) {
 	assert.Equal(t, "v1", version)
 }
 
+func TestToResource_Deployment_NilReplicas(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Deployment", "apps/v1", "my-deploy", "default")
+	setGeneration(obj.Object, 1)
+	obj.Object["spec"] = map[string]interface{}{
+		"template": map[string]interface{}{
+			"spec": map[string]interface{}{"containers": []interface{}{}},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"observedGeneration": int64(1),
+		"readyReplicas":      int64(0),
+	}
+
+	assert.NotPanics(t, func() {
+		res := mapper.ToResource(*obj, "deployments")
+		assert.Equal(t, kube.StatusPending, res.Status)
+	})
+}
+
+func TestToResource_StatefulSet_NilReplicas(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("StatefulSet", "apps/v1", "my-ss", "default")
+	setGeneration(obj.Object, 1)
+	obj.Object["spec"] = map[string]interface{}{}
+	obj.Object["status"] = map[string]interface{}{
+		"observedGeneration": int64(1),
+		"readyReplicas":      int64(0),
+	}
+
+	assert.NotPanics(t, func() {
+		mapper.ToResource(*obj, "statefulsets")
+	})
+}
+
 func TestGetRefVersion(t *testing.T) {
 	assert.Equal(t, "v1", GetRefVersion("v1"))
 	assert.Equal(t, "v1", GetRefVersion("apps/v1"))

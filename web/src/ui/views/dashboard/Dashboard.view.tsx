@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
@@ -15,7 +15,6 @@ import { useSessionState } from "../../../core/utils/useSessionState";
 import Header from "../../components/layout/Header";
 import { SiFlux } from "@icons-pack/react-simple-icons";
 import ResourceCountWidget from "../../components/widgets/ResourcesCountWidget";
-import { fetchTreeUseCase } from "../../../core/fluxTree/usecases/FetchTree.usecase";
 import { EventsStore } from "../../../core/fluxTree/stores/events.store";
 import { ROUTES } from "../../routes/routes.enum";
 import { Link } from "react-router-dom";
@@ -125,9 +124,6 @@ const AppsView: React.FC = observer(() => {
   const [eventFilter, setEventFilter] = useState<EventFilter>("all");
   const [eventSidebarOpen, setEventSidebarOpen] = useState(true);
 
-  useEffect(() => {
-    fetchTreeUseCase.execute();
-  }, []);
 
   const toggleFilterValue = (
     selected: string[],
@@ -209,7 +205,24 @@ const AppsView: React.FC = observer(() => {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
-      <Header />
+      <Header>
+        <button
+          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0 ${
+            eventSidebarOpen
+              ? "border-default-200 bg-content2 text-foreground"
+              : "border-default-100 bg-content1 hover:bg-content2 text-default-400 hover:text-foreground"
+          }`}
+          onClick={() => setEventSidebarOpen((o) => !o)}
+        >
+          <Bell className="w-3.5 h-3.5" />
+          Events
+          {warningCount > 0 && (
+            <Chip size="sm" color="warning" variant="flat" className="h-4 text-xs">
+              {warningCount}
+            </Chip>
+          )}
+        </button>
+      </Header>
 
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Main content */}
@@ -243,22 +256,6 @@ const AppsView: React.FC = observer(() => {
                     {hasActiveFilters ? " matching filters" : " total"}
                   </p>
                 </div>
-                <button
-                  className={`ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0 ${
-                    eventSidebarOpen
-                      ? "border-default-200 bg-content2 text-foreground"
-                      : "border-default-100 bg-content1 hover:bg-content2 text-default-400 hover:text-foreground"
-                  }`}
-                  onClick={() => setEventSidebarOpen((o) => !o)}
-                >
-                  <Bell className="w-3.5 h-3.5" />
-                  Events
-                  {warningCount > 0 && (
-                    <Chip size="sm" color="warning" variant="flat" className="h-4 text-xs">
-                      {warningCount}
-                    </Chip>
-                  )}
-                </button>
               </div>
 
               {/* Filter bar */}
@@ -363,7 +360,7 @@ const AppsView: React.FC = observer(() => {
                 {warningCount}
               </Chip>
             )}
-            <div className="ml-auto flex gap-1">
+            <div className="ml-auto flex items-center gap-1">
               {(["all", "Warning", "Normal"] as EventFilter[]).map((f) => (
                 <Chip
                   key={f}
@@ -376,6 +373,13 @@ const AppsView: React.FC = observer(() => {
                   {f === "all" ? "All" : f}
                 </Chip>
               ))}
+              <button
+                className="ml-1 p-1 rounded-md text-default-400 hover:text-foreground hover:bg-content2 transition-colors"
+                onClick={() => setEventSidebarOpen(false)}
+                aria-label="Close events sidebar"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 

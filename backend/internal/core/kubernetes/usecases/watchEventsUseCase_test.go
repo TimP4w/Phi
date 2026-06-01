@@ -15,9 +15,8 @@ func makeWatchEventsUseCase(t *testing.T) (*WatchEventsUseCase, *mocks.KubeServi
 	kubeSvc := mocks.NewKubeService(t)
 	store := mocks.NewKubeStore(t)
 	rtSvc := mocks.NewRealtimeService(t)
-	treeSvc := mocks.NewTreeService(t)
 
-	uc := NewWatchEventsUseCase(treeSvc, rtSvc, kubeSvc, store).(*WatchEventsUseCase)
+	uc := NewWatchEventsUseCase(rtSvc, kubeSvc, store).(*WatchEventsUseCase)
 	return uc, kubeSvc, store, rtSvc
 }
 

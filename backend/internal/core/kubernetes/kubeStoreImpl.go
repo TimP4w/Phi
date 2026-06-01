@@ -289,6 +289,17 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 	return updated
 }
 
+func (k *KubeStoreImpl) GetKnownResourceAPIRefs() map[string]struct{} {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	result := make(map[string]struct{})
+	for _, r := range k.resources {
+		key := r.Resource + "_" + r.Version + "_" + r.Group
+		result[key] = struct{}{}
+	}
+	return result
+}
+
 func (k *KubeStoreImpl) AddEvent(resourceUID string, event Event, ttl time.Duration, max int) bool {
 	k.mu.Lock()
 	defer k.mu.Unlock()

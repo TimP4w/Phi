@@ -469,7 +469,7 @@ func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 			return kube.StatusWarning
 		}
 
-		if deploy.Status.ReadyReplicas == *deploy.Spec.Replicas {
+		if deploy.Spec.Replicas != nil && deploy.Status.ReadyReplicas == *deploy.Spec.Replicas {
 			return kube.StatusSuccess
 		}
 
@@ -605,10 +605,10 @@ func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
 		if ss.Status.ObservedGeneration < ss.Generation {
 			return kube.StatusPending
 		}
-		if ss.Status.ReadyReplicas == *ss.Spec.Replicas {
+		if ss.Spec.Replicas != nil && ss.Status.ReadyReplicas == *ss.Spec.Replicas {
 			return kube.StatusSuccess
 		}
-		if ss.Status.CurrentReplicas < *ss.Spec.Replicas {
+		if ss.Spec.Replicas != nil && ss.Status.CurrentReplicas < *ss.Spec.Replicas {
 			return kube.StatusPending
 		}
 		return kube.StatusWarning

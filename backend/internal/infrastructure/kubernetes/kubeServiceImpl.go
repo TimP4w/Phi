@@ -482,7 +482,7 @@ func (k *KubeServiceImpl) DiscoverApis() (*kube.ResourceMap, error) {
 			}
 
 			for _, apiRes := range group.APIResources {
-				if !utils.Contains(apiRes.Verbs, "list") { // Skip resources that cannot be listed
+				if !utils.Contains(apiRes.Verbs, "list") || !utils.Contains(apiRes.Verbs, "watch") { // Skip resources that cannot be listed or watched
 					continue
 				}
 				api := kube.ApiResource{

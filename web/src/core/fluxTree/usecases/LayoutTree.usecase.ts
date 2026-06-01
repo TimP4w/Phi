@@ -6,9 +6,8 @@ import ELK, { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk.bundled.js";
 import { RESOURCE_TYPE } from "../constants/resources.const";
 import { VizualizationNodeData } from "../models/tree";
 
-
-type Output = { nodes: Node<VizualizationNodeData>[], edges: Edge[]; };
-type Input = { currentLayout: Node<VizualizationNodeData>[]; nodeId: string; };
+type Output = { nodes: Node<VizualizationNodeData>[]; edges: Edge[] };
+type Input = { currentLayout: Node<VizualizationNodeData>[]; nodeId: string };
 
 export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
   private fluxTreeStore = container.get<FluxTreeStore>(FluxTreeStore);
@@ -40,27 +39,27 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
       edges: edges as unknown[] as ElkExtendedEdge[],
     };
 
-    return this.elk
-      .layout(graph)
-      .then((layoutedGraph: ElkNode) => {
-        if (!layoutedGraph.children) {
-          return { nodes: [], edges: [] };
-        }
-        return {
-          nodes: layoutedGraph.children.map((node) => ({
-            ...node,
-            position: {
-              x: node.x!,
-              y: node.y!,
-            },
-          })) as Node<VizualizationNodeData>[],
-          edges: layoutedGraph.edges as unknown[] as Edge[] || [],
-        };
-      });
-  };
+    return this.elk.layout(graph).then((layoutedGraph: ElkNode) => {
+      if (!layoutedGraph.children) {
+        return { nodes: [], edges: [] };
+      }
+      return {
+        nodes: layoutedGraph.children.map((node) => ({
+          ...node,
+          position: {
+            x: node.x!,
+            y: node.y!,
+          },
+        })) as Node<VizualizationNodeData>[],
+        edges: (layoutedGraph.edges as unknown[] as Edge[]) || [],
+      };
+    });
+  }
 
-
-  public relayout(nodes: Node<VizualizationNodeData>[], edges: Edge[]): Promise<Output> {
+  public relayout(
+    nodes: Node<VizualizationNodeData>[],
+    edges: Edge[],
+  ): Promise<Output> {
     const isHorizontal = this.elkOptions["elk.direction"] === "RIGHT";
 
     const graph: ElkNode = {
@@ -83,37 +82,30 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
           ...node,
           position: { x: node.x!, y: node.y! },
         })) as Node<VizualizationNodeData>[],
-        edges: layoutedGraph.edges as unknown[] as Edge[] || [],
+        edges: (layoutedGraph.edges as unknown[] as Edge[]) || [],
       };
     });
   }
 
   private buildNodesAndEdges(nodeId: string): Output {
     const nodes: Node<VizualizationNodeData>[] = [];
-    let edges: Edge[] = [];
-    const node = this.fluxTreeStore.tree.findNodeById(nodeId);
+    const edges: Edge[] = [];
+    const visitedIds = new Set<string>();
+    const edgeTargets = new Set<string>();
+    const node =
+      this.fluxTreeStore.resources.get(nodeId) ?? this.fluxTreeStore.tree.root;
 
+    const resourcesToSkip = new Set([
+      // "ClusterRole",
+      // "ClusterRoleBinding",
+      // "CustomResourceDefinition"
+    ]);
 
-    const resourcesToSkip = [
-      "ClusterRole",
-      "ClusterRoleBinding",
-      "CustomResourceDefinition"
-    ]; // TODO: define if / what to skip. Maybe make it configurable
+    this.fluxTreeStore.tree.traverse(node, (n): boolean => {
+      if (visitedIds.has(n.uid)) return true;
+      if (resourcesToSkip.has(n.kind)) return false;
 
-
-    this.fluxTreeStore.tree.traverse(node, (n, _layer): boolean => {
-
-      // Skip duplicates
-      if (nodes.find((existingNode) => existingNode.id === n.uid)) {
-        return false;
-      }
-      // Skip resources that are not interesting
-      if (resourcesToSkip.includes(n.kind)) {
-        return false;
-      }
-
-
-      let type; // TODO: This is a bit error prone, since we need to provide a string for the properties that we use in Tree.view.tsx (in nodeTypes)
+      let type;
       switch (n.kind) {
         case RESOURCE_TYPE.DEPLOYMENT:
           type = "deployment";
@@ -126,27 +118,21 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
           break;
       }
 
+      visitedIds.add(n.uid);
       nodes.push({
         id: n.uid,
-        data: {
-          treeNode: n
-        },
+        data: { treeNode: n },
         type: type,
-        position: {
-          x: 0,
-          y: 0,
-        },
+        position: { x: 0, y: 0 },
       });
 
-      // Create edges
       for (const child of n.children) {
-        if (resourcesToSkip.includes(child.kind)) {
-          continue;
-        }
+        if (resourcesToSkip.has(child.kind)) continue;
 
-        // Only maintain the furthermost edge if there are multiple parents
-        if (edges.find((edge) => edge.target === child.uid)) {
-          edges = edges.filter((edge) => edge.target !== child.uid);
+        if (edgeTargets.has(child.uid)) {
+          // Replace previous edge to this target with the furthermost one
+          const idx = edges.findIndex((e) => e.target === child.uid);
+          if (idx !== -1) edges.splice(idx, 1);
         }
         edges.push({
           id: `${n.uid}-${child.uid}`,
@@ -155,6 +141,7 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
           type: "smoothstep",
           animated: true,
         });
+        edgeTargets.add(child.uid);
       }
 
       return false;
@@ -162,7 +149,6 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
 
     return { nodes, edges };
   }
-
 }
 
 export const layoutTreeUseCase = new LayoutTreeUseCase();
