@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import { makeObservable, observable, computed, action } from "mobx";
+import { makeObservable, observable, computed, action, runInAction } from "mobx";
 import { injectable } from "inversify";
 import { FluxResource, PodLog, Repository, SourceRef, Tree, KubeResource, Kustomization } from "../models/tree";
 import { RESOURCE_TYPE } from "../constants/resources.const";
@@ -82,17 +82,30 @@ class FluxTreeStore {
     return this.resources.size;
   }
 
-  // --- flat map mutators (rebuild tree after each mutation) ---
+  // --- flat map mutators ---
+
+  private _rebuildScheduled = false;
+
+  private scheduleBuild(): void {
+    if (this._rebuildScheduled) return;
+    this._rebuildScheduled = true;
+    Promise.resolve().then(() =>
+      runInAction(() => {
+        this._tree = buildTree(this.resources);
+        this._rebuildScheduled = false;
+      })
+    );
+  }
 
   upsertResource(dto: TreeNodeDto): void {
     if (!dto.uid) return;
     this.resources.set(dto.uid, KubeResource.fromDto(dto));
-    this._tree = buildTree(this.resources);
+    this.scheduleBuild();
   }
 
   removeResource(uid: string): void {
     this.resources.delete(uid);
-    this._tree = buildTree(this.resources);
+    this.scheduleBuild();
   }
 
   syncResources(dtos: TreeNodeDto[]): void {

@@ -139,7 +139,8 @@ func TestKubeStore_GetResources_ReturnsCopy(t *testing.T) {
 	s.UpdateResource(r)
 
 	all := s.GetResources()
-	all["uid-1"] = Resource{Name: "tampered"}
+	tampered := Resource{Name: "tampered"}
+	all["uid-1"] = &tampered
 
 	// Original must be unaffected
 	assert.Equal(t, "pod", s.GetResourceByUID("uid-1").Name)

@@ -168,19 +168,19 @@ func (_c *KubeStore_GetResourceByUID_Call) RunAndReturn(run func(string) *kubern
 }
 
 // GetResources provides a mock function with no fields
-func (_m *KubeStore) GetResources() map[string]kubernetes.Resource {
+func (_m *KubeStore) GetResources() map[string]*kubernetes.Resource {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetResources")
 	}
 
-	var r0 map[string]kubernetes.Resource
-	if rf, ok := ret.Get(0).(func() map[string]kubernetes.Resource); ok {
+	var r0 map[string]*kubernetes.Resource
+	if rf, ok := ret.Get(0).(func() map[string]*kubernetes.Resource); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string]kubernetes.Resource)
+			r0 = ret.Get(0).(map[string]*kubernetes.Resource)
 		}
 	}
 
@@ -204,12 +204,12 @@ func (_c *KubeStore_GetResources_Call) Run(run func()) *KubeStore_GetResources_C
 	return _c
 }
 
-func (_c *KubeStore_GetResources_Call) Return(_a0 map[string]kubernetes.Resource) *KubeStore_GetResources_Call {
+func (_c *KubeStore_GetResources_Call) Return(_a0 map[string]*kubernetes.Resource) *KubeStore_GetResources_Call {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *KubeStore_GetResources_Call) RunAndReturn(run func() map[string]kubernetes.Resource) *KubeStore_GetResources_Call {
+func (_c *KubeStore_GetResources_Call) RunAndReturn(run func() map[string]*kubernetes.Resource) *KubeStore_GetResources_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -9,6 +9,11 @@ import (
 	shared "github.com/timp4w/phi/internal/core/shared"
 )
 
+const (
+	eventTTL             = 72 * time.Hour
+	maxEventsPerResource = 100
+)
+
 type WatchEventsInput struct{}
 
 type WatchEventsUseCase struct {
@@ -38,9 +43,6 @@ func (uc *WatchEventsUseCase) Execute(in WatchEventsInput) (struct{}, error) {
 }
 
 func (uc *WatchEventsUseCase) onEvent(event *kubernetes.Event) {
-	const eventTTL = 72 * time.Hour  // TODO: make configurable
-	const maxEventsPerResource = 100 // TODO: make configurable
-
 	logger := uc.logger.WithFields(map[string]any{
 		"event_name":      event.Name,
 		"event_kind":      event.Kind,

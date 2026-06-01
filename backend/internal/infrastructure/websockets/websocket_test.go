@@ -164,7 +164,6 @@ func TestWebSocket_Broadcast_ReachesClient(t *testing.T) {
 	conn := dialWS(t, srv)
 	readMsg(t, conn) // drain CONNECTED
 
-	time.Sleep(5 * time.Millisecond) // let addClient finish
 	err := wm.Broadcast(realtime.Message{Type: realtime.RESOURCE_PATCH, Message: "payload"})
 	require.NoError(t, err)
 

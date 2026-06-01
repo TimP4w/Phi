@@ -26,11 +26,11 @@ func TestWatchLogsUseCase_ResourceNotFound(t *testing.T) {
 	uc, _, store, rtSvc := makeWatchLogsUseCase(t)
 
 	store.On("GetResourceByUID", "missing").Return((*kube.Resource)(nil))
-	rtSvc.On("AddConnectionListener", mock.Anything).Return()
 
 	_, err := uc.Execute(WatchLogsUseCaseInput{ClientID: "c1", ResourceID: "missing"})
 
 	assert.ErrorContains(t, err, "resource not found")
+	rtSvc.AssertNotCalled(t, "AddConnectionListener")
 }
 
 func TestWatchLogsUseCase_NotAPod(t *testing.T) {
@@ -38,11 +38,11 @@ func TestWatchLogsUseCase_NotAPod(t *testing.T) {
 
 	res := &kube.Resource{UID: "deploy-uid", Kind: "Deployment"}
 	store.On("GetResourceByUID", "deploy-uid").Return(res)
-	rtSvc.On("AddConnectionListener", mock.Anything).Return()
 
 	_, err := uc.Execute(WatchLogsUseCaseInput{ClientID: "c1", ResourceID: "deploy-uid"})
 
 	assert.ErrorContains(t, err, "not a pod")
+	rtSvc.AssertNotCalled(t, "AddConnectionListener")
 }
 
 func TestWatchLogsUseCase_Success(t *testing.T) {

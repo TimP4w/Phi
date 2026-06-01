@@ -14,8 +14,8 @@ type KubeStore interface {
 	RemoveResource(uid string)
 	// SetResources sets the resources map and returns it.
 	SetResources(resources map[string]*Resource) map[string]*Resource
-	// GetResources returns a copy of the resources map.
-	GetResources() map[string]Resource
+	// GetResources returns a snapshot of the resources map as pointers.
+	GetResources() map[string]*Resource
 	// FindChildrenResourcesByRef retrieves all child resources for a given reference.
 	// Reference is a string that uniquely identifies a resource, in the format `name_namespace_kind_version`.
 	//

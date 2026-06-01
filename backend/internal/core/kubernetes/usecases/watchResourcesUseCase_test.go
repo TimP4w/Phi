@@ -36,12 +36,13 @@ func TestWatchResources_onResourceAdd_UpdatesStore(t *testing.T) {
 	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod"}
 	store.On("UpdateResource", res).Return(&res)
 	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{})
-	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Once()
 	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
 
 	uc.onResourceAdd(res)
 
 	store.AssertCalled(t, "UpdateResource", res)
+	kubeSvc.AssertCalled(t, "WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestWatchResources_onResourceUpdate_DeepEqual_Skips(t *testing.T) {
@@ -153,7 +154,7 @@ func TestWatchResources_BroadcastsPatch(t *testing.T) {
 	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Status: kube.StatusSuccess}
 	store.On("UpdateResource", res).Return(&res)
 	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{})
-	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Maybe()
+	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Once()
 
 	rtSvc.On("Broadcast", mock.MatchedBy(func(msg realtime.Message) bool {
 		if msg.Type != realtime.RESOURCE_PATCH {

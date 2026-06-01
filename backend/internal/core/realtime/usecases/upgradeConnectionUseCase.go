@@ -40,7 +40,7 @@ func NewUpgradeConnectionUseCase(p UpgradeConnectionUseCaseParams) shared.UseCas
 			resources := p.KubeStore.GetResources()
 			resourceList := make([]kube.Resource, 0, len(resources))
 			for _, r := range resources {
-				resourceList = append(resourceList, r)
+				resourceList = append(resourceList, *r)
 			}
 			err := p.RealtimeService.SendMessage(realtime.Message{
 				Type:     realtime.RESOURCE_SYNC,

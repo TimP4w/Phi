@@ -4,13 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/realtime"
 )
+
+const readTimeout = 90 * time.Second
 
 type WebSocketManagerImpl struct {
 	clients             map[string]*websocket.Conn
@@ -21,9 +26,21 @@ type WebSocketManagerImpl struct {
 	logger              logging.PhiLogger
 }
 
+func allowedOrigin(r *http.Request) bool {
+	if os.Getenv("PHI_DEV") == "true" {
+		return true
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	origin = strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://")
+	return origin == r.Host
+}
+
 func NewWebSocketManager() realtime.RealtimeService {
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true },
+		CheckOrigin: allowedOrigin,
 	}
 
 	logging.Logger().Info("Initializing WebSocket manager")
@@ -71,6 +88,7 @@ func (wm *WebSocketManagerImpl) Upgrade(w http.ResponseWriter, r *http.Request) 
 		fn(clientId)
 	}
 
+	conn.SetReadDeadline(time.Now().Add(readTimeout))
 	for {
 		_, p, err := conn.ReadMessage()
 		if err != nil {
@@ -89,6 +107,7 @@ func (wm *WebSocketManagerImpl) Upgrade(w http.ResponseWriter, r *http.Request) 
 			return "", err
 		}
 		message.ClientId = clientId
+		conn.SetReadDeadline(time.Now().Add(readTimeout))
 
 		switch message.Type {
 		case realtime.PING:

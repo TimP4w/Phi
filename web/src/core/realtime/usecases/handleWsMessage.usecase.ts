@@ -37,17 +37,18 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
   }
 
   private handleResourceSync(resources: ResourceSyncDto): void {
-    this.fluxTreeStore.syncResources(resources as TreeNodeDto[]);
+    if (!Array.isArray(resources)) return;
+    this.fluxTreeStore.syncResources(resources.filter((r): r is TreeNodeDto => !!r?.uid));
   }
 
   private handleResourcePatch(patch: ResourcePatchDto): void {
-    if (patch.op === "upsert" && patch.resource) {
-      this.fluxTreeStore.upsertResource(patch.resource as TreeNodeDto);
-    } else if (patch.op === "delete" && patch.resource) {
-      const uid = (patch.resource as TreeNodeDto).uid;
-      if (uid) {
-        this.fluxTreeStore.removeResource(uid);
-      }
+    if (!patch || (patch.op !== "upsert" && patch.op !== "delete")) return;
+    if (patch.op === "upsert") {
+      const resource = patch.resource as TreeNodeDto | undefined;
+      if (resource?.uid) this.fluxTreeStore.upsertResource(resource);
+    } else {
+      const uid = (patch.resource as TreeNodeDto | undefined)?.uid;
+      if (uid) this.fluxTreeStore.removeResource(uid);
     }
   }
 

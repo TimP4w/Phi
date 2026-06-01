@@ -7,7 +7,7 @@ import { RESOURCE_TYPE } from "../constants/resources.const";
 import { VizualizationNodeData } from "../models/tree";
 
 type Output = { nodes: Node<VizualizationNodeData>[]; edges: Edge[] };
-type Input = { currentLayout: Node<VizualizationNodeData>[]; nodeId: string };
+type Input = { nodeId: string };
 
 export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
   private fluxTreeStore = container.get<FluxTreeStore>(FluxTreeStore);

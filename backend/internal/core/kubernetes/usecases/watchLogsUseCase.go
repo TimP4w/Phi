@@ -48,6 +48,16 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 
 	logger.Debug("Client subscribed to logs")
 
+	pod := uc.kubeStore.GetResourceByUID(in.ResourceID)
+	if pod == nil {
+		logger.Error("Resource not found")
+		return struct{}{}, fmt.Errorf("resource not found")
+	}
+	if pod.Kind != "Pod" {
+		logger.WithField("kind", pod.Kind).Error("Resource is not a pod")
+		return struct{}{}, fmt.Errorf("resource is not a pod")
+	}
+
 	uc.mu.Lock()
 	if cancel, exists := uc.watchers[in.ClientID]; exists {
 		logger.Debug("Client was already subscribed to logs, canceling previous subscription")
@@ -70,16 +80,6 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 		},
 	}
 	uc.realtimeService.AddConnectionListener(listener)
-
-	pod := uc.kubeStore.GetResourceByUID(in.ResourceID)
-	if pod == nil {
-		logger.Error("Resource not found")
-		return struct{}{}, fmt.Errorf("resource not found")
-	}
-	if pod.Kind != "Pod" {
-		logger.WithField("kind", pod.Kind).Error("Resource is not a pod")
-		return struct{}{}, fmt.Errorf("resource is not a pod")
-	}
 
 	logger.WithFields(map[string]any{
 		"pod_name":      pod.Name,

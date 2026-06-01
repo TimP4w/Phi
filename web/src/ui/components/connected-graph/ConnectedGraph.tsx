@@ -50,6 +50,8 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
   const fitAfterLayoutRef = useRef(false);
   const isLayingOut = useRef(false);
   const layoutDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const layoutThrottleStart = useRef<number | null>(null);
+  const LAYOUT_MAX_WAIT = 300;
 
   // Reset tree when navigating to new node
   useLayoutEffect(() => {
@@ -70,7 +72,7 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
     if (rootResource && shouldLayout && !isLayingOut.current) {
       isLayingOut.current = true;
       layoutTreeUseCase
-        .execute({ nodeId: rootResource.uid || "", currentLayout: [] })
+        .execute({ nodeId: rootResource.uid || "" })
         .then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
           setRawNodes(layoutedNodes);
           setRawEdges(layoutedEdges);
@@ -83,14 +85,22 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
   }, [shouldLayout, rootResource]);
 
   // Re-layout when the store's resource count changes (driven by incremental patches).
-  // Debounced so rapid patches settle before triggering an expensive ELK run.
+  // Throttled: fires at most once per LAYOUT_MAX_WAIT ms so a sustained burst of
+  // patches doesn't delay layout indefinitely the way a pure debounce would.
   useEffect(() => {
-    if (rootResource && previousRootUid.current === rootResource.uid) {
-      if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
-      layoutDebounceRef.current = setTimeout(() => {
-        setShouldLayout(true);
-      }, 300);
-    }
+    if (!rootResource || previousRootUid.current !== rootResource.uid) return;
+
+    const now = Date.now();
+    if (layoutThrottleStart.current === null) layoutThrottleStart.current = now;
+    const elapsed = now - layoutThrottleStart.current;
+    const delay = Math.max(0, LAYOUT_MAX_WAIT - elapsed);
+
+    if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
+    layoutDebounceRef.current = setTimeout(() => {
+      layoutThrottleStart.current = null;
+      setShouldLayout(true);
+    }, delay);
+
     return () => {
       if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
     };

@@ -120,7 +120,6 @@ export class KubeResource {
   children: KubeResource[] = [];
   annotations: Map<string, string>;
   labels: Map<string, string>;
-  parentId: string | null;
   parentIDs: string[];
   status: ResourceStatus;
   conditions: Condition[] = [];
@@ -140,7 +139,6 @@ export class KubeResource {
       this.namespace = dto.namespace;
       this.resource = dto.resource;
       this.group = dto.group;
-      this.parentId = null;
       this.parentIDs = dto.parentIDs || [];
       this.createdAt = new Date(dto.createdAt);
       this.deletedAt = dto.deletedAt ? new Date(dto.deletedAt) : undefined;
@@ -172,7 +170,6 @@ export class KubeResource {
       this.group = "";
       this.labels = new Map<string, string>();
       this.annotations = new Map<string, string>();
-      this.parentId = null;
       this.parentIDs = [];
       this.createdAt = new Date();
       this.status = ResourceStatus.UNKNOWN;
