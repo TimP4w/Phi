@@ -1,3 +1,4 @@
 dist
 .direnv
 .env
+backend/internal/api/http/frontend

@@ -95,7 +95,7 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
     const node =
       this.fluxTreeStore.resources.get(nodeId) ?? this.fluxTreeStore.tree.root;
 
-    const resourcesToSkip = new Set([
+    const resourcesToSkip = new Set<string>([
       // "ClusterRole",
       // "ClusterRoleBinding",
       // "CustomResourceDefinition"

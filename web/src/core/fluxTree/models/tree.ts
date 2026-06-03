@@ -54,33 +54,6 @@ export class Tree {
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  private findNodeById(nodeId?: string): KubeResource {
-    if (!nodeId) {
-      return this.root;
-    }
-    const result = this.findNodeByIdRecursive(this.root, nodeId);
-    if (result) {
-      return result;
-    }
-    throw new Error(`Node with id ${nodeId} not found`);
-  }
-
-  private findNodeByIdRecursive(
-    node: KubeResource,
-    nodeId: string,
-  ): KubeResource | null {
-    if (node.uid === nodeId) {
-      return node;
-    }
-    for (const child of node.children) {
-      const result = this.findNodeByIdRecursive(child, nodeId);
-      if (result) {
-        return result;
-      }
-    }
-    return null;
-  }
-
   public traverse(
     startNode: KubeResource,
     callback: (node: KubeResource, layer: number) => boolean,

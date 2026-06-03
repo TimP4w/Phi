@@ -4,7 +4,7 @@
     {
       "label": "Build Backend",
       "type": "shell",
-      "command": "CGO_ENABLED=0 go build -gcflags 'all=-N -l' -o ${workspaceFolder}/backend/cmd/phi/__debug_bin ./cmd/phi/main.go",
+      "command": "CGO_ENABLED=0 go build -tags localdev -gcflags 'all=-N -l' -o ${workspaceFolder}/backend/cmd/phi/__debug_bin ./cmd/phi/main.go",
       "options": {
         "cwd": "${workspaceFolder}/backend"
       },

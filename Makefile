@@ -23,6 +23,10 @@ build-be:
 	cd $(CMD_DIR) && GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GOBUILD) -o ../../../$(DIST_DIR)/$(BINARY_NAME) -v
 	cd ..
 
+run-be:
+	@echo "Running backend (local dev, no embed)..."
+	cd $(CMD_DIR) && go run -tags localdev . $(ARGS)
+
 backend-mocks:
 	@echo "Generating mocks for backend..."
 	cd $(BACKEND_DIR) && mockery --all --recursive --output ./internal/testing/mocks --with-expecter --exported 
@@ -53,20 +57,25 @@ build-fe:
 	@echo "Building frontend..."
 	cd $(FRONTEND_DIR) && echo "VITE_VERSION=$(VER)" > .env
 	cd $(FRONTEND_DIR) && yarn build
-	mkdir -p $(DIST_DIR)/web
-	cp -r $(FRONTEND_DIR)/dist/* $(DIST_DIR)/web
+	rm -rf $(BACKEND_DIR)/internal/api/http/frontend
+	mkdir -p $(BACKEND_DIR)/internal/api/http/frontend
+	cp -r $(FRONTEND_DIR)/dist/* $(BACKEND_DIR)/internal/api/http/frontend/
 	cd ..
 
 clean-fe:
 	@echo "Cleaning frontend..."
 	rm -rf $(FRONTEND_DIR)/dist
-	rm -rf $(DIST_DIR)/web
+	rm -rf $(BACKEND_DIR)/internal/api/http/frontend
 
 clean: clean-be clean-fe
 
-build: deps-be build-be deps-fe build-fe
+swagger:
+	@echo "Generating Swagger docs..."
+	cd $(BACKEND_DIR) && swag init -g cmd/phi/main.go -o docs
+
+build: deps-be deps-fe build-fe build-be
 
 test: test-be
 
 
-.PHONY: build-be clean-be test-be deps-be deps-fe build-fe clean-fe build clean test
+.PHONY: build-be run-be clean-be test-be deps-be deps-fe build-fe clean-fe build clean test swagger
