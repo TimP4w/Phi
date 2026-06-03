@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build Backend (flake)",
+      "label": "Build Backend",
       "type": "shell",
       "command": "CGO_ENABLED=0 go build -gcflags 'all=-N -l' -o ${workspaceFolder}/backend/cmd/phi/__debug_bin ./cmd/phi/main.go",
       "options": {
