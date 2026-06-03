@@ -24,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -374,7 +373,7 @@ func (k *KubeServiceImpl) PatchResource(pr kube.PatchableResource) (*kube.Resour
 		resourceInterface = k.dynamicClient.Resource(gvr)
 	}
 
-	patchType := types.PatchType(pr.PatchType())
+	patchType := pr.PatchType()
 
 	logger.WithFields(map[string]interface{}{
 		"patch_type": string(patchType),

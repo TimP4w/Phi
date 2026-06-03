@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -59,7 +60,10 @@ func (rc *ResourceController) GetDescribe(w http.ResponseWriter, r *http.Request
 	}
 	yamlData, err := rc.getResourceYAMLUseCase.Execute(kubernetesusecases.GetResourceYAMLInput{ResourceUid: resourceUid})
 	if err != nil {
-		// TODO: handle resource not found (404)
+		if errors.Is(err, kube.ErrNotFound) {
+			http.Error(w, "Resource not found", http.StatusNotFound)
+			return
+		}
 		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -84,8 +88,11 @@ func (rc *ResourceController) PatchReconcile(w http.ResponseWriter, r *http.Requ
 
 	_, err := rc.reconcileUseCase.Execute(kubernetesusecases.ReconcileInput{ResourceUid: resourceUid})
 	if err != nil {
-		// TODO: handle resource not found (404)
-		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
+		if errors.Is(err, kube.ErrNotFound) {
+			http.Error(w, "Resource not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Error reconciling resource: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -114,8 +121,11 @@ func (rc *ResourceController) PatchSuspend(w http.ResponseWriter, r *http.Reques
 
 	_, err := rc.suspendUseCase.Execute(kubernetesusecases.SuspendUseCaseInput{UID: resourceUid})
 	if err != nil {
-		// TODO: handle resource not found (404)
-		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
+		if errors.Is(err, kube.ErrNotFound) {
+			http.Error(w, "Resource not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Error suspending resource: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -140,8 +150,11 @@ func (rc *ResourceController) PatchResume(w http.ResponseWriter, r *http.Request
 
 	_, err := rc.resumeUseCase.Execute(kubernetesusecases.ResumeUseCaseInput{UID: resourceUid})
 	if err != nil {
-		// TODO: handle resource not found (404)
-		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
+		if errors.Is(err, kube.ErrNotFound) {
+			http.Error(w, "Resource not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Error resuming resource: %v", err), http.StatusInternalServerError)
 		return
 	}
 

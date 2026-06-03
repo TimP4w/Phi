@@ -89,7 +89,8 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		mapHelmRepositoryData(&el, obj)
 	case "OCIRepository":
 		mapOciRepositoryData(&el, obj)
-		// case "Bucket":
+	case "Bucket":
+		mapBucketData(&el, obj)
 	case "Pod":
 		mapPodData(&el, obj)
 	case "Deployment":
@@ -98,8 +99,10 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		mapPVCData(&el, obj)
 	case "PersistentVolume":
 		mapPVData(&el, obj)
-	case "Volume": // TODO: here we need to double check that this is indeed a longhorn Volume and not another driver that also calls them "Volume"
-		mapLonghornVolume(&el, obj)
+	case "Volume":
+		if el.Group == "longhorn.io" {
+			mapLonghornVolume(&el, obj)
+		}
 	case "Ingress":
 		mapIngressData(&el, obj)
 	case "StatefulSet":
@@ -270,6 +273,18 @@ func mapHelmRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	el.Status = mapFluxResourceStatusForCondition(&helmRepository.Status.Conditions)
 
 	mapFluxMetadata(el, helmRepository.GetAnnotations(), helmRepository.Status.LastHandledReconcileAt, helmRepository.Spec.Suspend, helmRepository.Status.Conditions)
+}
+
+func mapBucketData(el *kube.Resource, obj unstructured.Unstructured) {
+	bucket := &sourcev1beta2.Bucket{}
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), bucket)
+	if err != nil {
+		logging.Logger().WithError(err).Error("Error converting unstructured to Bucket")
+		return
+	}
+	mapConditions(el, bucket.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(&bucket.Status.Conditions)
+	mapFluxMetadata(el, bucket.GetAnnotations(), bucket.Status.LastHandledReconcileAt, bucket.Spec.Suspend, bucket.Status.Conditions)
 }
 
 func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {

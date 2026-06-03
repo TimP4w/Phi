@@ -33,7 +33,7 @@ func (uc *ResumeUseCase) Execute(input ResumeUseCaseInput) (struct{}, error) {
 	el := uc.kubeStore.GetResourceByUID(input.UID)
 	if el == nil {
 		logger.Warn("Resource not found")
-		return struct{}{}, fmt.Errorf("resource with uid %s not found", input.UID)
+		return struct{}{}, fmt.Errorf("resource with uid %s not found: %w", input.UID, kubernetes.ErrNotFound)
 	}
 	_, err := uc.fluxService.Resume(*el)
 	if err != nil {

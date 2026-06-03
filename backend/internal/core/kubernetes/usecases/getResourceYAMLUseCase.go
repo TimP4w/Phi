@@ -35,7 +35,7 @@ func (uc *GetResourceYAMLUseCase) Execute(in GetResourceYAMLInput) ([]byte, erro
 
 	if resource == nil {
 		logger.Error("Could not find resource")
-		return nil, fmt.Errorf("resource not found")
+		return nil, fmt.Errorf("resource not found: %w", kubernetes.ErrNotFound)
 	}
 
 	yaml, err := uc.kubeService.GetResourceYAML(*resource)
