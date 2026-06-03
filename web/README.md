@@ -1,7 +1,5 @@
 # Phi Web Frontend
 
-This is the frontend for the Phi project, built with React, TypeScript, and Vite. It provides the user interface for interacting with the Phi backend and visualizing Kubernetes resources in real time.
-
 ## Requirements
 
 - Node.js (>=18)
@@ -32,15 +30,13 @@ This provides Node.js, Yarn, and other dependencies.
 yarn install
 ```
 
-
 ### 4. Set the `./web/.env` file values
 
-```
+```sh
 VITE_VERSION=local
 VITE_URL=http://localhost:8080
 VITE_WS=http://localhost:8080/ws
 ```
-
 
 ### 5. Run the development server
 
@@ -87,7 +83,3 @@ yarn lint
 - `eslint.config.js` — ESLint configuration
 - `tailwind.config.js` — Tailwind CSS configuration
 - `postcss.config.js` — PostCSS configuration
-
-## API Integration
-
-The frontend communicates with the backend via REST and WebSocket APIs.

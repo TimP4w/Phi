@@ -1,48 +1,56 @@
 # Phi Backend
 
-Backend service for Phi. It is written in Go and provides core APIs, Kubernetes integration, and real-time features for the Phi dashboard.
-
 ## Requirements
+
 - Go (>=1.20)
 - Make
 
 ## Getting Started
 
 ### 1. Clone the repository
+
 ```sh
 git clone https://github.com/timp4w/phi.git
 cd phi/backend
 ```
 
 ### 2. Development Environment (Recommended)
+
 If you use [Nix flakes](https://nixos.wiki/wiki/Flakes):
+
 ```sh
 nix develop
 ```
+
 This provides Go, Make, Yarn, and go-mockery.
 
 ### 4. Prepare Backend
+
 ```sh
 make prepare-be
 ```
 
 ### 3. Build
+
 ```sh
 make build-be
 ```
 
 ### 4. Test
+
 ```sh
 make test-be
 ```
+
 Or with coverage:
+
 ```sh
 make test-be-coverage
 ```
 
 ## Project Structure
-The architecture follows Clean Architecture principles.
 
+The architecture follows Clean Architecture principles.
 
 - `cmd/phi/` — Main entrypoint for the backend service
 - `internal/` — Core application logic, organized by Clean Architecture:
