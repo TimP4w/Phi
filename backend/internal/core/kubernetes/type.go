@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"errors"
 	"maps"
 	"strings"
 	"sync"
@@ -8,6 +9,8 @@ import (
 
 	"k8s.io/apimachinery/pkg/types"
 )
+
+var ErrNotFound = errors.New("resource not found")
 
 type Resource struct {
 	Kind                  string                `json:"kind"`

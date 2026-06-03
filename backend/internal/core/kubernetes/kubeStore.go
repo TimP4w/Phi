@@ -14,8 +14,8 @@ type KubeStore interface {
 	RemoveResource(uid string)
 	// SetResources sets the resources map and returns it.
 	SetResources(resources map[string]*Resource) map[string]*Resource
-	// GetResources returns a copy of the resources map.
-	GetResources() map[string]Resource
+	// GetResources returns a snapshot of the resources map as pointers.
+	GetResources() map[string]*Resource
 	// FindChildrenResourcesByRef retrieves all child resources for a given reference.
 	// Reference is a string that uniquely identifies a resource, in the format `name_namespace_kind_version`.
 	//
@@ -28,4 +28,7 @@ type KubeStore interface {
 	RegisterResource(resource *Resource)
 
 	AddEvent(resourceUID string, ev Event, ttl time.Duration, max int) bool
+	// GetKnownResourceAPIRefs returns the set of resource API ref keys (resource_version_group)
+	// for all resources currently in the store. Used to determine which K8s resource types to watch.
+	GetKnownResourceAPIRefs() map[string]struct{}
 }

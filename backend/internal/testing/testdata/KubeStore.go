@@ -168,19 +168,19 @@ func (_c *KubeStore_GetResourceByUID_Call) RunAndReturn(run func(string) *kubern
 }
 
 // GetResources provides a mock function with no fields
-func (_m *KubeStore) GetResources() map[string]kubernetes.Resource {
+func (_m *KubeStore) GetResources() map[string]*kubernetes.Resource {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetResources")
 	}
 
-	var r0 map[string]kubernetes.Resource
-	if rf, ok := ret.Get(0).(func() map[string]kubernetes.Resource); ok {
+	var r0 map[string]*kubernetes.Resource
+	if rf, ok := ret.Get(0).(func() map[string]*kubernetes.Resource); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string]kubernetes.Resource)
+			r0 = ret.Get(0).(map[string]*kubernetes.Resource)
 		}
 	}
 
@@ -204,12 +204,12 @@ func (_c *KubeStore_GetResources_Call) Run(run func()) *KubeStore_GetResources_C
 	return _c
 }
 
-func (_c *KubeStore_GetResources_Call) Return(_a0 map[string]kubernetes.Resource) *KubeStore_GetResources_Call {
+func (_c *KubeStore_GetResources_Call) Return(_a0 map[string]*kubernetes.Resource) *KubeStore_GetResources_Call {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *KubeStore_GetResources_Call) RunAndReturn(run func() map[string]kubernetes.Resource) *KubeStore_GetResources_Call {
+func (_c *KubeStore_GetResources_Call) RunAndReturn(run func() map[string]*kubernetes.Resource) *KubeStore_GetResources_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -372,6 +372,53 @@ func (_c *KubeStore_UpdateResource_Call) Return(_a0 *kubernetes.Resource) *KubeS
 }
 
 func (_c *KubeStore_UpdateResource_Call) RunAndReturn(run func(kubernetes.Resource) *kubernetes.Resource) *KubeStore_UpdateResource_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetKnownResourceAPIRefs provides a mock function with no fields
+func (_m *KubeStore) GetKnownResourceAPIRefs() map[string]struct{} {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetKnownResourceAPIRefs")
+	}
+
+	var r0 map[string]struct{}
+	if rf, ok := ret.Get(0).(func() map[string]struct{}); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]struct{})
+		}
+	}
+
+	return r0
+}
+
+// KubeStore_GetKnownResourceAPIRefs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetKnownResourceAPIRefs'
+type KubeStore_GetKnownResourceAPIRefs_Call struct {
+	*mock.Call
+}
+
+// GetKnownResourceAPIRefs is a helper method to define mock.On call
+func (_e *KubeStore_Expecter) GetKnownResourceAPIRefs() *KubeStore_GetKnownResourceAPIRefs_Call {
+	return &KubeStore_GetKnownResourceAPIRefs_Call{Call: _e.mock.On("GetKnownResourceAPIRefs")}
+}
+
+func (_c *KubeStore_GetKnownResourceAPIRefs_Call) Run(run func()) *KubeStore_GetKnownResourceAPIRefs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *KubeStore_GetKnownResourceAPIRefs_Call) Return(_a0 map[string]struct{}) *KubeStore_GetKnownResourceAPIRefs_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *KubeStore_GetKnownResourceAPIRefs_Call) RunAndReturn(run func() map[string]struct{}) *KubeStore_GetKnownResourceAPIRefs_Call {
 	_c.Call.Return(run)
 	return _c
 }

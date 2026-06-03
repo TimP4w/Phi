@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -47,19 +48,26 @@ func (rc *ResourceController) RegisterRoutes(r chi.Router) {
 
 // DescribeResource godoc
 // @Summary Get describe YAML of a resource
+// @Tags resources
 // @Produce plain
 // @Param id path string true "UUID"
-// @Success 200 {object} string
+// @Success 200 {string} string
+// @Failure 400 {string} string "UID is required"
+// @Failure 404 {string} string "Resource not found"
+// @Failure 500 {string} string "Internal server error"
 // @Router /api/resource/{id}/describe [get]
 func (rc *ResourceController) GetDescribe(w http.ResponseWriter, r *http.Request) {
-	resourceUid := r.PathValue("id")
+	resourceUid := chi.URLParam(r, "id")
 	if resourceUid == "" {
 		http.Error(w, "Pod uid is required", http.StatusBadRequest)
 		return
 	}
 	yamlData, err := rc.getResourceYAMLUseCase.Execute(kubernetesusecases.GetResourceYAMLInput{ResourceUid: resourceUid})
 	if err != nil {
-		// TODO: handle resource not found (404)
+		if errors.Is(err, kube.ErrNotFound) {
+			http.Error(w, "Resource not found", http.StatusNotFound)
+			return
+		}
 		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -71,12 +79,16 @@ func (rc *ResourceController) GetDescribe(w http.ResponseWriter, r *http.Request
 
 // ReconcileResource godoc
 // @Summary Start the reconciliation of a resource that supports it
+// @Tags resources
 // @Produce json
 // @Param id path string true "UUID"
-// @Success 200 {object} string
+// @Success 200 {string} string
+// @Failure 400 {string} string "UID is required"
+// @Failure 404 {string} string "Resource not found"
+// @Failure 500 {string} string "Internal server error"
 // @Router /api/resource/{id}/reconcile [patch]
 func (rc *ResourceController) PatchReconcile(w http.ResponseWriter, r *http.Request) {
-	resourceUid := r.PathValue("id")
+	resourceUid := chi.URLParam(r, "id")
 	if resourceUid == "" {
 		http.Error(w, "UID is required", http.StatusBadRequest)
 		return
@@ -84,29 +96,31 @@ func (rc *ResourceController) PatchReconcile(w http.ResponseWriter, r *http.Requ
 
 	_, err := rc.reconcileUseCase.Execute(kubernetesusecases.ReconcileInput{ResourceUid: resourceUid})
 	if err != nil {
-		// TODO: handle resource not found (404)
-		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
+		if errors.Is(err, kube.ErrNotFound) {
+			http.Error(w, "Resource not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Error reconciling resource: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status": "success"}`))
-
 }
 
-// RSuspendResource godoc
+// SuspendResource godoc
 // @Summary Suspend the reconciliation of a resource that supports it
+// @Tags resources
 // @Produce json
 // @Param id path string true "UUID"
-// @Success 200 {object} string
+// @Success 200 {string} string
+// @Failure 400 {string} string "UID is required"
+// @Failure 404 {string} string "Resource not found"
+// @Failure 500 {string} string "Internal server error"
 // @Router /api/resource/{id}/suspend [patch]
 func (rc *ResourceController) PatchSuspend(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPatch {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	resourceUid := r.PathValue("id")
+	resourceUid := chi.URLParam(r, "id")
 	if resourceUid == "" {
 		http.Error(w, "UID is required", http.StatusBadRequest)
 		return
@@ -114,8 +128,11 @@ func (rc *ResourceController) PatchSuspend(w http.ResponseWriter, r *http.Reques
 
 	_, err := rc.suspendUseCase.Execute(kubernetesusecases.SuspendUseCaseInput{UID: resourceUid})
 	if err != nil {
-		// TODO: handle resource not found (404)
-		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
+		if errors.Is(err, kube.ErrNotFound) {
+			http.Error(w, "Resource not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Error suspending resource: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -126,12 +143,16 @@ func (rc *ResourceController) PatchSuspend(w http.ResponseWriter, r *http.Reques
 
 // ResumeResource godoc
 // @Summary Resume the reconciliation of a resource that supports it
+// @Tags resources
 // @Produce json
 // @Param id path string true "UUID"
-// @Success 200 {object} string
+// @Success 200 {string} string
+// @Failure 400 {string} string "UID is required"
+// @Failure 404 {string} string "Resource not found"
+// @Failure 500 {string} string "Internal server error"
 // @Router /api/resource/{id}/resume [patch]
 func (rc *ResourceController) PatchResume(w http.ResponseWriter, r *http.Request) {
-	resourceUid := r.PathValue("id")
+	resourceUid := chi.URLParam(r, "id")
 
 	if resourceUid == "" {
 		http.Error(w, "UID is required", http.StatusBadRequest)
@@ -140,19 +161,25 @@ func (rc *ResourceController) PatchResume(w http.ResponseWriter, r *http.Request
 
 	_, err := rc.resumeUseCase.Execute(kubernetesusecases.ResumeUseCaseInput{UID: resourceUid})
 	if err != nil {
-		// TODO: handle resource not found (404)
-		http.Error(w, fmt.Sprintf("Error getting resource: %v", err), http.StatusInternalServerError)
+		if errors.Is(err, kube.ErrNotFound) {
+			http.Error(w, "Resource not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Error resuming resource: %v", err), http.StatusInternalServerError)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status": "success"}`))
 }
 
 // GetEvents godoc
 // @Summary Get events
+// @Tags events
 // @Produce json
-// @Success 200 {object} []kube.Event
+// @Success 200 {array} kube.Event
+// @Failure 500 {string} string "Internal server error"
 // @Router /api/events [get]
 func (rc *ResourceController) GetEvents(w http.ResponseWriter, r *http.Request) {
 	events, err := rc.getEventsUseCase.Execute(struct{}{})

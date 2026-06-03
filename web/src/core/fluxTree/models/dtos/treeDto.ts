@@ -12,7 +12,8 @@ export type TreeNodeDto = {
   namespace?: string;
   resource?: string;
   group?: string;
-  children: TreeNodeDto[];
+  parentIDs?: string[];
+  children?: TreeNodeDto[];
   annotations: Record<string, string>;
   labels: Record<string, string>;
   conditions: ConditionDto[];
@@ -123,3 +124,10 @@ export type LogMessageDto = {
   timestamp: Date;
   container: string;
 };
+
+export type ResourcePatchDto = {
+  op: "upsert" | "delete";
+  resource?: TreeNodeDto;
+};
+
+export type ResourceSyncDto = TreeNodeDto[];

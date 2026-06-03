@@ -52,22 +52,31 @@ func (k *KubeStoreImpl) RegisterResource(resource *Resource) {
 	k.registerParentRefs(resource)
 }
 
-// registerParentRefs handles registering the resource under its parent/owner references.
-func (k *KubeStoreImpl) registerParentRefs(resource *Resource) {
-
+// parentRefsForResource returns the parent ref strings for a resource, along with
+// whether those refs are Flux-managed (vs. Kubernetes owner-reference-based).
+func (k *KubeStoreImpl) parentRefsForResource(resource *Resource) (refs []string, fluxManaged bool) {
 	if len(resource.ParentRefs) > 0 {
-		for _, ownerRef := range resource.ParentRefs {
-			k.addResourceToRef(ownerRef, resource)
-			resource.IsFluxManaged = false
-		}
-	} else if resource.Labels[KustomizationNameLabel] != "" {
-		parentRef := k.generateRef(resource.Labels[KustomizationNameLabel], resource.Labels[KustomizationNamespaceLabel], "Kustomization", defaultKustomizationVersion, fluxKustomizeGroup)
-		k.addResourceToRef(parentRef, resource)
-		resource.IsFluxManaged = true
-	} else if resource.Labels[HelmNameLabel] != "" {
-		parentRef := k.generateRef(resource.Labels[HelmNameLabel], resource.Labels[HelmNamespaceLabel], "HelmRelease", defaultHelmReleaseVersion, fluxHelmGroup)
-		k.addResourceToRef(parentRef, resource)
-		resource.IsFluxManaged = true
+		return resource.ParentRefs, false
+	}
+	if resource.Labels[KustomizationNameLabel] != "" {
+		ref := k.generateRef(resource.Labels[KustomizationNameLabel], resource.Labels[KustomizationNamespaceLabel], "Kustomization", defaultKustomizationVersion, fluxKustomizeGroup)
+		return []string{ref}, true
+	}
+	if resource.Labels[HelmNameLabel] != "" {
+		ref := k.generateRef(resource.Labels[HelmNameLabel], resource.Labels[HelmNamespaceLabel], "HelmRelease", defaultHelmReleaseVersion, fluxHelmGroup)
+		return []string{ref}, true
+	}
+	return nil, false
+}
+
+// registerParentRefs registers the resource under its parent/owner references.
+func (k *KubeStoreImpl) registerParentRefs(resource *Resource) {
+	refs, fluxManaged := k.parentRefsForResource(resource)
+	for _, ref := range refs {
+		k.addResourceToRef(ref, resource)
+	}
+	if len(refs) > 0 {
+		resource.IsFluxManaged = fluxManaged
 	}
 }
 
@@ -160,16 +169,9 @@ func (k *KubeStoreImpl) filterChildrenFromRef(res *Resource, ref string, refReso
 
 // removeFromParentRefs removes the resource from all parent references.
 func (k *KubeStoreImpl) removeFromParentRefs(res *Resource, uid string) {
-	if len(res.ParentRefs) > 0 {
-		for _, parentRef := range res.ParentRefs {
-			k.removeResourceFromRef(parentRef, uid)
-		}
-	} else if res.Labels[KustomizationNameLabel] != "" {
-		parentRef := k.generateRef(res.Labels[KustomizationNameLabel], res.Labels[KustomizationNamespaceLabel], "Kustomization", defaultKustomizationVersion, fluxKustomizeGroup)
-		k.removeResourceFromRef(parentRef, uid)
-	} else if res.Labels[HelmNameLabel] != "" {
-		parentRef := k.generateRef(res.Labels[HelmNameLabel], res.Labels[HelmNamespaceLabel], "HelmRelease", defaultHelmReleaseVersion, fluxHelmGroup)
-		k.removeResourceFromRef(parentRef, uid)
+	refs, _ := k.parentRefsForResource(res)
+	for _, ref := range refs {
+		k.removeResourceFromRef(ref, uid)
 	}
 }
 
@@ -235,12 +237,12 @@ func (k *KubeStoreImpl) SetResources(resources map[string]*Resource) map[string]
 	return resources
 }
 
-func (k *KubeStoreImpl) GetResources() map[string]Resource {
+func (k *KubeStoreImpl) GetResources() map[string]*Resource {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
-	result := make(map[string]Resource)
+	result := make(map[string]*Resource, len(k.resources))
 	for key, value := range k.resources {
-		result[key] = *value
+		result[key] = value
 	}
 	logging.Logger().WithField("resource_count", len(result)).Debug("Returning resources map")
 	return result
@@ -287,6 +289,17 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 
 	k.registerParentRefs(updated)
 	return updated
+}
+
+func (k *KubeStoreImpl) GetKnownResourceAPIRefs() map[string]struct{} {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	result := make(map[string]struct{})
+	for _, r := range k.resources {
+		key := r.Resource + "_" + r.Version + "_" + r.Group
+		result[key] = struct{}{}
+	}
+	return result
 }
 
 func (k *KubeStoreImpl) AddEvent(resourceUID string, event Event, ttl time.Duration, max int) bool {

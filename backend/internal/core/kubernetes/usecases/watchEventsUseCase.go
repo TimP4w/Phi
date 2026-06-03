@@ -7,31 +7,29 @@ import (
 	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/realtime"
 	shared "github.com/timp4w/phi/internal/core/shared"
-	"github.com/timp4w/phi/internal/core/tree"
-	"github.com/timp4w/phi/internal/core/utils"
+)
+
+const (
+	eventTTL             = 72 * time.Hour
+	maxEventsPerResource = 100
 )
 
 type WatchEventsInput struct{}
 
 type WatchEventsUseCase struct {
 	kubeService     kubernetes.KubeService
-	treeService     tree.TreeService
 	realtimeService realtime.RealtimeService
-	rateLimiter     *utils.RateLimiter
 	kubeStore       kubernetes.KubeStore
 	logger          logging.PhiLogger
 }
 
 func NewWatchEventsUseCase(
-	TreeService tree.TreeService,
 	RealtimeService realtime.RealtimeService,
 	KubeService kubernetes.KubeService,
 	KubeStore kubernetes.KubeStore,
 ) shared.UseCase[WatchEventsInput, struct{}] {
 	return &WatchEventsUseCase{
-		treeService:     TreeService,
 		realtimeService: RealtimeService,
-		rateLimiter:     utils.NewRateLimiter(300 * time.Millisecond),
 		kubeService:     KubeService,
 		kubeStore:       KubeStore,
 		logger:          *logging.Logger(),
@@ -45,9 +43,6 @@ func (uc *WatchEventsUseCase) Execute(in WatchEventsInput) (struct{}, error) {
 }
 
 func (uc *WatchEventsUseCase) onEvent(event *kubernetes.Event) {
-	const eventTTL = 72 * time.Hour  // TODO: make configurable
-	const maxEventsPerResource = 100 // TODO: make configurable
-
 	logger := uc.logger.WithFields(map[string]any{
 		"event_name":      event.Name,
 		"event_kind":      event.Kind,

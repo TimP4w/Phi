@@ -4,13 +4,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/realtime"
 )
+
+const readTimeout = 90 * time.Second
 
 type WebSocketManagerImpl struct {
 	clients             map[string]*websocket.Conn
@@ -21,9 +26,21 @@ type WebSocketManagerImpl struct {
 	logger              logging.PhiLogger
 }
 
+func allowedOrigin(r *http.Request) bool {
+	if os.Getenv("PHI_DEV") == "true" {
+		return true
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	origin = strings.TrimPrefix(strings.TrimPrefix(origin, "https://"), "http://")
+	return origin == r.Host
+}
+
 func NewWebSocketManager() realtime.RealtimeService {
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true },
+		CheckOrigin: allowedOrigin,
 	}
 
 	logging.Logger().Info("Initializing WebSocket manager")
@@ -58,6 +75,20 @@ func (wm *WebSocketManagerImpl) Upgrade(w http.ResponseWriter, r *http.Request) 
 	wm.logger.WithClient(clientId).Info("Client connected")
 	wm.SendMessage(realtime.Message{Type: realtime.CONNECTED, Message: clientId, ClientId: clientId}, clientId)
 
+	// Notify on-connect listeners (e.g. to send initial RESOURCE_SYNC)
+	wm.lock.RLock()
+	var onConnectCallbacks []func(string)
+	for _, listener := range wm.connectionListeners {
+		if listener.OnConnect != nil {
+			onConnectCallbacks = append(onConnectCallbacks, listener.OnConnect)
+		}
+	}
+	wm.lock.RUnlock()
+	for _, fn := range onConnectCallbacks {
+		fn(clientId)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(readTimeout))
 	for {
 		_, p, err := conn.ReadMessage()
 		if err != nil {
@@ -76,6 +107,7 @@ func (wm *WebSocketManagerImpl) Upgrade(w http.ResponseWriter, r *http.Request) 
 			return "", err
 		}
 		message.ClientId = clientId
+		conn.SetReadDeadline(time.Now().Add(readTimeout))
 
 		switch message.Type {
 		case realtime.PING:
@@ -101,22 +133,37 @@ func (wm *WebSocketManagerImpl) addClient(conn *websocket.Conn) string {
 	return clientId
 }
 
-func (wm *WebSocketManagerImpl) removeClientLocked(id string) {
-	if conn, exists := wm.clients[id]; exists {
-		delete(wm.clients, id)
-		for listenerID := range wm.connectionListeners {
-			wm.connectionListeners[listenerID].OnClose(id)
-		}
-		delete(wm.connectionListeners, id)
-		conn.Close()
-		logging.Logger().WithClient(id).Debug("Removed WebSocket client")
+// removeClientLocked removes a client and returns its OnClose callbacks to be
+// called by the caller after the lock is released.
+func (wm *WebSocketManagerImpl) removeClientLocked(id string) []func() {
+	conn, exists := wm.clients[id]
+	if !exists {
+		return nil
 	}
+	delete(wm.clients, id)
+	conn.Close()
+	logging.Logger().WithClient(id).Debug("Removed WebSocket client")
+
+	var callbacks []func()
+	for _, listener := range wm.connectionListeners {
+		if listener.OnClose != nil {
+			cb := listener.OnClose
+			callbacks = append(callbacks, func() { cb(id) })
+		}
+	}
+	return callbacks
 }
 
 func (wm *WebSocketManagerImpl) RemoveClientById(id string) {
+	var callbacks []func()
+	defer func() {
+		for _, cb := range callbacks {
+			cb()
+		}
+	}()
 	wm.lock.Lock()
 	defer wm.lock.Unlock()
-	wm.removeClientLocked(id)
+	callbacks = wm.removeClientLocked(id)
 }
 
 func (wm *WebSocketManagerImpl) AddConnectionListener(listener realtime.Listener) {
@@ -132,6 +179,13 @@ func (wm *WebSocketManagerImpl) RemoveConnectionListener(ID string) {
 }
 
 func (wm *WebSocketManagerImpl) Broadcast(message realtime.Message) error {
+	var deferred []func()
+	defer func() {
+		for _, cb := range deferred {
+			cb()
+		}
+	}()
+
 	wm.lock.Lock()
 	defer wm.lock.Unlock()
 
@@ -154,7 +208,7 @@ func (wm *WebSocketManagerImpl) Broadcast(message realtime.Message) error {
 				string(logging.ClientID): id,
 				"error":                  err.Error(),
 			}).Debug("Error broadcasting to client, removing")
-			wm.removeClientLocked(id)
+			deferred = append(deferred, wm.removeClientLocked(id)...)
 		}
 	}
 	return nil
@@ -167,6 +221,13 @@ func (wm *WebSocketManagerImpl) Broadcast(message realtime.Message) error {
 func (wm *WebSocketManagerImpl) SendMessage(message realtime.Message, clientId string) error {
 	logger := wm.logger.WithClient(clientId)
 
+	var callbacks []func()
+	defer func() {
+		for _, cb := range callbacks {
+			cb()
+		}
+	}()
+
 	wm.lock.Lock()
 	defer wm.lock.Unlock()
 
@@ -176,20 +237,19 @@ func (wm *WebSocketManagerImpl) SendMessage(message realtime.Message, clientId s
 		return err
 	}
 
-	if _, exists := wm.clients[clientId]; exists {
-		conn := wm.clients[clientId]
-		err := conn.WriteMessage(websocket.TextMessage, msg)
-
-		if err != nil {
-			logger.WithError(err).Debug("Failed to send message to client, removing client")
-			wm.removeClientLocked(clientId)
-			return err
-		}
-
-		logger.WithField("message_type", message.Type).Debug("Message sent to client")
-		return nil
-	} else {
+	if _, exists := wm.clients[clientId]; !exists {
 		logger.Debug("Client not found")
 		return fmt.Errorf("client with id %s not found", clientId)
 	}
+
+	conn := wm.clients[clientId]
+	err = conn.WriteMessage(websocket.TextMessage, msg)
+	if err != nil {
+		logger.WithError(err).Debug("Failed to send message to client, removing client")
+		callbacks = wm.removeClientLocked(clientId)
+		return err
+	}
+
+	logger.WithField("message_type", message.Type).Debug("Message sent to client")
+	return nil
 }

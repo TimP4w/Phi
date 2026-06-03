@@ -24,7 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/dynamic"
@@ -32,6 +31,16 @@ import (
 	clientset "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+)
+
+const (
+	// informerResyncPeriod is how often the informer re-lists all resources from
+	// the API server to reconcile any missed watch events.
+	informerResyncPeriod = 15 * time.Minute
+	// recentEventWindow is the age threshold below which add/delete events from
+	// the informer are forwarded. Events older than this are assumed to have been
+	// processed during the initial sync and are dropped to avoid duplicates.
+	recentEventWindow = 2 * time.Minute
 )
 
 type KubeServiceImpl struct {
@@ -192,7 +201,7 @@ func (k *KubeServiceImpl) WatchLogs(pod kube.Resource, ctx context.Context, onLo
 }
 
 func (k *KubeServiceImpl) WatchResources(resourceApiRefsSet map[string]struct{}, addFunc func(kube.Resource), updateFunc func(oldEl, newEl kube.Resource), deleteFunc func(kube.Resource)) {
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(k.dynamicClient, time.Minute*15, "", nil) // TODO: make resync period configurable
+	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(k.dynamicClient, informerResyncPeriod, "", nil)
 	for encodedResourceApiRef := range resourceApiRefsSet {
 		resource, version, group, err := k.decodeResourceApiRef(encodedResourceApiRef)
 		if err != nil {
@@ -268,7 +277,7 @@ func (k *KubeServiceImpl) WatchEvents(onEvent func(*kube.Event)) {
 func (k *KubeServiceImpl) defaultResourceEventHandler(resource string, addFunc func(kube.Resource), updateFunc func(oldEl, newEl kube.Resource), deleteFunc func(kube.Resource)) cache.ResourceEventHandler {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
-			if time.Since(obj.(*unstructured.Unstructured).GetCreationTimestamp().Time) <= 2*time.Minute { // ignore old resources since we already have them
+			if time.Since(obj.(*unstructured.Unstructured).GetCreationTimestamp().Time) <= recentEventWindow { // ignore old resources since we already have them
 				el := k.mapper.ToResource(*obj.(*unstructured.Unstructured), resource)
 				addFunc(el)
 			}
@@ -280,7 +289,7 @@ func (k *KubeServiceImpl) defaultResourceEventHandler(resource string, addFunc f
 			updateFunc(oldEl, newEl)
 		},
 		DeleteFunc: func(obj any) {
-			if (obj.(*unstructured.Unstructured)).GetDeletionTimestamp() == nil || time.Since(obj.(*unstructured.Unstructured).GetDeletionTimestamp().Time) <= 2*time.Minute { // ignore old resources since we already have them
+			if (obj.(*unstructured.Unstructured)).GetDeletionTimestamp() == nil || time.Since(obj.(*unstructured.Unstructured).GetDeletionTimestamp().Time) <= recentEventWindow { // ignore old resources since we already have them
 				el := k.mapper.ToResource(*obj.(*unstructured.Unstructured), resource)
 				deleteFunc(el)
 			}
@@ -364,7 +373,7 @@ func (k *KubeServiceImpl) PatchResource(pr kube.PatchableResource) (*kube.Resour
 		resourceInterface = k.dynamicClient.Resource(gvr)
 	}
 
-	patchType := types.PatchType(pr.PatchType())
+	patchType := pr.PatchType()
 
 	logger.WithFields(map[string]interface{}{
 		"patch_type": string(patchType),
@@ -482,7 +491,7 @@ func (k *KubeServiceImpl) DiscoverApis() (*kube.ResourceMap, error) {
 			}
 
 			for _, apiRes := range group.APIResources {
-				if !utils.Contains(apiRes.Verbs, "list") { // Skip resources that cannot be listed
+				if !utils.Contains(apiRes.Verbs, "list") || !utils.Contains(apiRes.Verbs, "watch") { // Skip resources that cannot be listed or watched
 					continue
 				}
 				api := kube.ApiResource{

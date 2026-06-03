@@ -2,12 +2,14 @@ package kubernetes
 
 import (
 	"context"
+
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type PatchableResource interface {
 	ResourceMeta() Resource
 	PatchJSON() ([]byte, error)
-	PatchType() string // TODO: use custom type for this
+	PatchType() types.PatchType
 }
 
 type KubeService interface {

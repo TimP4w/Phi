@@ -54,57 +54,30 @@ export class Tree {
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  public findNodeById(nodeId?: string): KubeResource {
-    if (!nodeId) {
-      return this.root;
-    }
-    const result = this.findNodeByIdRecursive(this.root, nodeId);
-    if (result) {
-      return result;
-    }
-    throw new Error(`Node with id ${nodeId} not found`);
-  }
-
-  private findNodeByIdRecursive(
-    node: KubeResource,
-    nodeId: string,
-  ): KubeResource | null {
-    if (node.uid === nodeId) {
-      return node;
-    }
-    for (const child of node.children) {
-      const result = this.findNodeByIdRecursive(child, nodeId);
-      if (result) {
-        return result;
-      }
-    }
-    return null;
-  }
-
   public traverse(
     startNode: KubeResource,
     callback: (node: KubeResource, layer: number) => boolean,
   ): void {
-    this.traverseRecursive(startNode, 0, callback);
+    this.traverseRecursive(startNode, 0, callback, new Set());
   }
 
   private traverseRecursive(
     node: KubeResource,
     layer: number,
     callback: (node: KubeResource, layer: number) => boolean,
+    visited: Set<string>,
   ): void {
+    if (visited.has(node.uid)) return;
+    visited.add(node.uid);
     const skip = callback(node, layer);
     if (skip) {
       return;
     }
     for (const child of node.children) {
-      this.traverseRecursive(child, layer + 1, callback);
+      this.traverseRecursive(child, layer + 1, callback, visited);
     }
   }
 
-  static fromDto(rootDto: TreeNodeDto): Tree {
-    return new Tree(KubeResource.fromDto(rootDto));
-  }
 }
 
 export class KubeResource {
@@ -120,7 +93,7 @@ export class KubeResource {
   children: KubeResource[] = [];
   annotations: Map<string, string>;
   labels: Map<string, string>;
-  parentId: string | null;
+  parentIDs: string[];
   status: ResourceStatus;
   conditions: Condition[] = [];
   events: KubeEvent[] = [];
@@ -139,12 +112,11 @@ export class KubeResource {
       this.namespace = dto.namespace;
       this.resource = dto.resource;
       this.group = dto.group;
-      this.parentId = null;
+      this.parentIDs = dto.parentIDs || [];
       this.createdAt = new Date(dto.createdAt);
       this.deletedAt = dto.deletedAt ? new Date(dto.deletedAt) : undefined;
-      this.children = dto.children
-        ? dto.children.map((child) => KubeResource.fromDto(child))
-        : [];
+      this.children = [];
+
       this.annotations = dto.annotations
         ? new Map(Object.entries(dto.annotations))
         : new Map();
@@ -171,7 +143,7 @@ export class KubeResource {
       this.group = "";
       this.labels = new Map<string, string>();
       this.annotations = new Map<string, string>();
-      this.parentId = null;
+      this.parentIDs = [];
       this.createdAt = new Date();
       this.status = ResourceStatus.UNKNOWN;
       this.events = [];

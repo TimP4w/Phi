@@ -10,15 +10,11 @@ import (
 	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/realtime"
 	shared "github.com/timp4w/phi/internal/core/shared"
-	"github.com/timp4w/phi/internal/core/tree"
-	"github.com/timp4w/phi/internal/core/utils"
 )
 
 type WatchLogsUseCase struct {
 	kubeService     kubernetes.KubeService
-	treeService     tree.TreeService
 	realtimeService realtime.RealtimeService
-	rateLimiter     *utils.RateLimiter
 	mu              sync.Mutex
 	watchers        map[string]context.CancelFunc
 	kubeStore       kubernetes.KubeStore
@@ -31,15 +27,12 @@ type WatchLogsUseCaseInput struct {
 }
 
 func NewWatchLogsUseCase(
-	TreeService tree.TreeService,
 	RealtimeService realtime.RealtimeService,
 	KubeService kubernetes.KubeService,
 	KubeStore kubernetes.KubeStore,
 ) shared.UseCase[WatchLogsUseCaseInput, struct{}] {
 	return &WatchLogsUseCase{
-		treeService:     TreeService,
 		realtimeService: RealtimeService,
-		rateLimiter:     utils.NewRateLimiter(300 * time.Millisecond),
 		watchers:        make(map[string]context.CancelFunc),
 		kubeService:     KubeService,
 		kubeStore:       KubeStore,
@@ -54,6 +47,16 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 	})
 
 	logger.Debug("Client subscribed to logs")
+
+	pod := uc.kubeStore.GetResourceByUID(in.ResourceID)
+	if pod == nil {
+		logger.Error("Resource not found")
+		return struct{}{}, fmt.Errorf("resource not found")
+	}
+	if pod.Kind != "Pod" {
+		logger.WithField("kind", pod.Kind).Error("Resource is not a pod")
+		return struct{}{}, fmt.Errorf("resource is not a pod")
+	}
 
 	uc.mu.Lock()
 	if cancel, exists := uc.watchers[in.ClientID]; exists {
@@ -77,16 +80,6 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 		},
 	}
 	uc.realtimeService.AddConnectionListener(listener)
-
-	pod := uc.kubeStore.GetResourceByUID(in.ResourceID)
-	if pod == nil {
-		logger.Error("Resource not found")
-		return struct{}{}, fmt.Errorf("resource not found")
-	}
-	if pod.Kind != "Pod" {
-		logger.WithField("kind", pod.Kind).Error("Resource is not a pod")
-		return struct{}{}, fmt.Errorf("resource is not a pod")
-	}
 
 	logger.WithFields(map[string]any{
 		"pod_name":      pod.Name,

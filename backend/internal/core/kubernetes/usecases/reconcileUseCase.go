@@ -33,7 +33,7 @@ func (uc *ReconcileUseCase) Execute(in ReconcileInput) (struct{}, error) {
 	el := uc.kubeStore.GetResourceByUID(in.ResourceUid)
 	if el == nil {
 		logger.Warn("Resource not found")
-		return struct{}{}, fmt.Errorf("resource with uid %s not found", in.ResourceUid)
+		return struct{}{}, fmt.Errorf("resource with uid %s not found: %w", in.ResourceUid, kubernetes.ErrNotFound)
 	}
 	_, err := uc.fluxService.Reconcile(*el)
 	if err != nil {

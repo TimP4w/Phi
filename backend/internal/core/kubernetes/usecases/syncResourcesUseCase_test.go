@@ -12,7 +12,6 @@ import (
 
 func TestSyncResourcesUseCaseExecuteSuccess(t *testing.T) {
 	mockKubeSvc := mocks.NewKubeService(t)
-	mockTreeSvc := mocks.NewTreeService(t)
 	mockKubeStore := mocks.NewKubeStore(t)
 
 	apis := &kubernetes.ResourceMap{}
@@ -30,10 +29,8 @@ func TestSyncResourcesUseCaseExecuteSuccess(t *testing.T) {
 	mockKubeSvc.On("DiscoverResources", apis).Return(resources, nil)
 	mockKubeStore.On("SetResources", resources).Return(resources)
 	mockKubeStore.On("RegisterResource", mock.Anything).Return()
-	mockKubeStore.On("FindChildrenResourcesByRef", mock.Anything).Return([]kubernetes.Resource{})
-	mockTreeSvc.On("SetTree", mock.Anything).Return()
 
-	uc := NewSyncResourcesUseCase(mockKubeSvc, mockTreeSvc, mockKubeStore)
+	uc := NewSyncResourcesUseCase(mockKubeSvc, mockKubeStore)
 
 	_, err := uc.Execute(struct{}{})
 	assert.NoError(t, err)
@@ -41,15 +38,13 @@ func TestSyncResourcesUseCaseExecuteSuccess(t *testing.T) {
 
 func TestSyncResourcesUseCaseExecuteError(t *testing.T) {
 	mockKubeSvc := mocks.NewKubeService(t)
-	mockTreeSvc := mocks.NewTreeService(t)
 	mockKubeStore := mocks.NewKubeStore(t)
 
 	errTest := errors.New("fail apis")
 	mockKubeSvc.On("DiscoverApis").Return((*kubernetes.ResourceMap)(nil), errTest)
 
-	uc := NewSyncResourcesUseCase(mockKubeSvc, mockTreeSvc, mockKubeStore)
+	uc := NewSyncResourcesUseCase(mockKubeSvc, mockKubeStore)
 
 	_, err := uc.Execute(struct{}{})
-	t.Logf("Error: %v", err) // confirms it reached here
 	assert.Error(t, err)
 }

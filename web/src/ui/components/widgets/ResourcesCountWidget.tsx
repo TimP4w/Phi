@@ -47,6 +47,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       if (!resource) return;
 
       const seenUids = new Set<string>();
+      const visited = new Set<string>();
       const newCritical: KubeResource[] = [];
       const newReconciling: KubeResource[] = [];
 
@@ -54,7 +55,8 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
         node: KubeResource | null,
         depth = 0
       ): { total: number; ready: number; notReady: number; unknown: number } => {
-        if (!node) return { total: 0, ready: 0, notReady: 0, unknown: 0 };
+        if (!node || visited.has(node.uid)) return { total: 0, ready: 0, notReady: 0, unknown: 0 };
+        visited.add(node.uid);
 
         let total = 1;
         let ready = node.status === ResourceStatus.SUCCESS ? 1 : 0;

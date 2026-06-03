@@ -89,7 +89,8 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		mapHelmRepositoryData(&el, obj)
 	case "OCIRepository":
 		mapOciRepositoryData(&el, obj)
-		// case "Bucket":
+	case "Bucket":
+		mapBucketData(&el, obj)
 	case "Pod":
 		mapPodData(&el, obj)
 	case "Deployment":
@@ -98,8 +99,10 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		mapPVCData(&el, obj)
 	case "PersistentVolume":
 		mapPVData(&el, obj)
-	case "Volume": // TODO: here we need to double check that this is indeed a longhorn Volume and not another driver that also calls them "Volume"
-		mapLonghornVolume(&el, obj)
+	case "Volume":
+		if el.Group == "longhorn.io" {
+			mapLonghornVolume(&el, obj)
+		}
 	case "Ingress":
 		mapIngressData(&el, obj)
 	case "StatefulSet":
@@ -272,6 +275,18 @@ func mapHelmRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	mapFluxMetadata(el, helmRepository.GetAnnotations(), helmRepository.Status.LastHandledReconcileAt, helmRepository.Spec.Suspend, helmRepository.Status.Conditions)
 }
 
+func mapBucketData(el *kube.Resource, obj unstructured.Unstructured) {
+	bucket := &sourcev1beta2.Bucket{}
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), bucket)
+	if err != nil {
+		logging.Logger().WithError(err).Error("Error converting unstructured to Bucket")
+		return
+	}
+	mapConditions(el, bucket.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(&bucket.Status.Conditions)
+	mapFluxMetadata(el, bucket.GetAnnotations(), bucket.Status.LastHandledReconcileAt, bucket.Spec.Suspend, bucket.Status.Conditions)
+}
+
 func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 	pod := &v1.Pod{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), pod)
@@ -318,9 +333,13 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 	el.Status = mapPodStatus(pod)
 
+	image := ""
+	if len(pod.Spec.Containers) > 0 {
+		image = pod.Spec.Containers[0].Image
+	}
 	el.PodMetadata = kube.PodMetadata{
 		Phase: string(pod.Status.Phase),
-		Image: pod.Spec.Containers[0].Image,
+		Image: image,
 	}
 
 }
@@ -333,10 +352,18 @@ func mapPVCData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 
+	storageClass := ""
+	if pvc.Spec.StorageClassName != nil {
+		storageClass = *pvc.Spec.StorageClassName
+	}
+	volumeMode := ""
+	if pvc.Spec.VolumeMode != nil {
+		volumeMode = string(*pvc.Spec.VolumeMode)
+	}
 	el.PVCMetadata = kube.PVCMetadata{
-		StorageClass: *pvc.Spec.StorageClassName,
+		StorageClass: storageClass,
 		VolumeName:   pvc.Spec.VolumeName,
-		VolumeMode:   string(*pvc.Spec.VolumeMode),
+		VolumeMode:   volumeMode,
 		AccessModes:  []string{},
 		Capacity:     map[string]string{},
 		Phase:        string(pvc.Status.Phase),
@@ -395,12 +422,14 @@ func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 
 	el.Status = mapPVStatus(pv)
 
-	el.ParentRefs = append(el.ParentRefs, makeRef(
-		pv.Spec.ClaimRef.Name,
-		pv.Spec.ClaimRef.Namespace,
-		pv.Spec.ClaimRef.Kind,
-		pv.Spec.ClaimRef.APIVersion,
-	))
+	if pv.Spec.ClaimRef != nil {
+		el.ParentRefs = append(el.ParentRefs, makeRef(
+			pv.Spec.ClaimRef.Name,
+			pv.Spec.ClaimRef.Namespace,
+			pv.Spec.ClaimRef.Kind,
+			pv.Spec.ClaimRef.APIVersion,
+		))
+	}
 }
 
 func mapLonghornVolume(el *kube.Resource, obj unstructured.Unstructured) {
@@ -455,7 +484,7 @@ func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 			return kube.StatusWarning
 		}
 
-		if deploy.Status.ReadyReplicas == *deploy.Spec.Replicas {
+		if deploy.Spec.Replicas != nil && deploy.Status.ReadyReplicas == *deploy.Spec.Replicas {
 			return kube.StatusSuccess
 		}
 
@@ -591,10 +620,10 @@ func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
 		if ss.Status.ObservedGeneration < ss.Generation {
 			return kube.StatusPending
 		}
-		if ss.Status.ReadyReplicas == *ss.Spec.Replicas {
+		if ss.Spec.Replicas != nil && ss.Status.ReadyReplicas == *ss.Spec.Replicas {
 			return kube.StatusSuccess
 		}
-		if ss.Status.CurrentReplicas < *ss.Spec.Replicas {
+		if ss.Spec.Replicas != nil && ss.Status.CurrentReplicas < *ss.Spec.Replicas {
 			return kube.StatusPending
 		}
 		return kube.StatusWarning

@@ -32,7 +32,7 @@ func (uc *SuspendUseCase) Execute(input SuspendUseCaseInput) (struct{}, error) {
 	el := uc.kubeStore.GetResourceByUID(input.UID)
 	if el == nil {
 		logger.Warn("Resource not found")
-		return struct{}{}, fmt.Errorf("resource with uid %s not found", input.UID)
+		return struct{}{}, fmt.Errorf("resource with uid %s not found: %w", input.UID, kubernetes.ErrNotFound)
 	}
 	_, err := uc.fluxService.Suspend(*el)
 	if err != nil {

@@ -15,7 +15,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/timp4w/phi/internal/core/logging"
-	"github.com/timp4w/phi/internal/core/tree"
 	"go.uber.org/fx"
 
 	httpSwagger "github.com/swaggo/http-swagger"
@@ -28,7 +27,6 @@ import (
 	"github.com/timp4w/phi/internal/core/realtime"
 	realtimeusecases "github.com/timp4w/phi/internal/core/realtime/usecases"
 	shared "github.com/timp4w/phi/internal/core/shared"
-	treeusecases "github.com/timp4w/phi/internal/core/tree/usecases"
 	kubeInfra "github.com/timp4w/phi/internal/infrastructure/kubernetes"
 	websocket "github.com/timp4w/phi/internal/infrastructure/websockets"
 )
@@ -36,7 +34,6 @@ import (
 type UseCases struct {
 	fx.In
 	SyncResources     shared.UseCase[kubernetesusecases.SyncResourcesInput, map[string]*kubernetes.Resource]
-	GetTree           shared.UseCase[treeusecases.GetTreeInput, *kubernetes.Resource]
 	WatchLogs         shared.UseCase[kubernetesusecases.WatchLogsUseCaseInput, struct{}]
 	GetResourceYAML   shared.UseCase[kubernetesusecases.GetResourceYAMLInput, []byte]
 	UpgradeConnection shared.UseCase[realtimeusecases.UpgradeConnectionInput, bool]
@@ -49,7 +46,6 @@ type UseCases struct {
 }
 
 func main() {
-	frontendDir := flag.String("frontend", "./frontend", "Path to frontend directory")
 	port := flag.String("port", "8080", "Server port")
 	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error, fatal)")
 	logJSON := flag.Bool("log-json", false, "Enable JSON logging")
@@ -71,13 +67,11 @@ func main() {
 			// Service providers
 			kubeInfra.NewKubeServiceImpl,
 			kubernetes.NewKubeStoreImpl,
-			tree.NewTreeService,
 			websocket.NewWebSocketManager,
 			kubernetes.NewFluxServiceImpl,
 
 			// Usecase providers
 			kubernetesusecases.NewSyncResourcesUseCase,
-			treeusecases.NewGetTreeUseCase,
 			kubernetesusecases.NewWatchLogsUseCase,
 			kubernetesusecases.NewGetResourceYAMlUseCase,
 			realtimeusecases.NewUpgradeConnectionUseCase,
@@ -88,10 +82,6 @@ func main() {
 			kubernetesusecases.NewWatchResourcesUseCase,
 			kubernetesusecases.NewWatchEventsUseCase,
 
-			fx.Annotate(
-				func() *string { return frontendDir },
-				fx.ResultTags(`name:"frontendDir"`),
-			),
 			fx.Annotate(
 				func() *string { return port },
 				fx.ResultTags(`name:"port"`),
@@ -104,12 +94,11 @@ func main() {
 
 func registerApp(useCases UseCases, realtimeService realtime.RealtimeService, lifecycle fx.Lifecycle, p struct {
 	fx.In
-	FrontendDir *string `name:"frontendDir"`
-	Port        *string `name:"port"`
+	Port *string `name:"port"`
 }) {
 	logging.Info("Registering application components")
 	initBackgroundTasks(useCases)
-	r := createRouter(useCases, realtimeService, *p.FrontendDir)
+	r := createRouter(useCases, realtimeService)
 	registerServerLifecycle(lifecycle, r, *p.Port)
 }
 
@@ -119,7 +108,9 @@ func initBackgroundTasks(uc UseCases) {
 	logger.Info("Initializing background tasks")
 
 	logger.Debug("Starting resource synchronization")
-	uc.SyncResources.Execute(struct{}{})
+	if _, err := uc.SyncResources.Execute(struct{}{}); err != nil {
+		logger.WithError(err).Error("Resource synchronization failed; watchers will start with empty store")
+	}
 
 	logger.Debug("Starting resource watching")
 	uc.WatchResources.Execute(struct{}{})
@@ -131,7 +122,7 @@ func initBackgroundTasks(uc UseCases) {
 }
 
 // createRouter initializes and configures the HTTP router
-func createRouter(uc UseCases, realtimeService realtime.RealtimeService, frontendDir string) *chi.Mux {
+func createRouter(uc UseCases, realtimeService realtime.RealtimeService) *chi.Mux {
 	logger := logging.Logger()
 	logger.Info("Creating router")
 
@@ -143,7 +134,7 @@ func createRouter(uc UseCases, realtimeService realtime.RealtimeService, fronten
 	r.Use(corsMiddleware)
 
 	// Register API controllers and routes
-	registerAPIRoutes(r, uc, realtimeService, frontendDir)
+	registerAPIRoutes(r, uc, realtimeService)
 
 	return r
 }
@@ -162,9 +153,8 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.RealtimeService, frontendDir string) {
-	staticController := controllers.NewStaticController(frontendDir)
-	treeController := controllers.NewTreeController(uc.GetTree)
+func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.RealtimeService) {
+	staticController := controllers.NewStaticController()
 	resourceController := controllers.NewResourceController(
 		uc.GetResourceYAML,
 		uc.Reconcile,
@@ -178,7 +168,6 @@ func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.Realtim
 	wscontrollers.NewResourceWSController(uc.WatchLogs, realtimeService)
 
 	// Register routes
-	treeController.RegisterRoutes(r)
 	resourceController.RegisterRoutes(r)
 	realtimeController.RegisterRoutes(r)
 	staticController.RegisterRoutes(r)
@@ -190,9 +179,11 @@ func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.Realtim
 func registerServerLifecycle(lifecycle fx.Lifecycle, router http.Handler, port string) {
 	logger := logging.Logger().WithField("port", port)
 
+	var server *http.Server
+
 	lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
-			server := &http.Server{
+			server = &http.Server{
 				Addr:         ":" + port,
 				Handler:      router,
 				ReadTimeout:  15 * time.Second,
@@ -210,7 +201,7 @@ func registerServerLifecycle(lifecycle fx.Lifecycle, router http.Handler, port s
 		},
 		OnStop: func(ctx context.Context) error {
 			logger.Info("Shutting down server")
-			return nil
+			return server.Shutdown(ctx)
 		},
 	})
 }
