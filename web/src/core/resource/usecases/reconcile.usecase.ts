@@ -10,15 +10,10 @@ export class ReconcileUseCase extends UseCase<string, Promise<void>> {
 
   public async execute(uid: string): Promise<void> {
     try {
-      const result = await this.resourceService.reconcile(uid);
-      addToast({
-        title: "Reconciliation Started",
-        color: "success",
-      });
-      return result;
+      return await this.resourceService.reconcile(uid);
     } catch (error) {
       addToast({
-        title: "Failed to start reconciliation events",
+        title: "Failed to trigger reconciliation",
         color: "danger",
       });
       console.error('Failed to start reconciliation:', error);
