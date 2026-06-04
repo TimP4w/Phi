@@ -1,6 +1,8 @@
 import { observer } from "mobx-react-lite";
 
-import { KubeResource, ResourceStatus } from "../../../core/fluxTree/models/tree";
+import { KubeResource, ResourceStatus, Tree } from "../../../core/fluxTree/models/tree";
+import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
+import { container } from "../../../core/shared/inversify.config";
 import Widget from "./Widget";
 import {
   Button,
@@ -32,6 +34,9 @@ function reconcilingLabel(resources: KubeResource[]): string {
 
 const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
   ({ resource, skipGrandChildren = false, compact }: ResourceCountWidgetProps) => {
+    const store = container.get<FluxTreeStore>(FluxTreeStore);
+    const tree: Tree = store.tree; 
+
     const { isOpen, onOpen, onOpenChange } = useDisclosure();
     const [criticalResources, setCriticalResources] = useState<KubeResource[]>([]);
     const [reconcilingResources, setReconcilingResources] = useState<KubeResource[]>([]);
@@ -95,7 +100,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       setResourceCounts(countResources(resource));
       setCriticalResources(newCritical);
       setReconcilingResources(newReconciling);
-    }, [resource, skipGrandChildren]);
+    }, [resource, tree, skipGrandChildren]);
 
     // reset collapsed state when modal closes
     const handleOpenChange = () => {
