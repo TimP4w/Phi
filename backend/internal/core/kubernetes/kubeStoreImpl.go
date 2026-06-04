@@ -261,7 +261,9 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 			k.resourcesRefs[selfRef] = []*Resource{}
 		}
 		k.registerParentRefs(&newResource)
-		return &newResource
+		snapshot := Resource{}
+		snapshot.Copy(newResource)
+		return &snapshot
 	}
 
 	logger.Debug("Resource found, updated existing resource")
@@ -288,7 +290,9 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 	}
 
 	k.registerParentRefs(updated)
-	return updated
+	snapshot := Resource{}
+	snapshot.Copy(*updated)
+	return &snapshot
 }
 
 func (k *KubeStoreImpl) GetKnownResourceAPIRefs() map[string]struct{} {
