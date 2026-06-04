@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react-swc';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 // https://vitejs.dev/config/
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins:
     [
       nodePolyfills({
@@ -13,6 +13,6 @@ export default defineConfig({
 
     ],
   build: {
-    sourcemap: process.env.NODE_ENV !== 'production',
-  }
-});
+    sourcemap: mode !== 'production',
+  },
+}));

@@ -17,7 +17,7 @@ class WebSocketServiceImpl implements WebSocketService {
   listeners: Set<Listener>;
   retryCount = 0;
   maxRetries = 10;
-  pingInterval: NodeJS.Timeout | null = null;
+  pingInterval: ReturnType<typeof setInterval> | null = null;
   clientId: string = "";
 
   constructor() {

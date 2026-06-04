@@ -1,8 +1,22 @@
 import "reflect-metadata";
 
-import { makeObservable, observable, computed, action, runInAction } from "mobx";
+import {
+  makeObservable,
+  observable,
+  computed,
+  action,
+  runInAction,
+} from "mobx";
 import { injectable } from "inversify";
-import { FluxResource, PodLog, Repository, SourceRef, Tree, KubeResource, Kustomization } from "../models/tree";
+import {
+  FluxResource,
+  PodLog,
+  Repository,
+  SourceRef,
+  Tree,
+  KubeResource,
+  Kustomization,
+} from "../models/tree";
 import { RESOURCE_TYPE } from "../constants/resources.const";
 import { TreeNodeDto } from "../models/dtos/treeDto";
 
@@ -43,9 +57,13 @@ function buildTree(resources: Map<string, KubeResource>): Tree {
     }
   });
 
-  const root = [...resources.values()].find(
-    (r) => r.kind === RESOURCE_TYPE.KUSTOMIZATION && r.name === "flux-system" && r.namespace === "flux-system"
-  ) ?? new KubeResource();
+  const root =
+    [...resources.values()].find(
+      (r) =>
+        r.kind === RESOURCE_TYPE.KUSTOMIZATION &&
+        r.name === "flux-system" &&
+        r.namespace === "flux-system",
+    ) ?? new KubeResource();
 
   return new Tree(root);
 }
@@ -93,7 +111,7 @@ class FluxTreeStore {
       runInAction(() => {
         this._tree = buildTree(this.resources);
         this._rebuildScheduled = false;
-      })
+      }),
     );
   }
 
@@ -122,7 +140,8 @@ class FluxTreeStore {
     void this._tree;
     const result: FluxResource[] = [];
     this.resources.forEach((r) => {
-      if (APPLICATION_KINDS.has(r.kind as RESOURCE_TYPE)) result.push(r as FluxResource);
+      if (APPLICATION_KINDS.has(r.kind as RESOURCE_TYPE))
+        result.push(r as FluxResource);
     });
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -131,7 +150,8 @@ class FluxTreeStore {
     void this._tree;
     const result: Repository[] = [];
     this.resources.forEach((r) => {
-      if (REPOSITORY_KINDS.has(r.kind as RESOURCE_TYPE)) result.push(r as Repository);
+      if (REPOSITORY_KINDS.has(r.kind as RESOURCE_TYPE))
+        result.push(r as Repository);
     });
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -145,14 +165,20 @@ class FluxTreeStore {
 
   findKustomizationByName(name?: string): Kustomization | null {
     if (!name) return null;
-    return this.applications.find(
-      (app) => app.name === name && app.kind === RESOURCE_TYPE.KUSTOMIZATION,
-    ) as Kustomization ?? null;
+    return (
+      (this.applications.find(
+        (app) => app.name === name && app.kind === RESOURCE_TYPE.KUSTOMIZATION,
+      ) as Kustomization) ?? null
+    );
   }
 
   findRepositoryByNameAndKind(name?: string, kind?: string): Repository | null {
     if (!name || !kind) return null;
-    return this.repositories.find((repo) => repo.name === name && repo.kind === kind) ?? null;
+    return (
+      this.repositories.find(
+        (repo) => repo.name === name && repo.kind === kind,
+      ) ?? null
+    );
   }
 
   findFluxParents(uid?: string): KubeResource[] {
@@ -167,14 +193,6 @@ class FluxTreeStore {
       const parentId = current.parentIDs[0];
       if (!parentId) break;
       if (visited.has(parentId)) {
-        const cycleNode = this.resources.get(parentId);
-        const startNode = this.resources.get(uid);
-        console.warn(
-          "[FluxTreeStore] findFluxParents: cycle detected —",
-          `${startNode?.kind}/${startNode?.name} (${uid})`,
-          "→ loop back to",
-          `${cycleNode?.kind}/${cycleNode?.name} (${parentId})`
-        );
         break;
       }
       visited.add(parentId);
@@ -187,7 +205,11 @@ class FluxTreeStore {
 
   findRepositoryByRef(ref?: SourceRef): Repository | null {
     if (!ref) return null;
-    return this.repositories.find((repo) => repo.name === ref.name && repo.kind === ref.kind) ?? null;
+    return (
+      this.repositories.find(
+        (repo) => repo.name === ref.name && repo.kind === ref.kind,
+      ) ?? null
+    );
   }
 
   get root(): KubeResource {
