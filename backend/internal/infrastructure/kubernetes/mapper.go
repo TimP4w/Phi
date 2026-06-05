@@ -91,6 +91,10 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		mapOciRepositoryData(&el, obj)
 	case "Bucket":
 		mapBucketData(&el, obj)
+	case "Alert", "Provider":
+		mapGenericFluxData(&el, obj, true)
+	case "Receiver", "ImageRepository", "ImagePolicy", "ImageUpdateAutomation":
+		mapGenericFluxData(&el, obj, false)
 	case "Pod":
 		mapPodData(&el, obj)
 	case "Deployment":
@@ -157,6 +161,15 @@ func mapFluxMetadata(el *kube.Resource, annotations map[string]string, lastRecon
 		}
 	}
 
+	if !isReconciling {
+		for _, cond := range conditions {
+			if cond.Type == "Reconciling" && cond.Status == metav1.ConditionTrue {
+				isReconciling = true
+				break
+			}
+		}
+	}
+
 	var lastSyncAt time.Time
 	for _, cond := range conditions {
 		if cond.Type == "Ready" {
@@ -173,6 +186,10 @@ func mapFluxMetadata(el *kube.Resource, annotations map[string]string, lastRecon
 		IsSuspended:            isSuspended,
 		LastHandledReconcileAt: lastReconcileTime,
 		LastSyncAt:             lastSyncAt,
+	}
+
+	if isSuspended {
+		el.Status = kube.StatusSuspended
 	}
 }
 
@@ -198,9 +215,8 @@ func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	mapConditions(el, gitRepository.Status.Conditions)
-	mapFluxMetadata(el, gitRepository.GetAnnotations(), gitRepository.Status.LastHandledReconcileAt, gitRepository.Spec.Suspend, gitRepository.Status.Conditions)
-
 	el.Status = mapFluxResourceStatusForCondition(&gitRepository.Status.Conditions)
+	mapFluxMetadata(el, gitRepository.GetAnnotations(), gitRepository.Status.LastHandledReconcileAt, gitRepository.Spec.Suspend, gitRepository.Status.Conditions)
 
 	el.GitRepositoryMetadata = kube.GitRepositoryMetadata{
 		URL:    gitRepository.Spec.URL,
@@ -231,6 +247,10 @@ func mapFluxResourceStatusForCondition(conditions *[]metav1.Condition) kube.Stat
 			case metav1.ConditionTrue:
 				return kube.StatusSuccess
 			case metav1.ConditionFalse:
+				// DependencyNotReady means waiting on a dependency, not a failure
+				if condition.Reason == "DependencyNotReady" {
+					return kube.StatusPending
+				}
 				return kube.StatusFailed
 			case metav1.ConditionUnknown:
 				return kube.StatusPending
@@ -249,8 +269,8 @@ func mapOciRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	mapConditions(el, ociRepository.Status.Conditions)
-	mapFluxMetadata(el, ociRepository.GetAnnotations(), ociRepository.Status.LastHandledReconcileAt, ociRepository.Spec.Suspend, ociRepository.Status.Conditions)
 	el.Status = mapFluxResourceStatusForCondition(&ociRepository.Status.Conditions)
+	mapFluxMetadata(el, ociRepository.GetAnnotations(), ociRepository.Status.LastHandledReconcileAt, ociRepository.Spec.Suspend, ociRepository.Status.Conditions)
 
 	el.OCIRepositoryMetadata = kube.OCIRepositoryMetadata{
 		URL:          ociRepository.Spec.URL,
@@ -271,6 +291,11 @@ func mapHelmRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 	mapConditions(el, helmRepository.Status.Conditions)
 	el.Status = mapFluxResourceStatusForCondition(&helmRepository.Status.Conditions)
+
+	// OCI helm repos don't emit conditions -> absence of conditions means valid config
+	if helmRepository.Spec.Type == "oci" && len(helmRepository.Status.Conditions) == 0 {
+		el.Status = kube.StatusSuccess
+	}
 
 	mapFluxMetadata(el, helmRepository.GetAnnotations(), helmRepository.Status.LastHandledReconcileAt, helmRepository.Spec.Suspend, helmRepository.Status.Conditions)
 }
@@ -518,9 +543,8 @@ func mapKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	mapConditions(el, kustomization.Status.Conditions)
-	mapFluxMetadata(el, kustomization.GetAnnotations(), kustomization.Status.LastHandledReconcileAt, kustomization.Spec.Suspend, kustomization.Status.Conditions)
-
 	el.Status = mapFluxResourceStatusForCondition(&kustomization.Status.Conditions)
+	mapFluxMetadata(el, kustomization.GetAnnotations(), kustomization.Status.LastHandledReconcileAt, kustomization.Spec.Suspend, kustomization.Status.Conditions)
 
 	var dependsOnRefs []string
 	for _, dep := range kustomization.Spec.DependsOn {
@@ -553,8 +577,8 @@ func mapHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 	mapConditions(el, helmRelease.Status.Conditions)
-	mapFluxMetadata(el, helmRelease.GetAnnotations(), helmRelease.Status.LastHandledReconcileAt, helmRelease.Spec.Suspend, helmRelease.Status.Conditions)
 	el.Status = mapFluxResourceStatusForCondition(&helmRelease.Status.Conditions)
+	mapFluxMetadata(el, helmRelease.GetAnnotations(), helmRelease.Status.LastHandledReconcileAt, helmRelease.Spec.Suspend, helmRelease.Status.Conditions)
 
 	el.HelmReleaseMetadata = kube.HelmReleaseMetadata{
 		ChartName:     helmRelease.GetHelmChartName(),
@@ -630,4 +654,116 @@ func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	el.Status = mapStatefulSetStatus(ss)
+}
+
+// extractUnstructuredConditions pulls status.conditions from an unstructured object.
+func extractUnstructuredConditions(obj unstructured.Unstructured) []map[string]any {
+	raw, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
+	if !found || err != nil {
+		return nil
+	}
+	conditions := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		if c, ok := item.(map[string]any); ok {
+			conditions = append(conditions, c)
+		}
+	}
+	return conditions
+}
+
+// mapFluxResourceStatusFromUnstructured applies the same Ready-condition logic as
+// mapFluxResourceStatusForCondition but works on raw unstructured conditions.
+// When defaultReady is true and no conditions exist, StatusSuccess is returned
+// (used for Alert/Provider which omit conditions when valid).
+func mapFluxResourceStatusFromUnstructured(conditions []map[string]any, defaultReady bool) kube.Status {
+	for _, cond := range conditions {
+		if cond["type"] != "Ready" {
+			continue
+		}
+		reason, _ := cond["reason"].(string)
+		switch cond["status"] {
+		case "True":
+			return kube.StatusSuccess
+		case "False":
+			if reason == "DependencyNotReady" {
+				return kube.StatusPending
+			}
+			return kube.StatusFailed
+		case "Unknown":
+			return kube.StatusPending
+		}
+	}
+	if defaultReady && len(conditions) == 0 {
+		return kube.StatusSuccess
+	}
+	return kube.StatusPending
+}
+
+// mapFluxMetadataFromUnstructured is the unstructured equivalent of mapFluxMetadata,
+// used for Flux resource types not imported as typed Go packages.
+func mapFluxMetadataFromUnstructured(el *kube.Resource, annotations map[string]string, lastReconcileTimeStr string, isSuspended bool, conditions []map[string]any) {
+	isReconciling := false
+	didManuallyReconcile, exists := annotations["reconcile.fluxcd.io/requestedAt"]
+	didManuallyReconcileTime, err := time.Parse(time.RFC3339Nano, didManuallyReconcile)
+	var lastReconcileTime time.Time
+	if err == nil {
+		lastReconcileTime, err = time.Parse(time.RFC3339Nano, lastReconcileTimeStr)
+		if err == nil {
+			isReconciling = exists && lastReconcileTime.Before(didManuallyReconcileTime)
+		}
+	}
+
+	if !isReconciling {
+		for _, cond := range conditions {
+			if cond["type"] == "Reconciling" && cond["status"] == "True" {
+				isReconciling = true
+				break
+			}
+		}
+	}
+
+	var lastSyncAt time.Time
+	for _, cond := range conditions {
+		if cond["type"] == "Ready" {
+			if ts, ok := cond["lastTransitionTime"].(string); ok {
+				if t, err := time.Parse(time.RFC3339, ts); err == nil {
+					lastSyncAt = t
+				}
+			}
+			break
+		}
+	}
+
+	el.FluxMetadata = kube.FluxMetadata{
+		IsReconciling:          isReconciling,
+		IsSuspended:            isSuspended,
+		LastHandledReconcileAt: lastReconcileTime,
+		LastSyncAt:             lastSyncAt,
+	}
+
+	if isSuspended {
+		el.Status = kube.StatusSuspended
+	}
+}
+
+// mapGenericFluxData handles Flux resource types that carry no type-specific metadata
+// beyond status/suspend/reconcile. Used for notification and image automation resources.
+// Set defaultReadyWhenNoConditions=true for Alert/Provider (valid config emits no conditions
+// in older notification-controller versions).
+func mapGenericFluxData(el *kube.Resource, obj unstructured.Unstructured, defaultReadyWhenNoConditions bool) {
+	conditions := extractUnstructuredConditions(obj)
+
+	el.Status = mapFluxResourceStatusFromUnstructured(conditions, defaultReadyWhenNoConditions)
+
+	isSuspended := false
+	if s, found, err := unstructured.NestedBool(obj.Object, "spec", "suspend"); found && err == nil {
+		isSuspended = s
+	}
+
+	lastHandledReconcileAt := ""
+	if t, found, err := unstructured.NestedString(obj.Object, "status", "lastHandledReconcileAt"); found && err == nil {
+		lastHandledReconcileAt = t
+	}
+
+	mapFluxMetadataFromUnstructured(el, obj.GetAnnotations(), lastHandledReconcileAt, isSuspended, conditions)
 }

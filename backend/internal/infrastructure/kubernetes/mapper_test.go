@@ -3,8 +3,8 @@ package kubernetes
 import (
 	"testing"
 
-	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/stretchr/testify/assert"
+	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -321,7 +321,7 @@ func TestToResource_Kustomization(t *testing.T) {
 		},
 	}
 	obj.Object["status"] = map[string]interface{}{
-		"lastAppliedRevision":  "main@sha1:abc123",
+		"lastAppliedRevision":   "main@sha1:abc123",
 		"lastAttemptedRevision": "main@sha1:abc123",
 		"conditions": []interface{}{
 			map[string]interface{}{
@@ -551,7 +551,7 @@ func TestToResource_HelmChart(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("HelmChart", "source.toolkit.fluxcd.io/v1", "my-chart", "flux-system")
 	obj.Object["spec"] = map[string]interface{}{
-		"suspend": false,
+		"suspend":   false,
 		"sourceRef": map[string]interface{}{"kind": "HelmRepository", "name": "stable"},
 	}
 	obj.Object["status"] = map[string]interface{}{
@@ -727,4 +727,321 @@ func TestToResource_StatefulSet_NilReplicas(t *testing.T) {
 func TestGetRefVersion(t *testing.T) {
 	assert.Equal(t, "v1", GetRefVersion("v1"))
 	assert.Equal(t, "v1", GetRefVersion("apps/v1"))
+}
+
+func fluxReadyCondition(status, reason string) map[string]interface{} {
+	return map[string]interface{}{
+		"type":               "Ready",
+		"status":             status,
+		"reason":             reason,
+		"message":            "msg",
+		"lastTransitionTime": "2024-01-15T10:30:00Z",
+	}
+}
+
+func fluxReconcilingCondition() map[string]interface{} {
+	return map[string]interface{}{
+		"type":               "Reconciling",
+		"status":             "True",
+		"reason":             "Progressing",
+		"message":            "reconciling",
+		"lastTransitionTime": "2024-01-15T10:30:00Z",
+	}
+}
+
+func TestToResource_Kustomization_DependencyNotReady_IsPending(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Kustomization", "kustomize.toolkit.fluxcd.io/v1", "my-ks", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{
+		"path":      "./clusters/prod",
+		"suspend":   false,
+		"sourceRef": map[string]interface{}{"kind": "GitRepository", "name": "flux-system"},
+		"dependsOn": []interface{}{map[string]interface{}{"name": "longhorn"}},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("False", "DependencyNotReady"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "kustomizations")
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+func TestToResource_Kustomization_Suspended_StatusIsSuspended(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Kustomization", "kustomize.toolkit.fluxcd.io/v1", "adguard", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{
+		"path":      "./k3s/apps/base/adguard",
+		"suspend":   true,
+		"sourceRef": map[string]interface{}{"kind": "GitRepository", "name": "flux-system"},
+	}
+	// Ready=True from a previous successful reconciliation — suspend must win
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("True", "ReconciliationSucceeded"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "kustomizations")
+	assert.Equal(t, kube.StatusSuspended, res.Status)
+	assert.True(t, res.FluxMetadata.IsSuspended)
+}
+
+func TestToResource_HelmRelease_Suspended_StatusIsSuspended(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("HelmRelease", "helm.toolkit.fluxcd.io/v2", "my-hr", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"suspend": true,
+		"chart": map[string]interface{}{
+			"spec": map[string]interface{}{
+				"sourceRef": map[string]interface{}{"kind": "HelmRepository", "name": "stable"},
+			},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("True", "InstallSucceeded"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "helmreleases")
+	assert.Equal(t, kube.StatusSuspended, res.Status)
+	assert.True(t, res.FluxMetadata.IsSuspended)
+}
+
+func TestToResource_GitRepository_Suspended_StatusIsSuspended(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("GitRepository", "source.toolkit.fluxcd.io/v1", "flux-system", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{
+		"url":     "https://github.com/org/repo",
+		"suspend": true,
+		"ref":     map[string]interface{}{"branch": "main"},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("True", "Succeeded"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "gitrepositories")
+	assert.Equal(t, kube.StatusSuspended, res.Status)
+}
+
+func TestToResource_OCIRepository_Suspended_StatusIsSuspended(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("OCIRepository", "source.toolkit.fluxcd.io/v1beta2", "my-oci", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{
+		"url":     "oci://ghcr.io/org/repo",
+		"suspend": true,
+		"ref":     map[string]interface{}{"tag": "latest"},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("True", "Succeeded"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "ocirepositories")
+	assert.Equal(t, kube.StatusSuspended, res.Status)
+}
+
+func TestToResource_HelmRepository_OCI_NoConditions_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("HelmRepository", "source.toolkit.fluxcd.io/v1", "oci-repo", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{
+		"type":    "oci",
+		"suspend": false,
+	}
+	obj.Object["status"] = map[string]interface{}{}
+
+	res := mapper.ToResource(*obj, "helmrepositories")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_HelmRepository_NonOCI_NoConditions_IsPending(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("HelmRepository", "source.toolkit.fluxcd.io/v1", "helm-repo", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{
+		"suspend": false,
+	}
+	obj.Object["status"] = map[string]interface{}{}
+
+	res := mapper.ToResource(*obj, "helmrepositories")
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+func TestToResource_FluxResource_IsReconcilingFromCondition(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Kustomization", "kustomize.toolkit.fluxcd.io/v1", "my-ks", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{
+		"path":      "./clusters/prod",
+		"suspend":   false,
+		"sourceRef": map[string]interface{}{"kind": "GitRepository", "name": "flux-system"},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("Unknown", "Progressing"),
+			fluxReconcilingCondition(),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "kustomizations")
+	assert.Equal(t, kube.StatusPending, res.Status)
+	assert.True(t, res.FluxMetadata.IsReconciling)
+}
+
+// ── New Flux resource types ───────────────────────────────────────────────────
+
+func TestToResource_Alert_NoConditions_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Alert", "notification.toolkit.fluxcd.io/v1beta3", "my-alert", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": false}
+	obj.Object["status"] = map[string]interface{}{}
+
+	res := mapper.ToResource(*obj, "alerts")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_Alert_WithReadyCondition_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Alert", "notification.toolkit.fluxcd.io/v1beta3", "my-alert", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": false}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("True", "Succeeded"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "alerts")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_Alert_Failed_IsFailed(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Alert", "notification.toolkit.fluxcd.io/v1beta3", "my-alert", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": false}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("False", "ValidationFailed"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "alerts")
+	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+func TestToResource_Alert_Suspended_IsSuspended(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Alert", "notification.toolkit.fluxcd.io/v1beta3", "my-alert", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": true}
+	obj.Object["status"] = map[string]interface{}{}
+
+	res := mapper.ToResource(*obj, "alerts")
+	assert.Equal(t, kube.StatusSuspended, res.Status)
+	assert.True(t, res.FluxMetadata.IsSuspended)
+}
+
+func TestToResource_Provider_NoConditions_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Provider", "notification.toolkit.fluxcd.io/v1beta3", "slack", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": false}
+	obj.Object["status"] = map[string]interface{}{}
+
+	res := mapper.ToResource(*obj, "providers")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_Receiver_Ready(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Receiver", "notification.toolkit.fluxcd.io/v1", "github", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": false}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("True", "Succeeded"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "receivers")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_Receiver_NoConditions_IsPending(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Receiver", "notification.toolkit.fluxcd.io/v1", "github", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": false}
+	obj.Object["status"] = map[string]interface{}{}
+
+	res := mapper.ToResource(*obj, "receivers")
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+func TestToResource_ImageRepository_Ready(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("ImageRepository", "image.toolkit.fluxcd.io/v1beta2", "my-image", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": false}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("True", "Succeeded"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "imagerepositories")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_ImageRepository_Suspended(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("ImageRepository", "image.toolkit.fluxcd.io/v1beta2", "my-image", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": true}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("True", "Succeeded"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "imagerepositories")
+	assert.Equal(t, kube.StatusSuspended, res.Status)
+}
+
+func TestToResource_ImagePolicy_Failed(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("ImagePolicy", "image.toolkit.fluxcd.io/v1beta2", "my-policy", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": false}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("False", "InvalidPolicy"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "imagepolicies")
+	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+func TestToResource_ImageUpdateAutomation_Ready(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("ImageUpdateAutomation", "image.toolkit.fluxcd.io/v1beta2", "my-auto", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": false}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("True", "Succeeded"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "imageupdateautomations")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_ImageUpdateAutomation_DependencyNotReady_IsPending(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("ImageUpdateAutomation", "image.toolkit.fluxcd.io/v1beta2", "my-auto", "flux-system")
+	obj.Object["spec"] = map[string]interface{}{"suspend": false}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("False", "DependencyNotReady"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "imageupdateautomations")
+	assert.Equal(t, kube.StatusPending, res.Status)
 }

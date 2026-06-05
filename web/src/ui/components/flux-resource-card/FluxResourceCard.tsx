@@ -37,6 +37,8 @@ const statusBorderClass = (status: ResourceStatus): string => {
     case ResourceStatus.PENDING:
     case ResourceStatus.WARNING:
       return "border-l-warning";
+    case ResourceStatus.SUSPENDED:
+      return "border-l-default-400";
     default:
       return "border-l-default-400";
   }

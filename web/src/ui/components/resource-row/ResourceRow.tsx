@@ -10,6 +10,7 @@ const resourceDotClass = (status: ResourceStatus): string => {
     case ResourceStatus.FAILED: return "bg-danger";
     case ResourceStatus.PENDING:
     case ResourceStatus.WARNING: return "bg-warning";
+    case ResourceStatus.SUSPENDED: return "bg-default-400";
     default: return "bg-default-400";
   }
 };

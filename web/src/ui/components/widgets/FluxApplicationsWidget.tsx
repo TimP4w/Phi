@@ -33,6 +33,13 @@ const STATUS_CONFIG = [
     match: (r: KubeResource) => r.status === ResourceStatus.PENDING,
   },
   {
+    label: "Suspended",
+    status: ResourceStatus.SUSPENDED,
+    dotClass: "bg-default-400",
+    textClass: "text-default-400",
+    match: (r: KubeResource) => r.status === ResourceStatus.SUSPENDED,
+  },
+  {
     label: "Unknown",
     status: ResourceStatus.UNKNOWN,
     dotClass: "bg-default-400",

@@ -45,6 +45,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       total: 0,
       ready: 0,
       notReady: 0,
+      suspended: 0,
       unknown: 0,
     });
 
@@ -59,15 +60,20 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       const countResources = (
         node: KubeResource | null,
         depth = 0
-      ): { total: number; ready: number; notReady: number; unknown: number } => {
-        if (!node || visited.has(node.uid)) return { total: 0, ready: 0, notReady: 0, unknown: 0 };
+      ): { total: number; ready: number; notReady: number; suspended: number; unknown: number } => {
+        if (!node || visited.has(node.uid)) return { total: 0, ready: 0, notReady: 0, suspended: 0, unknown: 0 };
         visited.add(node.uid);
 
         let total = 1;
         let ready = node.status === ResourceStatus.SUCCESS ? 1 : 0;
-        let notReady =
-          node.status !== ResourceStatus.SUCCESS && node.status !== ResourceStatus.UNKNOWN ? 1 : 0;
+        let suspended = node.status === ResourceStatus.SUSPENDED ? 1 : 0;
         let unknown = node.status === ResourceStatus.UNKNOWN ? 1 : 0;
+        let notReady =
+          node.status !== ResourceStatus.SUCCESS &&
+          node.status !== ResourceStatus.UNKNOWN &&
+          node.status !== ResourceStatus.SUSPENDED
+            ? 1
+            : 0;
 
         if (notReady === 1 && !seenUids.has(node.uid)) {
           seenUids.add(node.uid);
@@ -90,14 +96,16 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
             total += c.total;
             ready += c.ready;
             notReady += c.notReady;
+            suspended += c.suspended;
             unknown += c.unknown;
           }
         }
 
-        return { total, ready, notReady, unknown };
+        return { total, ready, notReady, suspended, unknown };
       };
 
-      setResourceCounts(countResources(resource));
+      const counts = countResources(resource);
+      setResourceCounts(counts);
       setCriticalResources(newCritical);
       setReconcilingResources(newReconciling);
     }, [resource, tree, skipGrandChildren]);
@@ -132,6 +140,10 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
           <div className="flex justify-between items-center">
             <span className="text-default-400">Not Ready</span>
             <span className="text-danger font-medium">{resourceCounts.notReady}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-default-400">Suspended</span>
+            <span className="text-default-400 font-medium">{resourceCounts.suspended}</span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-default-400">Unknown</span>
