@@ -396,11 +396,12 @@ type SourceRef struct {
 type Status string
 
 const (
-	StatusUnknown Status = "unknown"
-	StatusSuccess Status = "success"
-	StatusFailed  Status = "failed"
-	StatusPending Status = "pending"
-	StatusWarning Status = "warning"
+	StatusUnknown   Status = "unknown"
+	StatusSuccess   Status = "success"
+	StatusFailed    Status = "failed"
+	StatusPending   Status = "pending"
+	StatusWarning   Status = "warning"
+	StatusSuspended Status = "suspended"
 )
 
 const (

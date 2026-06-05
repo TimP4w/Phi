@@ -428,6 +428,7 @@ export enum ResourceStatus {
   PENDING = "pending",
   WARNING = "warning",
   UNKNOWN = "unknown",
+  SUSPENDED = "suspended",
 }
 
 export class Condition {

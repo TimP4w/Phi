@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
@@ -85,6 +85,12 @@ const statusFilter: {
     filter: (r) => r.status === ResourceStatus.PENDING,
   },
   {
+    label: "Suspended",
+    key: ResourceStatus.SUSPENDED,
+    color: "default",
+    filter: (r) => r.status === ResourceStatus.SUSPENDED,
+  },
+  {
     label: "Unknown",
     key: ResourceStatus.UNKNOWN,
     color: "default",
@@ -123,6 +129,22 @@ const AppsView: React.FC = observer(() => {
   const [searchValue, setSearchValue] = useSessionState<string>("SearchValueFilter", "");
   const [eventFilter, setEventFilter] = useState<EventFilter>("all");
   const [eventSidebarOpen, setEventSidebarOpen] = useState(true);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "f" && e.ctrlKey) {
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      } else if (e.key === "Escape" && document.activeElement === searchRef.current) {
+        searchRef.current?.blur();
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, []);
 
 
   const toggleFilterValue = (
@@ -261,14 +283,18 @@ const AppsView: React.FC = observer(() => {
               {/* Filter bar */}
               <div className="flex flex-wrap items-center gap-2">
                 <Input
-                  className="max-w-[220px]"
+                  ref={searchRef}
+                  className={`transition-all duration-200 ${searchFocused ? "max-w-[340px]" : "max-w-[220px]"}`}
                   value={searchValue}
                   placeholder="Search by name…"
                   radius="md"
                   size="sm"
                   type="text"
-                  startContent={<Search className="w-3.5 h-3.5 text-default-400 flex-shrink-0" />}
+                  color={searchFocused ? "primary" : "default"}
+                  startContent={<Search className={`w-3.5 h-3.5 flex-shrink-0 ${searchFocused ? "text-primary" : "text-default-400"}`} />}
                   onChange={(e) => setSearchValue(e.target.value)}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
                 />
 
                 <div className="flex flex-wrap items-center gap-1">
