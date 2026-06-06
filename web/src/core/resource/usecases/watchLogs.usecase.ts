@@ -11,20 +11,16 @@ export class WatchLogsUseCase extends UseCase<KubeResource, Promise<void>> {
   private readonly realtimeService = container.get<WebSocketService>(TYPES.WebSocket);
 
   public async execute(node: KubeResource): Promise<void> {
-    try {
-      if (!node) {
-        return Promise.reject('Node is not defined');
-      }
-      if (node.kind !== RESOURCE_TYPE.POD) {
-        return Promise.reject('Node is not a Pod');
-      }
-      this.realtimeService.sendMessage({
-        type: REALTIME_CONST.START_WATCH_LOGS,
-        message: node.uid,
-      });
-    } catch (error) {
-      return Promise.reject(error);
+    if (!node) {
+      return Promise.reject(new Error('Node is not defined'));
     }
+    if (node.kind !== RESOURCE_TYPE.POD) {
+      return Promise.reject(new Error('Node is not a Pod'));
+    }
+    this.realtimeService.sendMessage({
+      type: REALTIME_CONST.START_WATCH_LOGS,
+      message: node.uid,
+    });
   }
 }
 

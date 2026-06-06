@@ -24,11 +24,11 @@ realtime.connect();
 const listener: Listener = {
   id: "1",
   handle: (data: Message) => {
-    handleWsMessage.execute(data);
+    void handleWsMessage.execute(data).catch(console.error);
   },
 };
 realtime.addListener(listener);
-fetchEventsUseCase.execute();
+void fetchEventsUseCase.execute().catch(console.error);
 
 root.render(
   <React.StrictMode>

@@ -19,6 +19,7 @@ class WebSocketServiceImpl implements WebSocketService {
   maxRetries = 10;
   pingInterval: ReturnType<typeof setInterval> | null = null;
   clientId: string = "";
+  private intentionalClose = false;
 
   constructor() {
     console.log("Loading WebSocketService");
@@ -41,6 +42,12 @@ class WebSocketServiceImpl implements WebSocketService {
 
   connect(): void {
     console.log(`Connecting websocket to ${this.url}`);
+    if (this.socket) {
+      this.socket.onopen = null;
+      this.socket.onmessage = null;
+      this.socket.onclose = null;
+      this.socket.onerror = null;
+    }
     this.socket = new WebSocket(this.url);
 
     this.socket.onopen = () => {
@@ -54,7 +61,13 @@ class WebSocketServiceImpl implements WebSocketService {
     };
 
     this.socket.onmessage = (event: MessageEvent) => {
-      const message: Message = JSON.parse(event.data);
+      let message: Message;
+      try {
+        message = JSON.parse(event.data);
+      } catch (e) {
+        console.error("WebSocket received malformed frame:", e);
+        return;
+      }
       switch (message.type) {
         case REALTIME_CONST.PONG:
           break;
@@ -75,6 +88,12 @@ class WebSocketServiceImpl implements WebSocketService {
 
       this.clientId = "";
       this.stopPing();
+
+      if (this.intentionalClose) {
+        this.intentionalClose = false;
+        return;
+      }
+
       this.reconnect();
     };
 
@@ -84,6 +103,7 @@ class WebSocketServiceImpl implements WebSocketService {
   }
 
   startPing(): void {
+    this.stopPing();
     this.pingInterval = setInterval(() => {
       if (!this.socket) {
         console.error("Socket is not open");
@@ -124,6 +144,7 @@ class WebSocketServiceImpl implements WebSocketService {
   stopPing(): void {
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
+      this.pingInterval = null;
     }
   }
 
@@ -144,6 +165,7 @@ class WebSocketServiceImpl implements WebSocketService {
 
   disconnect(): void {
     if (this.socket) {
+      this.intentionalClose = true;
       this.socket.close();
     }
   }

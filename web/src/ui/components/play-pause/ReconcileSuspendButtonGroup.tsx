@@ -40,7 +40,9 @@ const ReconcileSuspendButtonGroup: React.FC<ReconcileSuspendButtonGroupProps> =
     const reconcile = useCallback(() => {
       if (isReconciling) return;
       setIsReconciling(true);
-      reconcileUseCase.execute(resource.uid);
+      reconcileUseCase
+        .execute(resource.uid)
+        .catch(() => setIsReconciling(false));
     }, [resource, isReconciling]);
 
     const resume = useCallback(() => {

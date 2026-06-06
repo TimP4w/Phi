@@ -73,12 +73,13 @@ class FluxTreeStore {
   // Plain map — not observable. Mutations happen inside actions, reactivity via _tree.
   resources: Map<string, KubeResource> = new Map();
   private _tree: Tree = new Tree(new KubeResource());
-  selectedResource: KubeResource | null = null;
+  private selectedUid: string | null = null;
 
   constructor() {
-    makeObservable<FluxTreeStore, "_tree">(this, {
+    makeObservable<FluxTreeStore, "_tree" | "selectedUid">(this, {
       _tree: observable.ref,
-      selectedResource: observable,
+      selectedUid: observable,
+      selectedResource: computed,
       tree: computed,
       applications: computed,
       repositories: computed,
@@ -89,6 +90,11 @@ class FluxTreeStore {
       setSelectedResource: action,
       appendLog: action,
     });
+  }
+
+  get selectedResource(): KubeResource | null {
+    void this._tree;
+    return this.selectedUid ? (this.resources.get(this.selectedUid) ?? null) : null;
   }
 
   get tree(): Tree {
@@ -217,14 +223,15 @@ class FluxTreeStore {
   }
 
   setSelectedResource(resource: KubeResource | null) {
-    this.selectedResource = resource;
+    this.selectedUid = resource?.uid ?? null;
   }
 
   appendLog(log: PodLog) {
-    if (!this.selectedResource) return;
-    const newResource = { ...this.selectedResource };
-    newResource.logs.unshift(log);
-    this.selectedResource = newResource;
+    const resource = this.selectedUid ? this.resources.get(this.selectedUid) : undefined;
+    if (!resource) return;
+    resource.logs.push(log);
+    // Create a new Tree instance to trigger observable.ref reactivity
+    this._tree = new Tree(this._tree.root);
   }
 }
 

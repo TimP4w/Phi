@@ -467,7 +467,8 @@ function stringToResourceStatus(status: string): ResourceStatus {
   if (Object.values(ResourceStatus).includes(status as ResourceStatus)) {
     return status as ResourceStatus;
   }
-  throw new Error(`Invalid ResourceStatus: ${status}`);
+  console.warn(`Unknown ResourceStatus "${status}", defaulting to UNKNOWN`);
+  return ResourceStatus.UNKNOWN;
 }
 
 export type VizualizationNodeData = Record<"treeNode", KubeResource>;
