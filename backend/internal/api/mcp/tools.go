@@ -132,8 +132,61 @@ func addChildrenToTree(node treeprint.Tree, children []kube.Resource) {
 	}
 }
 
-func (t *mcpTools) diagnoseResource(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
-	return mcplib.NewToolResultText("not implemented"), nil
+func (t *mcpTools) diagnoseResource(_ context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+	uid := getStringArg(req.GetArguments(), "uid")
+	if uid == "" {
+		return nil, fmt.Errorf("uid is required")
+	}
+
+	resource := t.store.GetResourceByUID(uid)
+	if resource == nil {
+		return nil, fmt.Errorf("resource not found: %s", uid)
+	}
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Resource: %s/%s (namespace: %s)\nStatus: %s\n",
+		resource.Kind, resource.Name, resource.Namespace, resource.Status)
+
+	var failing []kube.Condition
+	for _, c := range resource.Conditions {
+		if c.Status != "True" {
+			failing = append(failing, c)
+		}
+	}
+	if len(failing) > 0 {
+		sb.WriteString("\nFailing Conditions:\n")
+		for _, c := range failing {
+			fmt.Fprintf(&sb, "  - %s: %s — %s: %s\n", c.Type, c.Status, c.Reason, c.Message)
+		}
+	} else {
+		sb.WriteString("\nNo failing conditions.\n")
+	}
+
+	var errorEvents []kube.Event
+	for _, e := range resource.Events {
+		r := strings.ToLower(e.Reason)
+		if strings.Contains(r, "error") || strings.Contains(r, "fail") || strings.Contains(r, "backoff") {
+			errorEvents = append(errorEvents, e)
+		}
+	}
+	if len(errorEvents) > 0 {
+		sb.WriteString("\nError Events:\n")
+		for _, e := range errorEvents {
+			fmt.Fprintf(&sb, "  - %s (%s): %s\n", e.Reason, e.LastObserved.Format("2006-01-02 15:04"), e.Message)
+		}
+	}
+
+	if len(resource.ParentIDs) > 0 {
+		sb.WriteString("\nParent Resources:\n")
+		for _, parentUID := range resource.ParentIDs {
+			parent := t.store.GetResourceByUID(parentUID)
+			if parent != nil {
+				fmt.Fprintf(&sb, "  - %s/%s (status: %s)\n", parent.Kind, parent.Name, parent.Status)
+			}
+		}
+	}
+
+	return mcplib.NewToolResultText(sb.String()), nil
 }
 
 func (t *mcpTools) getEvents(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {

@@ -148,3 +148,48 @@ func TestGetTree_NotFound(t *testing.T) {
 
 	assert.ErrorContains(t, err, "resource not found")
 }
+
+func TestDiagnoseResource_WithFailures(t *testing.T) {
+	store := mocks.NewKubeStore(t)
+
+	res := &kube.Resource{
+		UID: "ks-uid", Kind: "Kustomization", Name: "my-app", Namespace: "default",
+		Status: kube.StatusFailed,
+		Conditions: []kube.Condition{
+			{Type: "Ready", Status: "False", Reason: "ArtifactFailed", Message: "failed to get artifact"},
+			{Type: "Reconciling", Status: "True", Reason: "Progressing", Message: ""},
+		},
+		Events: []kube.Event{
+			{Reason: "ReconcileFailed", Message: "failed to apply manifests"},
+			{Reason: "ImagePulled", Message: "successfully pulled"},
+		},
+		ParentIDs: []string{"repo-uid"},
+	}
+	parent := &kube.Resource{UID: "repo-uid", Kind: "GitRepository", Name: "flux-system", Status: kube.StatusSuccess}
+	store.On("GetResourceByUID", "ks-uid").Return(res)
+	store.On("GetResourceByUID", "repo-uid").Return(parent)
+
+	tools := &mcpTools{store: store}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{"uid": "ks-uid"}}}
+
+	result, err := tools.diagnoseResource(context.Background(), req)
+
+	require.NoError(t, err)
+	text := result.Content[0].(mcplib.TextContent).Text
+	assert.Contains(t, text, "ArtifactFailed")
+	assert.Contains(t, text, "ReconcileFailed")
+	assert.NotContains(t, text, "ImagePulled")
+	assert.Contains(t, text, "GitRepository/flux-system")
+}
+
+func TestDiagnoseResource_NotFound(t *testing.T) {
+	store := mocks.NewKubeStore(t)
+	store.On("GetResourceByUID", "missing").Return((*kube.Resource)(nil))
+
+	tools := &mcpTools{store: store}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{"uid": "missing"}}}
+
+	_, err := tools.diagnoseResource(context.Background(), req)
+
+	assert.ErrorContains(t, err, "resource not found")
+}
