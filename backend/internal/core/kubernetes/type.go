@@ -32,7 +32,6 @@ type Resource struct {
 	Status                Status                `json:"status"`
 	Conditions            []Condition           `json:"conditions"`
 	Events                []Event               `json:"events"`
-	Children              []Resource            `json:"children"`
 	CreatedAt             time.Time             `json:"createdAt"`
 	DeletedAt             time.Time             `json:"deletedAt"`
 	IsFluxManaged         bool                  `json:"isFluxManaged"`
@@ -79,7 +78,6 @@ func (e *Resource) Copy(other Resource) {
 	e.Status = other.Status
 	e.Conditions = append([]Condition(nil), other.Conditions...)
 
-	e.Children = append([]Resource(nil), other.Children...)
 	e.CreatedAt = other.CreatedAt
 	e.DeletedAt = other.DeletedAt
 	e.IsFluxManaged = other.IsFluxManaged
@@ -175,15 +173,6 @@ func (e *Resource) IsDeepEqual(other Resource) bool {
 			return false
 		}
 	}
-
-	if len(e.Children) != len(other.Children) {
-		return false
-	}
-	/*for i := range e.Children {
-		if !e.Children[i].DeepEqual(other.Children[i]) {
-			return false
-		}
-	}*/
 
 	return true
 }

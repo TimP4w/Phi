@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   FluxResource,
   HelmRelease,
@@ -172,6 +172,7 @@ const ResourceView: React.FC = observer(() => {
   const [statusFilters, setStatusFilters] = useState<ResourceStatus[]>([]);
   const [kindFilters, setKindFilters] = useState<string[]>([]);
   const { nodeUid } = useParams();
+  const navigate = useNavigate();
   const fluxTreeStore = useInjection(FluxTreeStore);
 
   const resource = fluxTreeStore.findResourceByUid(nodeUid ?? "");
@@ -245,9 +246,9 @@ const ResourceView: React.FC = observer(() => {
         {/* Resource identity bar */}
         <div className="flex-shrink-0 px-6 pt-4 pb-3 border-b border-default-100">
           <Breadcrumbs size="sm" className="mb-2">
-            <BreadcrumbItem href="/">Cluster</BreadcrumbItem>
+            <BreadcrumbItem onPress={() => navigate("/")}>Cluster</BreadcrumbItem>
             {fullChain.map((res) => (
-              <BreadcrumbItem key={res.uid} href={`/resource/${res.uid}`}>
+              <BreadcrumbItem key={res.uid} onPress={() => navigate(`/resource/${res.uid}`)}>
                 {res.name}
               </BreadcrumbItem>
             ))}

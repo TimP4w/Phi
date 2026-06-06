@@ -2,7 +2,8 @@ import { observer } from "mobx-react-lite";
 import { HelmRelease, Repository } from "../../../core/fluxTree/models/tree";
 import Widget from "./Widget";
 import Source from "../source/Source";
-import { Link, Skeleton } from "@heroui/react";
+import { Skeleton } from "@heroui/react";
+import { Link } from "react-router-dom";
 import { useInjection } from "inversify-react";
 import { useEffect, useState } from "react";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
@@ -68,7 +69,7 @@ const HelmReleaseSourceWidget: React.FC<HelmReleaseSourceWidgetProps> =
             <span className="font-mono text-xs text-right">
               {repository ? (
                 <Link
-                  href={ROUTES.RESOURCE + `/${repository.uid}`}
+                  to={ROUTES.RESOURCE + `/${repository.uid}`}
                   className="text-white hover:underline"
                 >
                   {resource.metadata?.sourceRef.name}

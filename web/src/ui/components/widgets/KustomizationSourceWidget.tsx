@@ -2,7 +2,8 @@ import { observer } from "mobx-react-lite";
 import { Kustomization, Repository } from "../../../core/fluxTree/models/tree";
 import Widget from "./Widget";
 import Source from "../source/Source";
-import { Link, Skeleton, Tooltip } from "@heroui/react";
+import { Skeleton, Tooltip } from "@heroui/react";
+import { Link } from "react-router-dom";
 import { useInjection } from "inversify-react";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useEffect, useState } from "react";
@@ -75,7 +76,7 @@ const KustomizationSourceWidget: React.FC<KustomizationSourceWidgetProps> =
             <span className="font-mono text-xs text-right">
               {repository ? (
                 <Link
-                  href={ROUTES.RESOURCE + `/${repository.uid}`}
+                  to={ROUTES.RESOURCE + `/${repository.uid}`}
                   className="text-white hover:underline"
                 >
                   {resource.metadata?.sourceRef.name}

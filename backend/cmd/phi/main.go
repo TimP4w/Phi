@@ -10,6 +10,7 @@ import (
 	"context"
 	"flag"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -141,10 +142,14 @@ func createRouter(uc UseCases, realtimeService realtime.RealtimeService, mcpSrv 
 	return r
 }
 
-// corsMiddleware handles CORS headers
+// corsMiddleware handles CORS headers. Allowed origin is controlled by PHI_ALLOWED_ORIGIN (default: *).
 func corsMiddleware(next http.Handler) http.Handler {
+	allowedOrigin := os.Getenv("PHI_ALLOWED_ORIGIN")
+	if allowedOrigin == "" {
+		allowedOrigin = "*"
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Origin, X-Requested-With")
 		if r.Method == "OPTIONS" {

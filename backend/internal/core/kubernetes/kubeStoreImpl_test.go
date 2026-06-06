@@ -22,7 +22,6 @@ func makeResource(uid, name, namespace, kind, version, group string) Resource {
 		Labels:     map[string]string{},
 		Conditions: []Condition{},
 		Events:     []Event{},
-		Children:   []Resource{},
 		ParentRefs: []string{},
 	}
 }

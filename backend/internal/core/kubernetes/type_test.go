@@ -24,7 +24,6 @@ func createSampleResource() Resource {
 		Status:        "Active",
 		Conditions:    []Condition{{Type: "condition1", Status: "True"}},
 		Events:        []Event{{UID: "event-uid", Message: "event-message", LastObserved: time.Now().Add(-1 * time.Hour)}},
-		Children:      []Resource{{Kind: "ChildKind", Name: "child-name", UID: "child-uid"}},
 		CreatedAt:     time.Date(2024, 01, 01, 0, 0, 0, 0, time.UTC),
 		DeletedAt:     time.Date(2024, 02, 01, 0, 0, 0, 0, time.UTC),
 		IsFluxManaged: true,

@@ -2,7 +2,7 @@ import { observer } from "mobx-react-lite";
 import { KubeResource, ResourceStatus } from "../../../core/fluxTree/models/tree";
 import Widget from "./Widget";
 import { Skeleton } from "@heroui/react";
-import { Link } from "@heroui/react";
+import { Link } from "react-router-dom";
 import { useInjection } from "inversify-react";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import AppLogo from "../resource-icon/ResourceIcon";
@@ -50,7 +50,7 @@ const FluxChainWidget: React.FC<FluxChainWidgetProps> = observer(
             {fullChain.map((res) => (
               <div key={res.uid}>
                 <Link
-                  href={`${ROUTES.RESOURCE}/${res.uid}`}
+                  to={`${ROUTES.RESOURCE}/${res.uid}`}
                   className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-default-100 text-white w-full"
                 >
                   <div
