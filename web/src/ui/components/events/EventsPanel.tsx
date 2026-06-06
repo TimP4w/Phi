@@ -33,7 +33,7 @@ const EventsPanel: React.FC<EventsPanelProps> = ({
   return (
     <>
       {/* Filter chip row */}
-      <div className="flex gap-1">
+      <div className="flex-shrink-0 flex gap-1 px-4 py-2 border-b border-default-100">
         {(["all", "Warning", "Normal"] as EventFilter[]).map((f) => (
           <Chip
             key={f}

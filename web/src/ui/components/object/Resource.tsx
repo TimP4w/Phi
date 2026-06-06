@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
-  VizualizationNodeData,
+  VisualizationNodeData,
   ResourceStatus,
   KubeResource,
   FluxResource,
@@ -19,7 +19,7 @@ import { Handle, NodeProps, Position, Node } from "@xyflow/react";
 import { ROUTES } from "../../routes/routes.enum";
 import { Pause } from "lucide-react";
 
-type ResourceProps = NodeProps<Node<VizualizationNodeData>>;
+type ResourceProps = NodeProps<Node<VisualizationNodeData>>;
 
 const borderColorClass = (status: ResourceStatus): string => {
   switch (status) {

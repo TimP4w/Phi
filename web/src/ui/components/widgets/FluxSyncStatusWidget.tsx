@@ -131,8 +131,8 @@ const FluxSyncStatusWidget: React.FC<FluxSyncStatusWidgetProps> = observer(
         {/* Conditions */}
         {resource.conditions.length > 0 && (
           <div className="space-y-1 mb-3">
-            {resource.conditions.map((c, i) => (
-              <Tooltip key={i} content={c.message} className="dark">
+            {resource.conditions.map((c) => (
+              <Tooltip key={c.type} content={c.message} className="dark">
                 <div className="flex items-center justify-between gap-2 px-1 py-0.5 rounded cursor-default hover:bg-default-50">
                   <div className="flex items-center gap-2 min-w-0">
                     <div

@@ -15,7 +15,7 @@ import {
   KubeResource,
   Kustomization,
 } from "../models/tree";
-import { RESOURCE_TYPE } from "../constants/resources.const";
+import { RESOURCE_TYPE, FLUX_NAMESPACE } from "../constants/resources.const";
 import { TreeNodeDto } from "../models/dtos/treeDto";
 
 const APPLICATION_KINDS = new Set([
@@ -55,19 +55,21 @@ function buildTree(resources: Map<string, KubeResource>): Tree {
     }
   });
 
+  // TODO: make this configurable via env
   const root =
     [...resources.values()].find(
       (r) =>
         r.kind === RESOURCE_TYPE.KUSTOMIZATION &&
-        r.name === "flux-system" &&
-        r.namespace === "flux-system",
+        r.name === FLUX_NAMESPACE &&
+        r.namespace === FLUX_NAMESPACE,
     ) ?? new KubeResource();
 
   return new Tree(root);
 }
 
 class FluxTreeStore {
-  // Observable map — MobX tracks reads/writes automatically; no manual reactivity tricks needed.
+  // resources: MobX ObservableMap that holds all cached KubeResources by UID.
+  // MobX automatically tracks reads/writes; computed and actions react to changes.
   resources: ObservableMap<string, KubeResource> = observable.map<string, KubeResource>();
   private _tree: Tree = new Tree(new KubeResource());
   private selectedUid: string | null = null;

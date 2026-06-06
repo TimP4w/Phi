@@ -122,8 +122,8 @@ const App: React.FC<AppProps> = observer(({ node }) => {
       {/* Condition indicators */}
       {node.conditions.length > 0 && (
         <div className="flex flex-wrap gap-x-3 gap-y-1 px-4 pb-3">
-          {node.conditions.slice(0, 4).map((c, i) => (
-            <Tooltip key={i} content={c.message} className="dark">
+          {node.conditions.slice(0, 4).map((c) => (
+            <Tooltip key={c.type} content={c.message} className="dark">
               <div className="flex items-center gap-1.5 cursor-default">
                 <div
                   className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${conditionDotClass(c)}`}

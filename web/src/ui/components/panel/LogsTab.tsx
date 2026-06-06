@@ -80,7 +80,7 @@ export const LogsTab = observer(() => {
       >
         {logs.map((log, i) => (
           <div
-            key={i}
+            key={`${log.timestamp.getTime()}-${i}`}
             className="flex gap-3 hover:bg-white/5 px-1 py-0.5 rounded group leading-5"
           >
             <span className="text-[#6e7681] flex-shrink-0 tabular-nums select-none">

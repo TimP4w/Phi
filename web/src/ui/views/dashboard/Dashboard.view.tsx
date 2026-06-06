@@ -7,7 +7,7 @@ import { useInjection } from "inversify-react";
 import { FluxResource, ResourceStatus } from "../../../core/fluxTree/models/tree";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import { Chip, Input } from "@heroui/react";
-import App from "../../components/flux-resource-card/FluxResourceCard";
+import FluxResourceCard from "../../components/flux-resource-card/FluxResourceCard";
 import FluxControllersWidget from "../../components/widgets/FluxControllersWidget";
 import FluxApplicationsWidget from "../../components/widgets/FluxApplicationsWidget";
 import FluxKindsWidget from "../../components/widgets/FluxKindsWidget";
@@ -16,10 +16,8 @@ import Header from "../../components/layout/Header";
 import { SiFlux } from "@icons-pack/react-simple-icons";
 import ResourceCountWidget from "../../components/widgets/ResourcesCountWidget";
 import { EventsStore } from "../../../core/fluxTree/stores/events.store";
-import { ROUTES } from "../../routes/routes.enum";
-import { Link } from "react-router-dom";
-import { format } from "date-fns";
-import { Bell, BellOff, Search, X } from "lucide-react";
+import { Bell, Search, X } from "lucide-react";
+import EventsPanel, { EventFilter } from "../../components/events/EventsPanel";
 
 const kindsFilter = [
   {
@@ -117,8 +115,6 @@ enum APP_FILTER {
   SUSPEND,
 }
 
-type EventFilter = "all" | "Warning" | "Normal";
-
 const AppsView: React.FC = observer(() => {
   const fluxTreeStore = useInjection(FluxTreeStore);
   const eventsStore = useInjection(EventsStore);
@@ -174,30 +170,28 @@ const AppsView: React.FC = observer(() => {
   };
 
   const filterFunction = (resource: FluxResource) => {
-    const kindFiltersFuncs = kindsFilter
-      .filter((f) => selectedKindsToFilter.includes(f.key))
-      .map((f) => f.filter);
-    const statusFiltersFuncs = statusFilter
-      .filter((f) => selectedStatusesToFilter.includes(f.key))
-      .map((f) => f.filter);
-    const suspendFiltersFuncs = suspendedFilter
-      .filter((f) => selectedSuspendStatusesToFilter.includes(f.key))
-      .map((f) => f.filter);
+    // Search: must match if search value is set
+    if (searchValue && !resource.name.toLowerCase().includes(searchValue.toLowerCase())) return false;
 
-    const allFilters = [kindFiltersFuncs, statusFiltersFuncs, suspendFiltersFuncs];
-    const isMatchingSearch = resource.name
-      .toLowerCase()
-      .includes(searchValue.toLowerCase());
+    // Kinds: if any kinds selected, resource must match at least one (OR within group)
+    if (selectedKindsToFilter.length > 0) {
+      const ok = kindsFilter.some(f => selectedKindsToFilter.includes(f.key) && f.filter(resource));
+      if (!ok) return false;
+    }
 
-    return (
-      allFilters
-        .filter((filters) => filters.length > 0)
-        .map((filters) => filters.reduce((a, b) => (x) => a(x) || b(x)))
-        .reduce(
-          (a, b) => (x) => a(x) && b(x),
-          () => true
-        )(resource) && isMatchingSearch
-    );
+    // Statuses: if any statuses selected, resource must match at least one (OR within group)
+    if (selectedStatusesToFilter.length > 0) {
+      const ok = statusFilter.some(f => selectedStatusesToFilter.includes(f.key) && f.filter(resource));
+      if (!ok) return false;
+    }
+
+    // Suspend status: if any suspend statuses selected, resource must match at least one (OR within group)
+    if (selectedSuspendStatusesToFilter.length > 0) {
+      const ok = suspendedFilter.some(f => selectedSuspendStatusesToFilter.includes(f.key) && f.filter(resource));
+      if (!ok) return false;
+    }
+
+    return true;
   };
 
   const filtered = [
@@ -360,7 +354,7 @@ const AppsView: React.FC = observer(() => {
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-8">
               {filtered.length > 0 ? (
                 filtered.map((resource) => (
-                  <App key={resource.uid} node={resource} />
+                  <FluxResourceCard key={resource.uid} node={resource} />
                 ))
               ) : (
                 <div className="col-span-full text-center text-default-400 text-sm py-16">
@@ -386,75 +380,22 @@ const AppsView: React.FC = observer(() => {
                 {warningCount}
               </Chip>
             )}
-            <div className="ml-auto flex items-center gap-1">
-              {(["all", "Warning", "Normal"] as EventFilter[]).map((f) => (
-                <Chip
-                  key={f}
-                  size="sm"
-                  variant={eventFilter === f ? "solid" : "flat"}
-                  color={eventFilter === f && f === "Warning" ? "warning" : "default"}
-                  className="cursor-pointer select-none"
-                  onClick={() => setEventFilter(f)}
-                >
-                  {f === "all" ? "All" : f}
-                </Chip>
-              ))}
-              <button
-                className="ml-1 p-1 rounded-md text-default-400 hover:text-foreground hover:bg-content2 transition-colors"
-                onClick={() => setEventSidebarOpen(false)}
-                aria-label="Close events sidebar"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            <button
+              className="ml-auto p-1 rounded-md text-default-400 hover:text-foreground hover:bg-content2 transition-colors"
+              onClick={() => setEventSidebarOpen(false)}
+              aria-label="Close events sidebar"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </div>
 
-          {/* Event list */}
           {eventSidebarOpen && (
-            <div className="flex-1 overflow-y-auto">
-              {displayedEvents.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full gap-2 text-default-400">
-                  <BellOff className="w-8 h-8 opacity-30" />
-                  <span className="text-sm">No events</span>
-                </div>
-              ) : (
-                <div className="divide-y divide-default-100">
-                  {displayedEvents.map((event, i) => (
-                    <div
-                      key={`${event.uid}_${i}`}
-                      className={`px-4 py-2.5 hover:bg-content2 transition-colors ${
-                        event.type === "Warning" ? "bg-warning/[0.04]" : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <div
-                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                            event.type === "Warning" ? "bg-warning" : "bg-primary"
-                          }`}
-                        />
-                        <span className="text-xs font-medium flex-1 min-w-0 truncate">
-                          {event.reason}
-                        </span>
-                        <span className="text-xs text-default-500 flex-shrink-0 tabular-nums">
-                          {format(event.lastObserved, "HH:mm:ss")}
-                        </span>
-                      </div>
-                      <p className="text-xs text-default-400 line-clamp-2 pl-3.5 leading-relaxed">
-                        {event.message}
-                      </p>
-                      <div className="pl-3.5 mt-1">
-                        <Link
-                          to={`${ROUTES.RESOURCE}/${event.resourceUID}`}
-                          className="text-xs font-mono text-default-500 hover:text-foreground transition-colors truncate block"
-                        >
-                          {event.kind}/{event.name}
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <EventsPanel
+              events={displayedEvents}
+              filter={eventFilter}
+              onFilterChange={setEventFilter}
+              linkLabel={(event) => `${event.kind}/${event.name}`}
+            />
           )}
         </aside>
       </div>

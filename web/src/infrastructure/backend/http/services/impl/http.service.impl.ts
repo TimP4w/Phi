@@ -1,6 +1,7 @@
 import { injectable } from 'inversify';
 import { HttpService } from "../../../../../core/http/services/http.service";
 import { env } from "../../../../../core/shared/env";
+import logger from "../../../../../core/shared/logger";
 
 function isEmptyBody(response: Response): boolean {
   return response.status === 204 || response.headers.get("Content-Length") === "0";
@@ -22,7 +23,7 @@ class HttpServiceImpl implements HttpService {
       }
       return response.json();
     } catch (error) {
-      console.error(`Failed to fetch data from ${url}`, error);
+      logger.error(`Failed to fetch data from ${url}`, error);
       throw error;
     }
 
@@ -42,7 +43,7 @@ class HttpServiceImpl implements HttpService {
         throw new Error(`Expected YAML response from ${url}, but got ${contentType}`);
       }
     } catch (error) {
-      console.error(`Failed to fetch data from ${url}`, error);
+      logger.error(`Failed to fetch data from ${url}`, error);
       throw error;
     }
 
@@ -66,7 +67,7 @@ class HttpServiceImpl implements HttpService {
       }
       return response.json();
     } catch (error) {
-      console.error(`Failed to send POST request to ${url}`, error);
+      logger.error(`Failed to send POST request to ${url}`, error);
       throw error;
     }
   }
@@ -89,7 +90,7 @@ class HttpServiceImpl implements HttpService {
       }
       return response.json();
     } catch (error) {
-      console.error(`Failed to send PATCH request to ${url}`, error);
+      logger.error(`Failed to send PATCH request to ${url}`, error);
       throw error;
     }
   }

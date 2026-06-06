@@ -65,7 +65,7 @@ export class KubeResource {
   events: KubeEvent[] = [];
   logs: PodLog[] = [];
   isFluxManaged: boolean = false;
-  isReconcillable: boolean = false;
+  isReconcilable: boolean = false;
 
   constructor();
   constructor(dto: TreeNodeDto);
@@ -143,7 +143,7 @@ export class KubeResource {
 }
 
 export abstract class FluxResource extends KubeResource {
-  isReconcillable: boolean = true;
+  isReconcilable: boolean = true;
   lastHandledReconcileAt?: Date;
   isReconciling: boolean;
   isSuspended: boolean;
@@ -175,7 +175,6 @@ export class HelmRelease extends FluxResource {
 }
 export class Kustomization extends FluxResource {
   metadata: KustomizationMetadata | null;
-  isReconcillable: boolean = true;
   constructor(dto: TreeNodeDto) {
     super(dto);
     this.metadata = dto.kustomizationMetadata
@@ -194,7 +193,6 @@ export class Kustomization extends FluxResource {
 
 export class HelmChart extends FluxResource {
   metadata: HelmChartMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
@@ -204,7 +202,6 @@ export class HelmChart extends FluxResource {
 
 export class HelmRepository extends FluxResource {
   metadata: HelmRepositoryMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
@@ -216,7 +213,6 @@ export class HelmRepository extends FluxResource {
 
 export class GitRepository extends FluxResource implements Repository {
   metadata: GitRepositoryMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
@@ -256,7 +252,6 @@ export class GitRepository extends FluxResource implements Repository {
 
 export class OCIRepository extends FluxResource implements Repository {
   metadata: OCIRepositoryMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
@@ -437,4 +432,4 @@ function stringToResourceStatus(status: string): ResourceStatus {
   return ResourceStatus.UNKNOWN;
 }
 
-export type VizualizationNodeData = Record<"treeNode", KubeResource>;
+export type VisualizationNodeData = Record<"treeNode", KubeResource>;

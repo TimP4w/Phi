@@ -11,7 +11,7 @@ import {
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
 import {
   KubeResource,
-  VizualizationNodeData,
+  VisualizationNodeData,
 } from "../../../core/fluxTree/models/tree";
 import { LayoutTreeUseCase } from "../../../core/fluxTree/usecases/LayoutTree.usecase";
 import { useInjection } from "inversify-react";
@@ -35,9 +35,9 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
   treeSize,
 }: ConnectedGraphProps) => {
   const layoutTreeUseCase = useInjection<LayoutTreeUseCase>(TYPES.LayoutTreeUseCase);
-  const [rawNodes, setRawNodes] = useState<Node<VizualizationNodeData>[]>([]);
+  const [rawNodes, setRawNodes] = useState<Node<VisualizationNodeData>[]>([]);
   const [rawEdges, setRawEdges] = useState<Edge[]>([]);
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node<VizualizationNodeData>>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<VisualizationNodeData>>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   const { fitView } = useReactFlow();
