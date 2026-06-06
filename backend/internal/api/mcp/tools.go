@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
+	"github.com/xlab/treeprint"
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	kubernetesusecases "github.com/timp4w/phi/internal/core/kubernetes/usecases"
 	shared "github.com/timp4w/phi/internal/core/shared"
@@ -106,8 +107,29 @@ func (t *mcpTools) getResource(_ context.Context, req mcplib.CallToolRequest) (*
 	return mcplib.NewToolResultText(sb.String()), nil
 }
 
-func (t *mcpTools) getTree(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
-	return mcplib.NewToolResultText("not implemented"), nil
+func (t *mcpTools) getTree(_ context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+	uid := getStringArg(req.GetArguments(), "uid")
+	if uid == "" {
+		return nil, fmt.Errorf("uid is required")
+	}
+
+	resource := t.store.GetResourceByUID(uid)
+	if resource == nil {
+		return nil, fmt.Errorf("resource not found: %s", uid)
+	}
+
+	tree := treeprint.New()
+	tree.SetValue(fmt.Sprintf("%s/%s (%s)", resource.Kind, resource.Name, resource.Status))
+	addChildrenToTree(tree, resource.Children)
+
+	return mcplib.NewToolResultText(tree.String()), nil
+}
+
+func addChildrenToTree(node treeprint.Tree, children []kube.Resource) {
+	for _, child := range children {
+		branch := node.AddBranch(fmt.Sprintf("%s/%s (%s)", child.Kind, child.Name, child.Status))
+		addChildrenToTree(branch, child.Children)
+	}
 }
 
 func (t *mcpTools) diagnoseResource(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
