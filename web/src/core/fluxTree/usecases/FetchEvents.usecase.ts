@@ -1,15 +1,19 @@
-import { container } from "../../shared/inversify.config";
+import { inject, injectable } from "inversify";
 import { TYPES } from "../../shared/types";
 import UseCase from "../../shared/usecase";
-import { TreeService } from "../services/tree.service";
+import type { TreeService } from "../services/tree.service";
 import { KubeEvent } from "../models/kubeEvent";
 import { EventsStore } from "../stores/events.store";
 import { addToast } from "@heroui/react";
 
+@injectable()
 export class FetchEventsUseCase extends UseCase<void, Promise<KubeEvent[]>> {
-
-  private readonly eventsStore = container.get<EventsStore>(EventsStore);
-  private readonly treeService = container.get<TreeService>(TYPES.TreeService);
+  constructor(
+    @inject(EventsStore) private readonly eventsStore: EventsStore,
+    @inject(TYPES.TreeService) private readonly treeService: TreeService,
+  ) {
+    super();
+  }
 
   public async execute(): Promise<KubeEvent[]> {
     try {
@@ -26,5 +30,3 @@ export class FetchEventsUseCase extends UseCase<void, Promise<KubeEvent[]>> {
     }
   }
 }
-
-export const fetchEventsUseCase = new FetchEventsUseCase();

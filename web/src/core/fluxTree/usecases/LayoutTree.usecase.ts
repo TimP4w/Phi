@@ -1,5 +1,5 @@
 import { Edge, Node } from "@xyflow/react";
-import { container } from "../../shared/inversify.config";
+import { inject, injectable } from "inversify";
 import UseCase from "../../shared/usecase";
 import { FluxTreeStore } from "../stores/fluxTree.store";
 import ELK, { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk.bundled.js";
@@ -9,8 +9,8 @@ import { VizualizationNodeData } from "../models/tree";
 type Output = { nodes: Node<VizualizationNodeData>[]; edges: Edge[] };
 type Input = { nodeId: string };
 
+@injectable()
 export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
-  private fluxTreeStore = container.get<FluxTreeStore>(FluxTreeStore);
   private elk = new ELK();
   private elkOptions = {
     "elk.algorithm": "mrtree",
@@ -20,6 +20,10 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
     "elk.searchOrder": "DFS",
     "elk.topDownLayout": "true",
   };
+
+  constructor(@inject(FluxTreeStore) private fluxTreeStore: FluxTreeStore) {
+    super();
+  }
 
   public execute(input: Input): Promise<Output> {
     const { nodes, edges } = this.buildNodesAndEdges(input.nodeId);
@@ -150,5 +154,3 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
     return { nodes, edges };
   }
 }
-
-export const layoutTreeUseCase = new LayoutTreeUseCase();

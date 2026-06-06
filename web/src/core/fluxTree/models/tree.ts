@@ -9,40 +9,6 @@ export class Tree {
     this.root = root;
   }
 
-  public getApplicationResources(): FluxResource[] {
-    const applications: KubeResource[] = [];
-    const applicationKinds: string[] = [
-      RESOURCE_TYPE.KUSTOMIZATION,
-      RESOURCE_TYPE.HELM_RELEASE,
-      RESOURCE_TYPE.HELM_CHART,
-    ].map((kind) => kind.toString());
-    this.traverse(this.root, (node) => {
-      if (applicationKinds.includes(node.kind)) {
-        applications.push(node);
-      }
-      return false;
-    });
-
-    return applications as FluxResource[];
-  }
-
-  public getRepositories(): Repository[] {
-    const repositories: Repository[] = [];
-    const repositoryKinds: string[] = [
-      RESOURCE_TYPE.OCI_REPOSITORY,
-      RESOURCE_TYPE.HELM_REPOSITORY,
-      RESOURCE_TYPE.GIT_REPOSITORY,
-      RESOURCE_TYPE.BUCKET,
-    ].map((kind) => kind.toString());
-    this.traverse(this.root, (node) => {
-      if (repositoryKinds.includes(node.kind)) {
-        repositories.push(node as Repository);
-      }
-      return false;
-    });
-    return repositories;
-  }
-
   public getFluxControllersDeployments(): Deployment[] {
     const result: Deployment[] = [];
     this.root.children.forEach((child) => {

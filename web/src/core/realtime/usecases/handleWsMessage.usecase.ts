@@ -1,6 +1,6 @@
 import { REALTIME_CONST } from "../constants/realtime.const";
 import { Message } from "../models/message";
-import { container } from "../../shared/inversify.config";
+import { inject, injectable } from "inversify";
 import UseCase from "../../shared/usecase";
 import { PodLog } from "../../fluxTree/models/tree";
 import { LogMessageDto, ResourcePatchDto, ResourceSyncDto, TreeNodeDto } from "../../fluxTree/models/dtos/treeDto";
@@ -47,9 +47,14 @@ const FLUX_REASON_COLOR: Record<string, "primary" | "success" | "warning" | "dan
   URLInvalid: "danger",
 };
 
+@injectable()
 export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
-  private fluxTreeStore = container.get<FluxTreeStore>(FluxTreeStore);
-  private eventsStore = container.get<EventsStore>(EventsStore);
+  constructor(
+    @inject(FluxTreeStore) private fluxTreeStore: FluxTreeStore,
+    @inject(EventsStore) private eventsStore: EventsStore,
+  ) {
+    super();
+  }
 
   public execute(message: Message): Promise<void> {
     switch (message.type) {
@@ -107,5 +112,3 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
     this.eventsStore.addEvent(new KubeEvent(event));
   }
 }
-
-export const handleWsMessage = new HandleWsMessageUseCase();

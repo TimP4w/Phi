@@ -1,14 +1,16 @@
-import { container } from "../../shared/inversify.config";
+import { inject, injectable } from "inversify";
 import { TYPES } from "../../shared/types";
 import UseCase from "../../shared/usecase";
-import { WebSocketService } from "../../realtime/services/webSocket.service";
+import type { WebSocketService } from "../../realtime/services/webSocket.service";
 import { REALTIME_CONST } from "../../realtime/constants/realtime.const";
 import { KubeResource } from "../../fluxTree/models/tree";
 import { RESOURCE_TYPE } from "../../fluxTree/constants/resources.const";
 
+@injectable()
 export class WatchLogsUseCase extends UseCase<KubeResource, Promise<void>> {
-
-  private readonly realtimeService = container.get<WebSocketService>(TYPES.WebSocket);
+  constructor(@inject(TYPES.WebSocket) private readonly realtimeService: WebSocketService) {
+    super();
+  }
 
   public async execute(node: KubeResource): Promise<void> {
     if (!node) {
@@ -23,5 +25,3 @@ export class WatchLogsUseCase extends UseCase<KubeResource, Promise<void>> {
     });
   }
 }
-
-export const watchLogsUseCase = new WatchLogsUseCase();

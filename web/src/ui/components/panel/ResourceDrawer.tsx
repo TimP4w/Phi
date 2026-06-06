@@ -8,8 +8,8 @@ import { LogsTab } from "./LogsTab";
 import { useEffect, useState } from "react";
 import { useInjection } from "inversify-react";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
-import { describeNodeUseCase } from "../../../core/resource/usecases/describeNode.usecase";
-import { watchLogsUseCase } from "../../../core/resource/usecases/watchLogs.usecase";
+import { DescribeNodeUseCase } from "../../../core/resource/usecases/describeNode.usecase";
+import { WatchLogsUseCase } from "../../../core/resource/usecases/watchLogs.usecase";
 import { WebSocketService } from "../../../core/realtime/services/webSocket.service";
 import { TYPES } from "../../../core/shared/types";
 import StatusChip from "../status-chip/StatusChip";
@@ -25,6 +25,8 @@ type TabKey = "info" | "describe" | "logs";
 function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
   const fluxTreeStore = useInjection(FluxTreeStore);
   const realtimeService = useInjection<WebSocketService>(TYPES.WebSocket);
+  const describeNodeUseCase = useInjection<DescribeNodeUseCase>(TYPES.DescribeNodeUseCase);
+  const watchLogsUseCase = useInjection<WatchLogsUseCase>(TYPES.WatchLogsUseCase);
   const [selectedNodeDescribe, setSelectedNodeDescribe] = useState<string>("");
   const [isLoadingDescribe, setIsLoadingDescribe] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
@@ -48,7 +50,7 @@ function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
           .finally(() => setIsLoadingDescribe(false));
       }
     }
-  }, [isOpen, fluxTreeStore, realtimeService, node]);
+  }, [isOpen, fluxTreeStore, realtimeService, node, watchLogsUseCase, describeNodeUseCase]);
 
   const isPod = node?.kind === RESOURCE_TYPE.POD;
 

@@ -1,14 +1,11 @@
-import { injectable } from 'inversify';
-import { ResourceService } from '../resource.service';
-import { HttpService } from '../../../http/services/http.service';
-import { container } from '../../../shared/inversify.config';
+import { inject, injectable } from 'inversify';
+import type { ResourceService } from '../resource.service';
+import type { HttpService } from '../../../http/services/http.service';
 import { TYPES } from '../../../shared/types';
 
 @injectable()
 class ResourceServiceImpl implements ResourceService {
-  private readonly httpService: HttpService = container.get<HttpService>(TYPES.Http);
-
-  constructor() { }
+  constructor(@inject(TYPES.Http) private readonly httpService: HttpService) {}
 
   async describe(uid: string): Promise<string> {
     return await this.httpService.getYAML(`/api/resource/${uid}/describe`);

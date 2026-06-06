@@ -1,10 +1,6 @@
-import 'reflect-metadata';
-
 import { makeAutoObservable } from "mobx";
-import { injectable } from 'inversify';
 import { KubeEvent } from '../models/kubeEvent';
 
-@injectable()
 class EventsStore {
   events: KubeEvent[] = [];
   isPanelOpen = false;

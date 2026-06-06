@@ -13,7 +13,9 @@ import {
   KubeResource,
   VizualizationNodeData,
 } from "../../../core/fluxTree/models/tree";
-import { layoutTreeUseCase } from "../../../core/fluxTree/usecases/LayoutTree.usecase";
+import { LayoutTreeUseCase } from "../../../core/fluxTree/usecases/LayoutTree.usecase";
+import { useInjection } from "inversify-react";
+import { TYPES } from "../../../core/shared/types";
 import Deployment from "../object/Deployment";
 import Pod from "../object/Pod";
 import Resource from "../object/Resource";
@@ -32,6 +34,7 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
   filter,
   treeSize,
 }: ConnectedGraphProps) => {
+  const layoutTreeUseCase = useInjection<LayoutTreeUseCase>(TYPES.LayoutTreeUseCase);
   const [rawNodes, setRawNodes] = useState<Node<VizualizationNodeData>[]>([]);
   const [rawEdges, setRawEdges] = useState<Edge[]>([]);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<VizualizationNodeData>>([]);
@@ -82,7 +85,7 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
           isLayingOut.current = false;
         });
     }
-  }, [shouldLayout, rootResource]);
+  }, [shouldLayout, rootResource, layoutTreeUseCase]);
 
   // Re-layout when the store's resource count changes (driven by incremental patches).
   // Throttled: fires at most once per LAYOUT_MAX_WAIT ms so a sustained burst of
@@ -181,7 +184,7 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
     });
 
     return () => { cancelled = true; };
-  }, [rawNodes, rawEdges, filter, rootResource, setNodes, setEdges, fitView]);
+  }, [rawNodes, rawEdges, filter, rootResource, setNodes, setEdges, fitView, layoutTreeUseCase]);
 
   return (
     <ReactFlow
