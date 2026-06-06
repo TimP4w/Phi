@@ -2,6 +2,8 @@ package mcp
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
@@ -28,8 +30,35 @@ func getStringArg(args map[string]interface{}, key string) string {
 	return ""
 }
 
-func (t *mcpTools) listResources(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
-	return mcplib.NewToolResultText("not implemented"), nil
+func (t *mcpTools) listResources(_ context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+	args := req.GetArguments()
+	nsFilter := getStringArg(args, "namespace")
+	kindFilter := getStringArg(args, "kind")
+	statusFilter := getStringArg(args, "status")
+
+	resources := t.store.GetResources()
+
+	var sb strings.Builder
+	count := 0
+	for _, r := range resources {
+		if nsFilter != "" && r.Namespace != nsFilter {
+			continue
+		}
+		if kindFilter != "" && !strings.EqualFold(r.Kind, kindFilter) {
+			continue
+		}
+		if statusFilter != "" && !strings.EqualFold(string(r.Status), statusFilter) {
+			continue
+		}
+		fmt.Fprintf(&sb, "%s/%s (namespace: %s, status: %s, flux: %v)\n",
+			r.Kind, r.Name, r.Namespace, r.Status, r.IsFluxManaged)
+		count++
+	}
+
+	if count == 0 {
+		return mcplib.NewToolResultText("No resources found matching the given filters."), nil
+	}
+	return mcplib.NewToolResultText(fmt.Sprintf("Found %d resource(s):\n\n%s", count, sb.String())), nil
 }
 
 func (t *mcpTools) getResource(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
