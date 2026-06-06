@@ -278,3 +278,49 @@ func TestReconcileResource_MissingUID(t *testing.T) {
 
 	assert.ErrorContains(t, err, "uid is required")
 }
+
+func TestSuspendResource_Success(t *testing.T) {
+	suspendUC := mocks.NewUseCase[kubernetesusecases.SuspendUseCaseInput, struct{}](t)
+	suspendUC.On("Execute", kubernetesusecases.SuspendUseCaseInput{UID: "ks-uid"}).
+		Return(struct{}{}, nil)
+
+	tools := &mcpTools{suspendUC: suspendUC}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{"uid": "ks-uid"}}}
+
+	result, err := tools.suspendResource(context.Background(), req)
+
+	require.NoError(t, err)
+	assert.Contains(t, result.Content[0].(mcplib.TextContent).Text, "suspended")
+}
+
+func TestSuspendResource_MissingUID(t *testing.T) {
+	tools := &mcpTools{}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{}}}
+
+	_, err := tools.suspendResource(context.Background(), req)
+
+	assert.ErrorContains(t, err, "uid is required")
+}
+
+func TestResumeResource_Success(t *testing.T) {
+	resumeUC := mocks.NewUseCase[kubernetesusecases.ResumeUseCaseInput, struct{}](t)
+	resumeUC.On("Execute", kubernetesusecases.ResumeUseCaseInput{UID: "ks-uid"}).
+		Return(struct{}{}, nil)
+
+	tools := &mcpTools{resumeUC: resumeUC}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{"uid": "ks-uid"}}}
+
+	result, err := tools.resumeResource(context.Background(), req)
+
+	require.NoError(t, err)
+	assert.Contains(t, result.Content[0].(mcplib.TextContent).Text, "resumed")
+}
+
+func TestResumeResource_MissingUID(t *testing.T) {
+	tools := &mcpTools{}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{}}}
+
+	_, err := tools.resumeResource(context.Background(), req)
+
+	assert.ErrorContains(t, err, "uid is required")
+}

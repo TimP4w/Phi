@@ -233,10 +233,30 @@ func (t *mcpTools) reconcileResource(_ context.Context, req mcplib.CallToolReque
 	return mcplib.NewToolResultText(fmt.Sprintf("reconciliation triggered for resource %s", uid)), nil
 }
 
-func (t *mcpTools) suspendResource(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
-	return mcplib.NewToolResultText("not implemented"), nil
+func (t *mcpTools) suspendResource(_ context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+	uid := getStringArg(req.GetArguments(), "uid")
+	if uid == "" {
+		return nil, fmt.Errorf("uid is required")
+	}
+
+	_, err := t.suspendUC.Execute(kubernetesusecases.SuspendUseCaseInput{UID: uid})
+	if err != nil {
+		return nil, err
+	}
+
+	return mcplib.NewToolResultText(fmt.Sprintf("resource %s suspended", uid)), nil
 }
 
-func (t *mcpTools) resumeResource(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
-	return mcplib.NewToolResultText("not implemented"), nil
+func (t *mcpTools) resumeResource(_ context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+	uid := getStringArg(req.GetArguments(), "uid")
+	if uid == "" {
+		return nil, fmt.Errorf("uid is required")
+	}
+
+	_, err := t.resumeUC.Execute(kubernetesusecases.ResumeUseCaseInput{UID: uid})
+	if err != nil {
+		return nil, err
+	}
+
+	return mcplib.NewToolResultText(fmt.Sprintf("resource %s resumed", uid)), nil
 }
