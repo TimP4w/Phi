@@ -220,7 +220,17 @@ func (t *mcpTools) getEvents(_ context.Context, req mcplib.CallToolRequest) (*mc
 }
 
 func (t *mcpTools) reconcileResource(_ context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
-	return mcplib.NewToolResultText("not implemented"), nil
+	uid := getStringArg(req.GetArguments(), "uid")
+	if uid == "" {
+		return nil, fmt.Errorf("uid is required")
+	}
+
+	_, err := t.reconcileUC.Execute(kubernetesusecases.ReconcileInput{ResourceUid: uid})
+	if err != nil {
+		return nil, err
+	}
+
+	return mcplib.NewToolResultText(fmt.Sprintf("reconciliation triggered for resource %s", uid)), nil
 }
 
 func (t *mcpTools) suspendResource(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {

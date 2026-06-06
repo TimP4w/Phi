@@ -242,3 +242,39 @@ func TestGetEvents_ServiceError(t *testing.T) {
 
 	assert.ErrorContains(t, err, "failed to get events")
 }
+
+func TestReconcileResource_Success(t *testing.T) {
+	reconcileUC := mocks.NewUseCase[kubernetesusecases.ReconcileInput, struct{}](t)
+	reconcileUC.On("Execute", kubernetesusecases.ReconcileInput{ResourceUid: "ks-uid"}).
+		Return(struct{}{}, nil)
+
+	tools := &mcpTools{reconcileUC: reconcileUC}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{"uid": "ks-uid"}}}
+
+	result, err := tools.reconcileResource(context.Background(), req)
+
+	require.NoError(t, err)
+	assert.Contains(t, result.Content[0].(mcplib.TextContent).Text, "reconciliation triggered")
+}
+
+func TestReconcileResource_NotFound(t *testing.T) {
+	reconcileUC := mocks.NewUseCase[kubernetesusecases.ReconcileInput, struct{}](t)
+	reconcileUC.On("Execute", kubernetesusecases.ReconcileInput{ResourceUid: "missing"}).
+		Return(struct{}{}, fmt.Errorf("resource with uid missing not found"))
+
+	tools := &mcpTools{reconcileUC: reconcileUC}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{"uid": "missing"}}}
+
+	_, err := tools.reconcileResource(context.Background(), req)
+
+	assert.ErrorContains(t, err, "not found")
+}
+
+func TestReconcileResource_MissingUID(t *testing.T) {
+	tools := &mcpTools{}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{}}}
+
+	_, err := tools.reconcileResource(context.Background(), req)
+
+	assert.ErrorContains(t, err, "uid is required")
+}
