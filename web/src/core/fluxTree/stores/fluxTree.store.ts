@@ -1,13 +1,11 @@
-import "reflect-metadata";
-
 import {
   makeObservable,
   observable,
   computed,
   action,
   runInAction,
+  ObservableMap,
 } from "mobx";
-import { injectable } from "inversify";
 import {
   FluxResource,
   PodLog,
@@ -17,7 +15,7 @@ import {
   KubeResource,
   Kustomization,
 } from "../models/tree";
-import { RESOURCE_TYPE } from "../constants/resources.const";
+import { RESOURCE_TYPE, FLUX_NAMESPACE } from "../constants/resources.const";
 import { TreeNodeDto } from "../models/dtos/treeDto";
 
 const APPLICATION_KINDS = new Set([
@@ -57,28 +55,30 @@ function buildTree(resources: Map<string, KubeResource>): Tree {
     }
   });
 
+  // TODO: make this configurable via env
   const root =
     [...resources.values()].find(
       (r) =>
         r.kind === RESOURCE_TYPE.KUSTOMIZATION &&
-        r.name === "flux-system" &&
-        r.namespace === "flux-system",
+        r.name === FLUX_NAMESPACE &&
+        r.namespace === FLUX_NAMESPACE,
     ) ?? new KubeResource();
 
   return new Tree(root);
 }
 
-@injectable()
 class FluxTreeStore {
-  // Plain map — not observable. Mutations happen inside actions, reactivity via _tree.
-  resources: Map<string, KubeResource> = new Map();
+  // resources: MobX ObservableMap that holds all cached KubeResources by UID.
+  // MobX automatically tracks reads/writes; computed and actions react to changes.
+  resources: ObservableMap<string, KubeResource> = observable.map<string, KubeResource>();
   private _tree: Tree = new Tree(new KubeResource());
-  selectedResource: KubeResource | null = null;
+  private selectedUid: string | null = null;
 
   constructor() {
-    makeObservable<FluxTreeStore, "_tree">(this, {
+    makeObservable<FluxTreeStore, "_tree" | "selectedUid">(this, {
       _tree: observable.ref,
-      selectedResource: observable,
+      selectedUid: observable,
+      selectedResource: computed,
       tree: computed,
       applications: computed,
       repositories: computed,
@@ -91,12 +91,15 @@ class FluxTreeStore {
     });
   }
 
+  get selectedResource(): KubeResource | null {
+    return this.selectedUid ? (this.resources.get(this.selectedUid) ?? null) : null;
+  }
+
   get tree(): Tree {
     return this._tree;
   }
 
   get resourceCount(): number {
-    void this._tree;
     return this.resources.size;
   }
 
@@ -134,10 +137,9 @@ class FluxTreeStore {
     this._tree = buildTree(this.resources);
   }
 
-  // --- computed getters (depend on _tree for reactivity, read resources directly) ---
+  // --- computed getters ---
 
   get applications(): FluxResource[] {
-    void this._tree;
     const result: FluxResource[] = [];
     this.resources.forEach((r) => {
       if (APPLICATION_KINDS.has(r.kind as RESOURCE_TYPE))
@@ -147,7 +149,6 @@ class FluxTreeStore {
   }
 
   get repositories(): Repository[] {
-    void this._tree;
     const result: Repository[] = [];
     this.resources.forEach((r) => {
       if (REPOSITORY_KINDS.has(r.kind as RESOURCE_TYPE))
@@ -156,10 +157,9 @@ class FluxTreeStore {
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // --- lookup helpers (access _tree so observer components re-run when tree changes) ---
+  // --- lookup helpers ---
 
   findResourceByUid(uid: string): KubeResource | undefined {
-    void this._tree;
     return this.resources.get(uid);
   }
 
@@ -185,20 +185,15 @@ class FluxTreeStore {
     if (!uid) return [];
     const path: KubeResource[] = [];
     const visited = new Set<string>([uid]);
-    let currentUid: string = uid;
-
-    while (true) {
-      const current = this.resources.get(currentUid);
-      if (!current) break;
+    let current = this.resources.get(uid);
+    while (current) {
       const parentId = current.parentIDs[0];
-      if (!parentId) break;
-      if (visited.has(parentId)) {
-        break;
-      }
+      if (!parentId || visited.has(parentId)) break;
       visited.add(parentId);
-      currentUid = parentId;
       const parent = this.resources.get(parentId);
+      if (!parent) break;
       if (parent instanceof FluxResource) path.unshift(parent);
+      current = parent;
     }
     return path;
   }
@@ -217,15 +212,18 @@ class FluxTreeStore {
   }
 
   setSelectedResource(resource: KubeResource | null) {
-    this.selectedResource = resource;
+    this.selectedUid = resource?.uid ?? null;
   }
 
   appendLog(log: PodLog) {
-    if (!this.selectedResource) return;
-    const newResource = { ...this.selectedResource };
-    newResource.logs.unshift(log);
-    this.selectedResource = newResource;
+    const resource = this.selectedUid ? this.resources.get(this.selectedUid) : undefined;
+    if (!resource) return;
+    resource.logs.push(log);
+    // Create a new Tree instance to trigger observable.ref reactivity
+    this._tree = new Tree(this._tree.root);
   }
 }
 
 export { FluxTreeStore };
+
+export const fluxTreeStore = new FluxTreeStore();

@@ -40,8 +40,7 @@ func (uc *SuspendUseCase) Execute(input SuspendUseCaseInput) (struct{}, error) {
 		return struct{}{}, fmt.Errorf("failed to suspend resource: %v", err)
 	}
 
-	// Optimistically update resource state
-	el.FluxMetadata.IsSuspended = true
+	uc.kubeStore.SetSuspended(input.UID, true)
 	logger.Debug("Resource optimistically suspended")
 	return struct{}{}, nil
 }

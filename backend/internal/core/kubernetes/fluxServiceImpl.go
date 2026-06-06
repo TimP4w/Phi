@@ -3,7 +3,6 @@ package kubernetes
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/fluxcd/pkg/apis/meta"
@@ -200,8 +199,3 @@ func (s ReconcilePatch) PatchType() types.PatchType {
 	return types.MergePatchType
 }
 
-func escapeJSONPointer(s string) string {
-	s = strings.ReplaceAll(s, "~", "~0")
-	s = strings.ReplaceAll(s, "/", "~1")
-	return s
-}

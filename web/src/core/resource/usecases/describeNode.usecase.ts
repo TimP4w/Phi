@@ -1,12 +1,14 @@
-import { container } from "../../shared/inversify.config";
+import { inject, injectable } from "inversify";
 import { TYPES } from "../../shared/types";
 import UseCase from "../../shared/usecase";
-import { ResourceService } from "../services/resource.service";
+import type { ResourceService } from "../services/resource.service";
 import { addToast } from "@heroui/react";
 
+@injectable()
 export class DescribeNodeUseCase extends UseCase<string, Promise<string>> {
-
-  private readonly resourceService = container.get<ResourceService>(TYPES.ResourceService);
+  constructor(@inject(TYPES.ResourceService) private readonly resourceService: ResourceService) {
+    super();
+  }
 
   public async execute(uid: string): Promise<string> {
     try {
@@ -21,5 +23,3 @@ export class DescribeNodeUseCase extends UseCase<string, Promise<string>> {
     }
   }
 }
-
-export const describeNodeUseCase = new DescribeNodeUseCase();

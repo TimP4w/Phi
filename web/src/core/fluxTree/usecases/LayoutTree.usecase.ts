@@ -1,16 +1,16 @@
 import { Edge, Node } from "@xyflow/react";
-import { container } from "../../shared/inversify.config";
+import { inject, injectable } from "inversify";
 import UseCase from "../../shared/usecase";
 import { FluxTreeStore } from "../stores/fluxTree.store";
 import ELK, { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk.bundled.js";
 import { RESOURCE_TYPE } from "../constants/resources.const";
-import { VizualizationNodeData } from "../models/tree";
+import { VisualizationNodeData } from "../models/tree";
 
-type Output = { nodes: Node<VizualizationNodeData>[]; edges: Edge[] };
+type Output = { nodes: Node<VisualizationNodeData>[]; edges: Edge[] };
 type Input = { nodeId: string };
 
+@injectable()
 export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
-  private fluxTreeStore = container.get<FluxTreeStore>(FluxTreeStore);
   private elk = new ELK();
   private elkOptions = {
     "elk.algorithm": "mrtree",
@@ -20,6 +20,10 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
     "elk.searchOrder": "DFS",
     "elk.topDownLayout": "true",
   };
+
+  constructor(@inject(FluxTreeStore) private fluxTreeStore: FluxTreeStore) {
+    super();
+  }
 
   public execute(input: Input): Promise<Output> {
     const { nodes, edges } = this.buildNodesAndEdges(input.nodeId);
@@ -50,14 +54,14 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
             x: node.x!,
             y: node.y!,
           },
-        })) as Node<VizualizationNodeData>[],
+        })) as Node<VisualizationNodeData>[],
         edges: (layoutedGraph.edges as unknown[] as Edge[]) || [],
       };
     });
   }
 
   public relayout(
-    nodes: Node<VizualizationNodeData>[],
+    nodes: Node<VisualizationNodeData>[],
     edges: Edge[],
   ): Promise<Output> {
     const isHorizontal = this.elkOptions["elk.direction"] === "RIGHT";
@@ -81,14 +85,14 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
         nodes: layoutedGraph.children.map((node) => ({
           ...node,
           position: { x: node.x!, y: node.y! },
-        })) as Node<VizualizationNodeData>[],
+        })) as Node<VisualizationNodeData>[],
         edges: (layoutedGraph.edges as unknown[] as Edge[]) || [],
       };
     });
   }
 
   private buildNodesAndEdges(nodeId: string): Output {
-    const nodes: Node<VizualizationNodeData>[] = [];
+    const nodes: Node<VisualizationNodeData>[] = [];
     const edges: Edge[] = [];
     const visitedIds = new Set<string>();
     const edgeTargets = new Set<string>();
@@ -150,5 +154,3 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
     return { nodes, edges };
   }
 }
-
-export const layoutTreeUseCase = new LayoutTreeUseCase();

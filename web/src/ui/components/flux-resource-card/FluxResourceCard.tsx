@@ -9,8 +9,8 @@ import {
 import Source from "../source/Source";
 import ReconcileSuspendButtonGroup from "../play-pause/ReconcileSuspendButtonGroup";
 import AppLogo from "../resource-icon/ResourceIcon";
-import { Divider, Link, Tooltip } from "@heroui/react";
-import { useNavigate } from "react-router-dom";
+import { Divider, Tooltip } from "@heroui/react";
+import { useNavigate, Link } from "react-router-dom";
 import { ROUTES } from "../../routes/routes.enum";
 import TooltipedDate from "../tooltiped-date/TooltipedDate";
 import { useInjection } from "inversify-react";
@@ -122,8 +122,8 @@ const App: React.FC<AppProps> = observer(({ node }) => {
       {/* Condition indicators */}
       {node.conditions.length > 0 && (
         <div className="flex flex-wrap gap-x-3 gap-y-1 px-4 pb-3">
-          {node.conditions.slice(0, 4).map((c, i) => (
-            <Tooltip key={i} content={c.message} className="dark">
+          {node.conditions.slice(0, 4).map((c) => (
+            <Tooltip key={c.type} content={c.message} className="dark">
               <div className="flex items-center gap-1.5 cursor-default">
                 <div
                   className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${conditionDotClass(c)}`}
@@ -148,7 +148,7 @@ const App: React.FC<AppProps> = observer(({ node }) => {
           <div className="flex justify-between items-center gap-2">
             <span className="text-default-400">Source</span>
             <Link
-              href={`${ROUTES.RESOURCE}/${repository.uid}`}
+              to={`${ROUTES.RESOURCE}/${repository.uid}`}
               className="font-mono text-xs text-white hover:underline truncate max-w-[140px]"
               onClick={(e) => e.stopPropagation()}
             >

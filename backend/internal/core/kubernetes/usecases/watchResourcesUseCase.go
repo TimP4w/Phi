@@ -58,8 +58,7 @@ func (uc *WatchResourcesUseCase) onResourceAdd(el kube.Resource) {
 	// type cannot both pass the !exists guard and spawn duplicate informers.
 	resourceKey := el.Resource + "_" + el.Version + "_" + el.Group
 	uc.informerMu.Lock()
-	channels := uc.kubeService.GetInformerChannels()
-	if _, exists := channels[resourceKey]; !exists {
+	if !uc.kubeService.IsWatching(resourceKey) {
 		logger.WithField("resourceKey", resourceKey).Debug("Creating new informer for resource")
 		uc.kubeService.WatchResources(
 			map[string]struct{}{resourceKey: {}},

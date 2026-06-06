@@ -2,6 +2,7 @@ import { injectable } from "inversify";
 import { Message } from "../../../../../core/realtime/models/message";
 import { REALTIME_CONST } from "../../../../../core/realtime/constants/realtime.const";
 import { env } from "../../../../../core/shared/env";
+import logger from "../../../../../core/shared/logger";
 import { WebSocketService } from "../../../../../core/realtime/services/webSocket.service";
 import { addToast } from "@heroui/react";
 
@@ -19,9 +20,10 @@ class WebSocketServiceImpl implements WebSocketService {
   maxRetries = 10;
   pingInterval: ReturnType<typeof setInterval> | null = null;
   clientId: string = "";
+  private intentionalClose = false;
 
   constructor() {
-    console.log("Loading WebSocketService");
+    logger.debug("Loading WebSocketService");
     this.url = env.WS_URL;
     this.listeners = new Set();
   }
@@ -40,11 +42,17 @@ class WebSocketServiceImpl implements WebSocketService {
   }
 
   connect(): void {
-    console.log(`Connecting websocket to ${this.url}`);
+    logger.debug(`Connecting websocket to ${this.url}`);
+    if (this.socket) {
+      this.socket.onopen = null;
+      this.socket.onmessage = null;
+      this.socket.onclose = null;
+      this.socket.onerror = null;
+    }
     this.socket = new WebSocket(this.url);
 
     this.socket.onopen = () => {
-      console.log("Websocket connection opened");
+      logger.debug("Websocket connection opened");
       addToast({
         title: "Websocket connection opened",
         color: "success",
@@ -54,13 +62,19 @@ class WebSocketServiceImpl implements WebSocketService {
     };
 
     this.socket.onmessage = (event: MessageEvent) => {
-      const message: Message = JSON.parse(event.data);
+      let message: Message;
+      try {
+        message = JSON.parse(event.data);
+      } catch (e) {
+        logger.error("WebSocket received malformed frame:", e);
+        return;
+      }
       switch (message.type) {
         case REALTIME_CONST.PONG:
           break;
         case REALTIME_CONST.CONNECTED:
           this.clientId = message.clientId ?? "";
-          console.log(`Connected with clientId: ${this.clientId}`);
+          logger.debug(`Connected with clientId: ${this.clientId}`);
           break;
         default:
           this.handleMessage(message);
@@ -75,18 +89,25 @@ class WebSocketServiceImpl implements WebSocketService {
 
       this.clientId = "";
       this.stopPing();
+
+      if (this.intentionalClose) {
+        this.intentionalClose = false;
+        return;
+      }
+
       this.reconnect();
     };
 
     this.socket.onerror = (error) => {
-      console.error("WebSocket error:", error);
+      logger.error("WebSocket error:", error);
     };
   }
 
   startPing(): void {
+    this.stopPing();
     this.pingInterval = setInterval(() => {
       if (!this.socket) {
-        console.error("Socket is not open");
+        logger.error("Socket is not open");
         return;
       }
       if (this.socket.readyState === WebSocket.OPEN) {
@@ -104,7 +125,7 @@ class WebSocketServiceImpl implements WebSocketService {
       this.retryCount++;
       const retryTimeout = Math.min(1000 * Math.pow(2, this.retryCount), 30000);
       setTimeout(() => {
-        console.log(`Reconnection attempt #${this.retryCount}`);
+        logger.debug(`Reconnection attempt #${this.retryCount}`);
         addToast({
           title: `Reconnection attempt #${this.retryCount}`,
           color: "default",
@@ -117,13 +138,14 @@ class WebSocketServiceImpl implements WebSocketService {
         title: `Max reconnection attempts reached.`,
         color: "danger",
       });
-      console.log("Max reconnection attempts reached.");
+      logger.debug("Max reconnection attempts reached.");
     }
   }
 
   stopPing(): void {
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
+      this.pingInterval = null;
     }
   }
 
@@ -138,12 +160,13 @@ class WebSocketServiceImpl implements WebSocketService {
       message.clientId = this.clientId;
       this.socket.send(JSON.stringify(message));
     } else {
-      console.error("WebSocket is not open");
+      logger.error("WebSocket is not open");
     }
   }
 
   disconnect(): void {
     if (this.socket) {
+      this.intentionalClose = true;
       this.socket.close();
     }
   }

@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -16,10 +17,9 @@ const (
 )
 
 type KubeStoreImpl struct {
-	resources         map[string]*Resource
-	resourcesRefs     map[string][]*Resource
-	mu                sync.RWMutex
-	informersChannels map[string]chan struct{}
+	resources     map[string]*Resource
+	resourcesRefs map[string][]*Resource
+	mu            sync.RWMutex
 }
 
 var _ KubeStore = (*KubeStoreImpl)(nil)
@@ -29,9 +29,8 @@ func NewKubeStoreImpl() KubeStore {
 	logger.Debug("Creating new KubeStoreImpl")
 
 	service := &KubeStoreImpl{
-		resources:         make(map[string]*Resource),
-		resourcesRefs:     make(map[string][]*Resource),
-		informersChannels: make(map[string]chan struct{}),
+		resources:     make(map[string]*Resource),
+		resourcesRefs: make(map[string][]*Resource),
 	}
 
 	return service
@@ -306,6 +305,17 @@ func (k *KubeStoreImpl) GetKnownResourceAPIRefs() map[string]struct{} {
 	return result
 }
 
+func (k *KubeStoreImpl) SetSuspended(uid string, suspended bool) bool {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	res, exists := k.resources[uid]
+	if !exists {
+		return false
+	}
+	res.FluxMetadata.IsSuspended = suspended
+	return true
+}
+
 func (k *KubeStoreImpl) AddEvent(resourceUID string, event Event, ttl time.Duration, max int) bool {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -328,36 +338,30 @@ func (k *KubeStoreImpl) AddEvent(resourceUID string, event Event, ttl time.Durat
 		return false
 	}
 
-	for _, ex := range res.Events {
-		if ex.Name == event.Name && ex.LastObserved.Equal(event.LastObserved) {
-			logger.Debug("Duplicate event found, not adding")
-			return false
-		}
-	}
-
 	cutoff := time.Now().Add(-ttl)
-	eventList := res.Events[:0]
+	existingUIDs := make(map[string]struct{}, len(res.Events))
+	var valid []Event
 	for _, e := range res.Events {
 		if e.LastObserved.After(cutoff) {
-			logger.Debug("Event is within TTL, adding to active events")
-			eventList = append(eventList, e)
+			valid = append(valid, e)
+			existingUIDs[string(e.UID)] = struct{}{}
 		}
 	}
-	res.Events = eventList
 
-	if len(res.Events) >= max {
-		logger.Debug("Max events reached, removing oldest event")
-		oldestIdx := 0
-		oldest := res.Events[0].LastObserved
-		for i := range res.Events {
-			if res.Events[i].LastObserved.Before(oldest) {
-				oldestIdx = i
-				oldest = res.Events[i].LastObserved
-			}
-		}
-		res.Events = append(res.Events[:oldestIdx], res.Events[oldestIdx+1:]...)
+	if _, dup := existingUIDs[string(event.UID)]; dup {
+		logger.Debug("Duplicate event found, not adding")
+		return false
 	}
 
-	res.Events = append(res.Events, event)
+	valid = append(valid, event)
+
+	if len(valid) > max {
+		sort.Slice(valid, func(i, j int) bool {
+			return valid[i].LastObserved.After(valid[j].LastObserved)
+		})
+		valid = valid[:max]
+	}
+
+	res.Events = valid
 	return true
 }

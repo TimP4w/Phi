@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import {
   FluxResource,
   HelmRelease,
@@ -25,7 +25,7 @@ import Header from "../../components/layout/Header";
 import RenderTreeNode from "../../components/resource-tree/ResourceTree";
 import { ResourceFilter } from "../../shared/resourceFilter";
 import ReconcileSuspendButtonGroup from "../../components/play-pause/ReconcileSuspendButtonGroup";
-import { Bell, BellOff, Check, ChevronDown, Info, List, Network, PanelRightClose, PanelRightOpen, X } from "lucide-react";
+import { Bell, Check, ChevronDown, Info, List, Network, PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import StatusChip from "../../components/status-chip/StatusChip";
 import FluxChainWidget from "../../components/widgets/FluxChainWidget";
 import ConnectedGraph from "../../components/connected-graph/ConnectedGraph";
@@ -36,11 +36,7 @@ import FluxSyncStatusWidget from "../../components/widgets/FluxSyncStatusWidget"
 import ResourceStatusWidget from "../../components/widgets/ResourceStatusWidget";
 import ResourceCountWidget from "../../components/widgets/ResourcesCountWidget";
 import KustomizationDependsOnWidget from "../../components/widgets/KustomizationDependsOnWidget";
-import { format } from "date-fns";
-import { Link } from "react-router-dom";
-import { ROUTES } from "../../routes/routes.enum";
-
-type EventFilter = "all" | "Warning" | "Normal";
+import EventsPanel, { EventFilter } from "../../components/events/EventsPanel";
 
 const STATUS_FILTER_OPTIONS: { value: ResourceStatus; label: string; dot: string }[] = [
   { value: ResourceStatus.FAILED, label: "Failed", dot: "bg-danger" },
@@ -176,6 +172,7 @@ const ResourceView: React.FC = observer(() => {
   const [statusFilters, setStatusFilters] = useState<ResourceStatus[]>([]);
   const [kindFilters, setKindFilters] = useState<string[]>([]);
   const { nodeUid } = useParams();
+  const navigate = useNavigate();
   const fluxTreeStore = useInjection(FluxTreeStore);
 
   const resource = fluxTreeStore.findResourceByUid(nodeUid ?? "");
@@ -249,9 +246,9 @@ const ResourceView: React.FC = observer(() => {
         {/* Resource identity bar */}
         <div className="flex-shrink-0 px-6 pt-4 pb-3 border-b border-default-100">
           <Breadcrumbs size="sm" className="mb-2">
-            <BreadcrumbItem href="/">Cluster</BreadcrumbItem>
+            <BreadcrumbItem onPress={() => navigate("/")}>Cluster</BreadcrumbItem>
             {fullChain.map((res) => (
-              <BreadcrumbItem key={res.uid} href={`/resource/${res.uid}`}>
+              <BreadcrumbItem key={res.uid} onPress={() => navigate(`/resource/${res.uid}`)}>
                 {res.name}
               </BreadcrumbItem>
             ))}
@@ -477,7 +474,7 @@ const ResourceView: React.FC = observer(() => {
                 >
                   Details
                 </Button>
-                {resource instanceof FluxResource && resource.isReconcillable && (
+                {resource instanceof FluxResource && resource.isReconcilable && (
                   <ReconcileSuspendButtonGroup
                     resource={resource as FluxResource}
                     compact
@@ -521,72 +518,14 @@ const ResourceView: React.FC = observer(() => {
                   {warningCount}
                 </Chip>
               )}
-              <div className="ml-auto flex gap-1">
-                {(["all", "Warning", "Normal"] as EventFilter[]).map((f) => (
-                  <Chip
-                    key={f}
-                    size="sm"
-                    variant={eventFilter === f ? "solid" : "flat"}
-                    color={eventFilter === f && f === "Warning" ? "warning" : "default"}
-                    className="cursor-pointer select-none"
-                    onClick={() => setEventFilter(f)}
-                  >
-                    {f === "all" ? "All" : f}
-                  </Chip>
-                ))}
-              </div>
             </div>
-            <div className="flex-1 overflow-y-auto">
-              {displayedEvents.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full gap-2 text-default-400">
-                  <BellOff className="w-8 h-8 opacity-30" />
-                  <span className="text-sm">
-                    {allEvents.length === 0 ? "No events" : "No matching events"}
-                  </span>
-                </div>
-              ) : (
-                <div className="divide-y divide-default-100">
-                  {displayedEvents.map((event, i) => (
-                    <div
-                      key={`${event.uid}_${i}`}
-                      className={`px-4 py-2.5 hover:bg-content2 transition-colors ${
-                        event.type === "Warning" ? "bg-warning/[0.04]" : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <div
-                          className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                            event.type === "Warning" ? "bg-warning" : "bg-primary"
-                          }`}
-                        />
-                        <span className="text-xs font-medium flex-1 min-w-0 truncate">
-                          {event.reason}
-                        </span>
-                        <span className="text-xs text-default-500 flex-shrink-0 tabular-nums">
-                          {format(event.lastObserved, "HH:mm:ss")}
-                        </span>
-                      </div>
-                      <p className="text-xs text-default-400 line-clamp-2 pl-3.5 leading-relaxed">
-                        {event.message}
-                      </p>
-                      {event.count > 1 && (
-                        <p className="text-xs text-default-600 pl-3.5 mt-0.5">
-                          ×{event.count}
-                        </p>
-                      )}
-                      <div className="pl-3.5 mt-1">
-                        <Link
-                          to={`${ROUTES.RESOURCE}/${event.resourceUID}`}
-                          className="text-xs font-mono text-default-500 hover:text-foreground transition-colors truncate block"
-                        >
-                          {event.source}
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <EventsPanel
+              events={displayedEvents}
+              filter={eventFilter}
+              onFilterChange={setEventFilter}
+              totalEventCount={allEvents.length}
+              showCount
+            />
           </aside>
         </div>
 
@@ -605,79 +544,21 @@ const ResourceView: React.FC = observer(() => {
                     {warningCount}
                   </Chip>
                 )}
-                <div className="ml-auto flex items-center gap-1">
-                  {(["all", "Warning", "Normal"] as EventFilter[]).map((f) => (
-                    <Chip
-                      key={f}
-                      size="sm"
-                      variant={eventFilter === f ? "solid" : "flat"}
-                      color={eventFilter === f && f === "Warning" ? "warning" : "default"}
-                      className="cursor-pointer select-none"
-                      onClick={() => setEventFilter(f)}
-                    >
-                      {f === "all" ? "All" : f}
-                    </Chip>
-                  ))}
-                  <button
-                    className="ml-1 p-1 rounded-md text-default-400 hover:text-foreground hover:bg-content2 transition-colors"
-                    onClick={() => setEventSidebarOpen(false)}
-                    aria-label="Close events"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <button
+                  className="ml-auto p-1 rounded-md text-default-400 hover:text-foreground hover:bg-content2 transition-colors"
+                  onClick={() => setEventSidebarOpen(false)}
+                  aria-label="Close events"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <div className="flex-1 overflow-y-auto">
-                {displayedEvents.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full gap-2 text-default-400">
-                    <BellOff className="w-8 h-8 opacity-30" />
-                    <span className="text-sm">
-                      {allEvents.length === 0 ? "No events" : "No matching events"}
-                    </span>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-default-100">
-                    {displayedEvents.map((event, i) => (
-                      <div
-                        key={`${event.uid}_${i}`}
-                        className={`px-4 py-2.5 hover:bg-content2 transition-colors ${
-                          event.type === "Warning" ? "bg-warning/[0.04]" : ""
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <div
-                            className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                              event.type === "Warning" ? "bg-warning" : "bg-primary"
-                            }`}
-                          />
-                          <span className="text-xs font-medium flex-1 min-w-0 truncate">
-                            {event.reason}
-                          </span>
-                          <span className="text-xs text-default-500 flex-shrink-0 tabular-nums">
-                            {format(event.lastObserved, "HH:mm:ss")}
-                          </span>
-                        </div>
-                        <p className="text-xs text-default-400 line-clamp-2 pl-3.5 leading-relaxed">
-                          {event.message}
-                        </p>
-                        {event.count > 1 && (
-                          <p className="text-xs text-default-600 pl-3.5 mt-0.5">
-                            ×{event.count}
-                          </p>
-                        )}
-                        <div className="pl-3.5 mt-1">
-                          <Link
-                            to={`${ROUTES.RESOURCE}/${event.resourceUID}`}
-                            className="text-xs font-mono text-default-500 hover:text-foreground transition-colors truncate block"
-                          >
-                            {event.source}
-                          </Link>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <EventsPanel
+                events={displayedEvents}
+                filter={eventFilter}
+                onFilterChange={setEventFilter}
+                totalEventCount={allEvents.length}
+                showCount
+              />
             </aside>
           </>
         )}

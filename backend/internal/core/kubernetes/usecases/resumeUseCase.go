@@ -41,8 +41,7 @@ func (uc *ResumeUseCase) Execute(input ResumeUseCaseInput) (struct{}, error) {
 		return struct{}{}, fmt.Errorf("failed to resume resource: %v", err)
 	}
 
-	// Optimistically update resource state
-	el.FluxMetadata.IsSuspended = false
+	uc.kubeStore.SetSuspended(input.UID, false)
 	logger.Debug("Resource optimistically resumed")
 	return struct{}{}, nil
 }

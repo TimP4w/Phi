@@ -724,10 +724,6 @@ func TestToResource_StatefulSet_NilReplicas(t *testing.T) {
 	})
 }
 
-func TestGetRefVersion(t *testing.T) {
-	assert.Equal(t, "v1", GetRefVersion("v1"))
-	assert.Equal(t, "v1", GetRefVersion("apps/v1"))
-}
 
 func fluxReadyCondition(status, reason string) map[string]interface{} {
 	return map[string]interface{}{

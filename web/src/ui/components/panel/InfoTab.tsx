@@ -219,8 +219,8 @@ export const InfoTab = ({ resource }: InfoTabProps) => {
         <InfoRow label="Children" value={resource.children.length.toString()} />
         <InfoRow label="Events" value={resource.events.length.toString()} />
         <InfoRow
-          label="Reconcillable"
-          value={resource.isReconcillable.toString()}
+          label="Reconcilable"
+          value={resource.isReconcilable.toString()}
         />
       </Section>
 

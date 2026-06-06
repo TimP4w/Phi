@@ -1,15 +1,12 @@
-import { TreeService } from '../tree.service';
-import { HttpService } from '../../../http/services/http.service';
-import { container } from '../../../shared/inversify.config';
+import type { TreeService } from '../tree.service';
+import type { HttpService } from '../../../http/services/http.service';
 import { TYPES } from '../../../shared/types';
 import { KubeEvent } from '../../models/kubeEvent';
-import { injectable } from 'inversify';
+import { inject, injectable } from 'inversify';
 
 @injectable()
 class TreeServiceImpl implements TreeService {
-  private readonly httpService: HttpService = container.get<HttpService>(TYPES.Http);
-
-  constructor() { }
+  constructor(@inject(TYPES.Http) private readonly httpService: HttpService) {}
 
   async getEvents(): Promise<KubeEvent[]> {
     const eventsDto = await this.httpService.get<KubeEvent[]>(`/api/events`);

@@ -1,7 +1,8 @@
 import { observer } from "mobx-react-lite";
 import { Kustomization, KubeResource, ResourceStatus } from "../../../core/fluxTree/models/tree";
 import Widget from "./Widget";
-import { Link, Skeleton } from "@heroui/react";
+import { Skeleton } from "@heroui/react";
+import { Link } from "react-router-dom";
 import { useInjection } from "inversify-react";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useEffect, useState } from "react";
@@ -57,7 +58,7 @@ const KustomizationDependsOnWidget: React.FC<KustomizationDependsOnWidgetProps> 
             {dependencies.map((dep, i) => (
               <div key={dep.uid}>
                 <Link
-                  href={`${ROUTES.RESOURCE}/${dep.uid}`}
+                  to={`${ROUTES.RESOURCE}/${dep.uid}`}
                   className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-default-100 text-white w-full"
                 >
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass(dep)}`} />

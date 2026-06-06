@@ -17,12 +17,13 @@ func TestResumeUseCase_Success(t *testing.T) {
 	res := &kube.Resource{UID: "hr-uid", Kind: "HelmRelease", FluxMetadata: kube.FluxMetadata{IsSuspended: true}}
 	store.On("GetResourceByUID", "hr-uid").Return(res)
 	flux.On("Resume", *res).Return(res, nil)
+	store.On("SetSuspended", "hr-uid", false).Return(true)
 
 	uc := NewResumeUseCase(flux, store)
 	_, err := uc.Execute(ResumeUseCaseInput{UID: "hr-uid"})
 
 	require.NoError(t, err)
-	assert.False(t, res.FluxMetadata.IsSuspended)
+	store.AssertCalled(t, "SetSuspended", "hr-uid", false)
 }
 
 func TestResumeUseCase_ResourceNotFound(t *testing.T) {

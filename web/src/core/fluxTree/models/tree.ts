@@ -9,40 +9,6 @@ export class Tree {
     this.root = root;
   }
 
-  public getApplicationResources(): FluxResource[] {
-    const applications: KubeResource[] = [];
-    const applicationKinds: string[] = [
-      RESOURCE_TYPE.KUSTOMIZATION,
-      RESOURCE_TYPE.HELM_RELEASE,
-      RESOURCE_TYPE.HELM_CHART,
-    ].map((kind) => kind.toString());
-    this.traverse(this.root, (node) => {
-      if (applicationKinds.includes(node.kind)) {
-        applications.push(node);
-      }
-      return false;
-    });
-
-    return applications as FluxResource[];
-  }
-
-  public getRepositories(): Repository[] {
-    const repositories: Repository[] = [];
-    const repositoryKinds: string[] = [
-      RESOURCE_TYPE.OCI_REPOSITORY,
-      RESOURCE_TYPE.HELM_REPOSITORY,
-      RESOURCE_TYPE.GIT_REPOSITORY,
-      RESOURCE_TYPE.BUCKET,
-    ].map((kind) => kind.toString());
-    this.traverse(this.root, (node) => {
-      if (repositoryKinds.includes(node.kind)) {
-        repositories.push(node as Repository);
-      }
-      return false;
-    });
-    return repositories;
-  }
-
   public getFluxControllersDeployments(): Deployment[] {
     const result: Deployment[] = [];
     this.root.children.forEach((child) => {
@@ -99,7 +65,7 @@ export class KubeResource {
   events: KubeEvent[] = [];
   logs: PodLog[] = [];
   isFluxManaged: boolean = false;
-  isReconcillable: boolean = false;
+  isReconcilable: boolean = false;
 
   constructor();
   constructor(dto: TreeNodeDto);
@@ -177,7 +143,7 @@ export class KubeResource {
 }
 
 export abstract class FluxResource extends KubeResource {
-  isReconcillable: boolean = true;
+  isReconcilable: boolean = true;
   lastHandledReconcileAt?: Date;
   isReconciling: boolean;
   isSuspended: boolean;
@@ -209,7 +175,6 @@ export class HelmRelease extends FluxResource {
 }
 export class Kustomization extends FluxResource {
   metadata: KustomizationMetadata | null;
-  isReconcillable: boolean = true;
   constructor(dto: TreeNodeDto) {
     super(dto);
     this.metadata = dto.kustomizationMetadata
@@ -228,7 +193,6 @@ export class Kustomization extends FluxResource {
 
 export class HelmChart extends FluxResource {
   metadata: HelmChartMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
@@ -238,7 +202,6 @@ export class HelmChart extends FluxResource {
 
 export class HelmRepository extends FluxResource {
   metadata: HelmRepositoryMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
@@ -250,7 +213,6 @@ export class HelmRepository extends FluxResource {
 
 export class GitRepository extends FluxResource implements Repository {
   metadata: GitRepositoryMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
@@ -290,7 +252,6 @@ export class GitRepository extends FluxResource implements Repository {
 
 export class OCIRepository extends FluxResource implements Repository {
   metadata: OCIRepositoryMetadata | null;
-  isReconcillable: boolean = true;
 
   constructor(dto: TreeNodeDto) {
     super(dto);
@@ -467,7 +428,8 @@ function stringToResourceStatus(status: string): ResourceStatus {
   if (Object.values(ResourceStatus).includes(status as ResourceStatus)) {
     return status as ResourceStatus;
   }
-  throw new Error(`Invalid ResourceStatus: ${status}`);
+  console.warn(`Unknown ResourceStatus "${status}", defaulting to UNKNOWN`);
+  return ResourceStatus.UNKNOWN;
 }
 
-export type VizualizationNodeData = Record<"treeNode", KubeResource>;
+export type VisualizationNodeData = Record<"treeNode", KubeResource>;

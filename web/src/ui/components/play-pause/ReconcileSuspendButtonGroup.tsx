@@ -3,12 +3,14 @@ import {
   HelmRelease,
   Kustomization,
 } from "../../../core/fluxTree/models/tree";
-import { reconcileUseCase } from "../../../core/resource/usecases/reconcile.usecase";
 import { useCallback, useEffect, useState } from "react";
-import { resumeUseCase } from "../../../core/resource/usecases/resume.usecase";
-import { suspendUseCase } from "../../../core/resource/usecases/suspend.usecase";
 import { Button, Tooltip } from "@heroui/react";
 import { Pause, Play, RefreshCw } from "lucide-react";
+import { useInjection } from "inversify-react";
+import { TYPES } from "../../../core/shared/types";
+import { ReconcileUseCase } from "../../../core/resource/usecases/reconcile.usecase";
+import { ResumeUseCase } from "../../../core/resource/usecases/resume.usecase";
+import { SuspendUseCase } from "../../../core/resource/usecases/suspend.usecase";
 
 type ReconcileSuspendButtonGroupProps = {
   resource: FluxResource;
@@ -17,6 +19,10 @@ type ReconcileSuspendButtonGroupProps = {
 
 const ReconcileSuspendButtonGroup: React.FC<ReconcileSuspendButtonGroupProps> =
   ({ resource, compact = false }: ReconcileSuspendButtonGroupProps) => {
+    const reconcileUseCase = useInjection<ReconcileUseCase>(TYPES.ReconcileUseCase);
+    const resumeUseCase = useInjection<ResumeUseCase>(TYPES.ResumeUseCase);
+    const suspendUseCase = useInjection<SuspendUseCase>(TYPES.SuspendUseCase);
+
     const [isToggling, setIsToggling] = useState<boolean>(false);
     const [isSuspended, setIsSuspended] = useState<boolean>(
       (resource as Kustomization | HelmRelease).isSuspended ?? false
@@ -40,8 +46,10 @@ const ReconcileSuspendButtonGroup: React.FC<ReconcileSuspendButtonGroupProps> =
     const reconcile = useCallback(() => {
       if (isReconciling) return;
       setIsReconciling(true);
-      reconcileUseCase.execute(resource.uid);
-    }, [resource, isReconciling]);
+      reconcileUseCase
+        .execute(resource.uid)
+        .catch(() => setIsReconciling(false));
+    }, [resource, isReconciling, reconcileUseCase]);
 
     const resume = useCallback(() => {
       setIsToggling(true);
@@ -49,7 +57,7 @@ const ReconcileSuspendButtonGroup: React.FC<ReconcileSuspendButtonGroupProps> =
         .execute(resource.uid)
         .then(() => setIsSuspended(false))
         .finally(() => setIsToggling(false));
-    }, [resource]);
+    }, [resource, resumeUseCase]);
 
     const suspend = useCallback(() => {
       setIsToggling(true);
@@ -57,7 +65,7 @@ const ReconcileSuspendButtonGroup: React.FC<ReconcileSuspendButtonGroupProps> =
         .execute(resource.uid)
         .then(() => setIsSuspended(true))
         .finally(() => setIsToggling(false));
-    }, [resource]);
+    }, [resource, suspendUseCase]);
 
     const toggle = useCallback(() => {
       if (isSuspended) resume();
