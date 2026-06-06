@@ -31,4 +31,7 @@ type KubeStore interface {
 	// GetKnownResourceAPIRefs returns the set of resource API ref keys (resource_version_group)
 	// for all resources currently in the store. Used to determine which K8s resource types to watch.
 	GetKnownResourceAPIRefs() map[string]struct{}
+	// SetSuspended mutates the IsSuspended flag on a resource under the store lock.
+	// Returns false if the resource does not exist.
+	SetSuspended(uid string, suspended bool) bool
 }

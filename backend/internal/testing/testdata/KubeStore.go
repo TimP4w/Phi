@@ -423,6 +423,53 @@ func (_c *KubeStore_GetKnownResourceAPIRefs_Call) RunAndReturn(run func() map[st
 	return _c
 }
 
+// SetSuspended provides a mock function with given fields: uid, suspended
+func (_m *KubeStore) SetSuspended(uid string, suspended bool) bool {
+	ret := _m.Called(uid, suspended)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetSuspended")
+	}
+
+	var r0 bool
+	if rf, ok := ret.Get(0).(func(string, bool) bool); ok {
+		r0 = rf(uid, suspended)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+
+	return r0
+}
+
+// KubeStore_SetSuspended_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetSuspended'
+type KubeStore_SetSuspended_Call struct {
+	*mock.Call
+}
+
+// SetSuspended is a helper method to define mock.On call
+//   - uid string
+//   - suspended bool
+func (_e *KubeStore_Expecter) SetSuspended(uid interface{}, suspended interface{}) *KubeStore_SetSuspended_Call {
+	return &KubeStore_SetSuspended_Call{Call: _e.mock.On("SetSuspended", uid, suspended)}
+}
+
+func (_c *KubeStore_SetSuspended_Call) Run(run func(uid string, suspended bool)) *KubeStore_SetSuspended_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(bool))
+	})
+	return _c
+}
+
+func (_c *KubeStore_SetSuspended_Call) Return(_a0 bool) *KubeStore_SetSuspended_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *KubeStore_SetSuspended_Call) RunAndReturn(run func(string, bool) bool) *KubeStore_SetSuspended_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewKubeStore creates a new instance of KubeStore. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewKubeStore(t interface {

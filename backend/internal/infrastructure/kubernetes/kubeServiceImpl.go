@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/timp4w/phi/internal/core/kubernetes"
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/shared"
@@ -149,17 +148,11 @@ func (k *KubeServiceImpl) GetResourceYAML(resource kube.Resource) ([]byte, error
 	return yamlData, nil
 }
 
-func (k *KubeServiceImpl) WatchLogs(pod kube.Resource, ctx context.Context, onLog func(kubernetes.KubeLog)) error {
+func (k *KubeServiceImpl) WatchLogs(pod kube.Resource, ctx context.Context, onLog func(kube.KubeLog)) error {
 	if pod.Kind != "Pod" {
 		return fmt.Errorf("resource is not a pod")
 	}
 	count := int64(100)
-
-	podLogOpts := &corev1.PodLogOptions{
-		Follow:     true,
-		Timestamps: true,
-		TailLines:  &count,
-	}
 
 	podResource, err := k.findKubeResource(pod)
 	if err != nil {
@@ -172,31 +165,43 @@ func (k *KubeServiceImpl) WatchLogs(pod kube.Resource, ctx context.Context, onLo
 		return fmt.Errorf("failed to convert pod resource: %v", err)
 	}
 
+	var wg sync.WaitGroup
 	for _, container := range podR.Spec.Containers {
-		podLogOpts.Container = container.Name
-		req := k.clientSet.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, podLogOpts)
-		stream, err := req.Stream(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to open stream: %v", err)
-		}
-		defer stream.Close()
-
-		sc := bufio.NewScanner(stream)
-		for sc.Scan() {
-			text := sc.Text()
-			chunks := chunks(text, 1000)
-			for _, chunk := range chunks {
-				timestamp, message := parseMessage(chunk)
-				logMessage := kubernetes.KubeLog{
-					Timestamp: timestamp,
-					Message:   message,
-					Container: container.Name,
-				}
-				onLog(logMessage)
+		wg.Add(1)
+		go func(containerName string) {
+			defer wg.Done()
+			opts := &corev1.PodLogOptions{
+				Container:  containerName,
+				Follow:     true,
+				Timestamps: true,
+				TailLines:  &count,
 			}
-		}
+			req := k.clientSet.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, opts)
+			stream, err := req.Stream(ctx)
+			if err != nil {
+				logging.Logger().WithError(err).WithField("container", containerName).Warn("Failed to open log stream")
+				return
+			}
+			defer stream.Close()
 
+			sc := bufio.NewScanner(stream)
+			for sc.Scan() {
+				if ctx.Err() != nil {
+					return
+				}
+				text := sc.Text()
+				for _, chunk := range chunks(text, 1000) {
+					timestamp, message := parseMessage(chunk)
+					onLog(kube.KubeLog{
+						Timestamp: timestamp,
+						Message:   message,
+						Container: containerName,
+					})
+				}
+			}
+		}(container.Name)
 	}
+	wg.Wait()
 	return nil
 }
 
@@ -221,7 +226,7 @@ func (k *KubeServiceImpl) WatchResources(resourceApiRefsSet map[string]struct{},
 func (k *KubeServiceImpl) GetEvents() ([]kube.Event, error) {
 	kubeEvents, err := k.clientSet.CoreV1().Events("").List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		return []kubernetes.Event{}, err
+		return []kube.Event{}, err
 	}
 
 	var events []kube.Event = make([]kube.Event, 0)
@@ -297,10 +302,11 @@ func (k *KubeServiceImpl) defaultResourceEventHandler(resource string, addFunc f
 	}
 }
 
-func (k *KubeServiceImpl) GetInformerChannels() map[string]chan struct{} {
+func (k *KubeServiceImpl) IsWatching(resourceKey string) bool {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
-	return k.informersChannels
+	_, exists := k.informersChannels[resourceKey]
+	return exists
 }
 
 // createInformerChannel creates a new channel for a specific resource informer.
@@ -543,7 +549,11 @@ func (k *KubeServiceImpl) DiscoverResources(rm *kube.ResourceMap) (map[string]*k
 			v, err := k.listResourcesByApi(a)
 			if err != nil {
 				apiLogger.WithError(err).Error("Error querying API resource")
-				errResult = err
+				mu.Lock()
+				if errResult == nil {
+					errResult = err
+				}
+				mu.Unlock()
 				return
 			}
 			mu.Lock()

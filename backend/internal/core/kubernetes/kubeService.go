@@ -28,8 +28,8 @@ type KubeService interface {
 	DiscoverResources(rm *ResourceMap) (map[string]*Resource, error)
 	// GetEvents retrieves all Kubernetes events from the cluster
 	GetEvents() ([]Event, error)
-	// GetInformerChannels returns the map of informer channels.
-	GetInformerChannels() map[string]chan struct{}
+	// IsWatching reports whether an informer is currently running for the given resource key.
+	IsWatching(resourceKey string) bool
 	// PatchResource applies a patch to a Kubernetes resource and returns the updated resource.
 	PatchResource(pr PatchableResource) (*Resource, error)
 }

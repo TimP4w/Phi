@@ -40,11 +40,6 @@ func makeRef(name, namespace, kind, apiVersion string) string {
 	return group + "/" + version + "/" + kind + ":" + namespace + "/" + name
 }
 
-func GetRefVersion(version string) string {
-	parts := strings.Split(version, "/")
-	return parts[len(parts)-1]
-}
-
 func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource string) kube.Resource {
 	el := kube.Resource{
 		Kind:        obj.GetKind(),
@@ -134,8 +129,6 @@ func (mapper *KubeMapper) ToEvent(k8event *v1.Event) kube.Event {
 	}
 }
 
-type KubeResourceWithConditions struct{}
-
 func mapConditions(el *kube.Resource, conditions []metav1.Condition) []kube.Condition {
 	for _, condition := range conditions {
 		el.Conditions = append(el.Conditions, kube.Condition{
@@ -173,10 +166,7 @@ func mapFluxMetadata(el *kube.Resource, annotations map[string]string, lastRecon
 	var lastSyncAt time.Time
 	for _, cond := range conditions {
 		if cond.Type == "Ready" {
-			t, err := time.Parse(time.RFC3339Nano, cond.LastTransitionTime.Format(time.RFC3339Nano))
-			if err == nil {
-				lastSyncAt = t
-			}
+			lastSyncAt = cond.LastTransitionTime.Time
 			break
 		}
 	}
@@ -227,15 +217,6 @@ func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 		Commit: gitRepository.Spec.Reference.Commit,
 	}
 
-}
-
-func checkInList(s string, list []string) bool {
-	for _, item := range list {
-		if s == item {
-			return true
-		}
-	}
-	return false
 }
 
 func mapFluxResourceStatusForCondition(conditions *[]metav1.Condition) kube.Status {

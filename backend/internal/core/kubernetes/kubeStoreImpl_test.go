@@ -1,11 +1,13 @@
 package kubernetes
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func makeResource(uid, name, namespace, kind, version, group string) Resource {
@@ -268,12 +270,11 @@ func TestKubeStore_AddEvent_Duplicate(t *testing.T) {
 	res := makeResource("uid-1", "pod", "default", "Pod", "v1", "")
 	s.UpdateResource(res)
 
-	ts := time.Now()
-	ev := Event{Name: "BackOff", LastObserved: ts}
+	ev := Event{UID: "event-uid-1", Name: "BackOff", LastObserved: time.Now()}
 	s.AddEvent("uid-1", ev, 72*time.Hour, 100)
 
-	// Same name + same timestamp → duplicate
-	duplicate := Event{Name: "BackOff", LastObserved: ts}
+	// Same UID → duplicate
+	duplicate := Event{UID: "event-uid-1", Name: "BackOff", LastObserved: time.Now()}
 	added := s.AddEvent("uid-1", duplicate, 72*time.Hour, 100)
 
 	assert.False(t, added)
@@ -288,18 +289,18 @@ func TestKubeStore_AddEvent_MaxEvents_EvictsOldest(t *testing.T) {
 	now := time.Now()
 	for i := 0; i < 3; i++ {
 		ev := Event{
-			Name:        "Event",
+			UID:          types.UID(fmt.Sprintf("event-%d", i)),
+			Name:         "Event",
 			LastObserved: now.Add(time.Duration(i) * time.Second),
 		}
-		// Use unique LastObserved to avoid duplicate detection
 		s.AddEvent("uid-1", ev, 72*time.Hour, 3)
 	}
 
 	got := s.GetResourceByUID("uid-1")
 	assert.Len(t, got.Events, 3)
 
-	// Add one more — oldest should be evicted
-	newest := Event{Name: "Event", LastObserved: now.Add(10 * time.Second)}
+	// Add one more with unique UID — oldest should be evicted
+	newest := Event{UID: "event-newest", Name: "Event", LastObserved: now.Add(10 * time.Second)}
 	added := s.AddEvent("uid-1", newest, 72*time.Hour, 3)
 
 	assert.True(t, added)

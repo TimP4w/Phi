@@ -194,49 +194,48 @@ func (_c *KubeService_GetEvents_Call) RunAndReturn(run func() ([]kubernetes.Even
 	return _c
 }
 
-// GetInformerChannels provides a mock function with no fields
-func (_m *KubeService) GetInformerChannels() map[string]chan struct{} {
-	ret := _m.Called()
+// IsWatching provides a mock function with given fields: resourceKey
+func (_m *KubeService) IsWatching(resourceKey string) bool {
+	ret := _m.Called(resourceKey)
 
 	if len(ret) == 0 {
-		panic("no return value specified for GetInformerChannels")
+		panic("no return value specified for IsWatching")
 	}
 
-	var r0 map[string]chan struct{}
-	if rf, ok := ret.Get(0).(func() map[string]chan struct{}); ok {
-		r0 = rf()
+	var r0 bool
+	if rf, ok := ret.Get(0).(func(string) bool); ok {
+		r0 = rf(resourceKey)
 	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string]chan struct{})
-		}
+		r0 = ret.Get(0).(bool)
 	}
 
 	return r0
 }
 
-// KubeService_GetInformerChannels_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetInformerChannels'
-type KubeService_GetInformerChannels_Call struct {
+// KubeService_IsWatching_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsWatching'
+type KubeService_IsWatching_Call struct {
 	*mock.Call
 }
 
-// GetInformerChannels is a helper method to define mock.On call
-func (_e *KubeService_Expecter) GetInformerChannels() *KubeService_GetInformerChannels_Call {
-	return &KubeService_GetInformerChannels_Call{Call: _e.mock.On("GetInformerChannels")}
+// IsWatching is a helper method to define mock.On call
+//   - resourceKey string
+func (_e *KubeService_Expecter) IsWatching(resourceKey interface{}) *KubeService_IsWatching_Call {
+	return &KubeService_IsWatching_Call{Call: _e.mock.On("IsWatching", resourceKey)}
 }
 
-func (_c *KubeService_GetInformerChannels_Call) Run(run func()) *KubeService_GetInformerChannels_Call {
+func (_c *KubeService_IsWatching_Call) Run(run func(resourceKey string)) *KubeService_IsWatching_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		run(args[0].(string))
 	})
 	return _c
 }
 
-func (_c *KubeService_GetInformerChannels_Call) Return(_a0 map[string]chan struct{}) *KubeService_GetInformerChannels_Call {
+func (_c *KubeService_IsWatching_Call) Return(_a0 bool) *KubeService_IsWatching_Call {
 	_c.Call.Return(_a0)
 	return _c
 }
 
-func (_c *KubeService_GetInformerChannels_Call) RunAndReturn(run func() map[string]chan struct{}) *KubeService_GetInformerChannels_Call {
+func (_c *KubeService_IsWatching_Call) RunAndReturn(run func(string) bool) *KubeService_IsWatching_Call {
 	_c.Call.Return(run)
 	return _c
 }

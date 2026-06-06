@@ -19,11 +19,9 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
-func TestKubeServiceImplGetInformerChannelsEmpty(t *testing.T) {
+func TestKubeServiceImplIsWatchingEmpty(t *testing.T) {
 	service := &KubeServiceImpl{informersChannels: make(map[string]chan struct{})}
-	channels := service.GetInformerChannels()
-	assert.NotNil(t, channels)
-	assert.Equal(t, 0, len(channels))
+	assert.False(t, service.IsWatching("pods_v1_"))
 }
 
 func normalizeYAML(yaml string) string {

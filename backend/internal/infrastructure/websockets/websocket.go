@@ -15,10 +15,15 @@ import (
 	"github.com/timp4w/phi/internal/core/realtime"
 )
 
-const readTimeout = 90 * time.Second
+const (
+	readTimeout       = 90 * time.Second
+	writeTimeout      = 10 * time.Second
+	writeChannelSize  = 64
+)
 
 type WebSocketManagerImpl struct {
 	clients             map[string]*websocket.Conn
+	clientWriteChans    map[string]chan []byte
 	lock                sync.RWMutex
 	upgrader            websocket.Upgrader
 	connectionListeners map[string]*realtime.Listener
@@ -46,6 +51,7 @@ func NewWebSocketManager() realtime.RealtimeService {
 	logging.Logger().Info("Initializing WebSocket manager")
 	return &WebSocketManagerImpl{
 		clients:             make(map[string]*websocket.Conn),
+		clientWriteChans:    make(map[string]chan []byte),
 		upgrader:            upgrader,
 		connectionListeners: make(map[string]*realtime.Listener),
 		listener:            make(map[string][]*realtime.MessageListener),
@@ -126,11 +132,26 @@ func (wm *WebSocketManagerImpl) addClient(conn *websocket.Conn) string {
 	wm.lock.Lock()
 	defer wm.lock.Unlock()
 
-	uuid := uuid.New()
-	clientId := uuid.String()
+	clientId := uuid.New().String()
+	ch := make(chan []byte, writeChannelSize)
 	wm.clients[clientId] = conn
+	wm.clientWriteChans[clientId] = ch
+	go wm.runWriter(clientId, conn, ch)
 	logging.Logger().WithClient(clientId).Debug("Added new WebSocket client")
 	return clientId
+}
+
+// runWriter drains the per-client write channel and sends each message with a write deadline.
+// It exits when the channel is closed or a write fails.
+func (wm *WebSocketManagerImpl) runWriter(clientId string, conn *websocket.Conn, ch <-chan []byte) {
+	for msg := range ch {
+		conn.SetWriteDeadline(time.Now().Add(writeTimeout))
+		if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			wm.logger.WithClient(clientId).WithError(err).Debug("Write error, removing client")
+			wm.RemoveClientById(clientId)
+			return
+		}
+	}
 }
 
 // removeClientLocked removes a client and returns its OnClose callbacks to be
@@ -141,6 +162,10 @@ func (wm *WebSocketManagerImpl) removeClientLocked(id string) []func() {
 		return nil
 	}
 	delete(wm.clients, id)
+	if ch, ok := wm.clientWriteChans[id]; ok {
+		close(ch)
+		delete(wm.clientWriteChans, id)
+	}
 	conn.Close()
 	logging.Logger().WithClient(id).Debug("Removed WebSocket client")
 
@@ -179,57 +204,39 @@ func (wm *WebSocketManagerImpl) RemoveConnectionListener(ID string) {
 }
 
 func (wm *WebSocketManagerImpl) Broadcast(message realtime.Message) error {
-	var deferred []func()
-	defer func() {
-		for _, cb := range deferred {
-			cb()
-		}
-	}()
-
-	wm.lock.Lock()
-	defer wm.lock.Unlock()
-
 	msg, err := json.Marshal(message)
 	if err != nil {
 		wm.logger.WithError(err).Error("Failed to marshal broadcast message")
 		return err
 	}
 
-	clientCount := len(wm.clients)
+	wm.lock.RLock()
 	wm.logger.WithFields(map[string]any{
 		"message_type": message.Type,
-		"client_count": clientCount,
+		"client_count": len(wm.clientWriteChans),
 	}).Debug("Broadcasting message to clients")
-
-	for id := range wm.clients {
-		err := wm.clients[id].WriteMessage(websocket.TextMessage, msg)
-		if err != nil {
-			wm.logger.WithFields(map[string]any{
-				string(logging.ClientID): id,
-				"error":                  err.Error(),
-			}).Debug("Error broadcasting to client, removing")
-			deferred = append(deferred, wm.removeClientLocked(id)...)
+	var slowClients []string
+	for id, ch := range wm.clientWriteChans {
+		select {
+		case ch <- msg:
+		default:
+			slowClients = append(slowClients, id)
 		}
+	}
+	wm.lock.RUnlock()
+
+	for _, id := range slowClients {
+		wm.logger.WithField(string(logging.ClientID), id).Debug("Slow client, removing")
+		wm.RemoveClientById(id)
 	}
 	return nil
 }
 
 // SendMessage sends a message to a specific client by ID.
-// It marshals the message to JSON and writes it to the WebSocket connection.
-// If sending the message fails, it removes the client from the manager.
-// Returns an error if the client is not found or if there is an error during sending.
+// It marshals the message to JSON and enqueues it to the client's write channel.
+// Returns an error if the client is not found or its buffer is full.
 func (wm *WebSocketManagerImpl) SendMessage(message realtime.Message, clientId string) error {
 	logger := wm.logger.WithClient(clientId)
-
-	var callbacks []func()
-	defer func() {
-		for _, cb := range callbacks {
-			cb()
-		}
-	}()
-
-	wm.lock.Lock()
-	defer wm.lock.Unlock()
 
 	msg, err := json.Marshal(message)
 	if err != nil {
@@ -237,19 +244,22 @@ func (wm *WebSocketManagerImpl) SendMessage(message realtime.Message, clientId s
 		return err
 	}
 
-	if _, exists := wm.clients[clientId]; !exists {
+	wm.lock.RLock()
+	ch, exists := wm.clientWriteChans[clientId]
+	wm.lock.RUnlock()
+
+	if !exists {
 		logger.Debug("Client not found")
 		return fmt.Errorf("client with id %s not found", clientId)
 	}
 
-	conn := wm.clients[clientId]
-	err = conn.WriteMessage(websocket.TextMessage, msg)
-	if err != nil {
-		logger.WithError(err).Debug("Failed to send message to client, removing client")
-		callbacks = wm.removeClientLocked(clientId)
-		return err
+	select {
+	case ch <- msg:
+		logger.WithField("message_type", message.Type).Debug("Message enqueued for client")
+		return nil
+	default:
+		logger.Debug("Client write buffer full, removing client")
+		wm.RemoveClientById(clientId)
+		return fmt.Errorf("client %s write buffer full", clientId)
 	}
-
-	logger.WithField("message_type", message.Type).Debug("Message sent to client")
-	return nil
 }

@@ -35,7 +35,7 @@ func TestWatchResources_onResourceAdd_UpdatesStore(t *testing.T) {
 
 	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod"}
 	store.On("UpdateResource", res).Return(&res)
-	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{})
+	kubeSvc.On("IsWatching", mock.AnythingOfType("string")).Return(false)
 	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Once()
 	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
 
@@ -112,7 +112,7 @@ func TestWatchResources_onResourceAdd_InformerAlreadyRunning_SkipsWatchResources
 
 	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Resource: "pods", Version: "v1", Group: ""}
 	store.On("UpdateResource", res).Return(&res)
-	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{"pods_v1_": make(chan struct{})})
+	kubeSvc.On("IsWatching", "pods_v1_").Return(true)
 	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
 
 	uc.onResourceAdd(res)
@@ -127,9 +127,9 @@ func TestWatchResources_onResourceAdd_ConcurrentCallsSameType_StartsInformerOnce
 	store.On("UpdateResource", res).Return(&res)
 	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
 
-	// First call sees absent channel; second (serialized by mutex) sees it present.
-	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{}).Once()
-	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{"pods_v1_": make(chan struct{})})
+	// First call reports not watching; second (serialized by mutex) reports watching.
+	kubeSvc.On("IsWatching", "pods_v1_").Return(false).Once()
+	kubeSvc.On("IsWatching", "pods_v1_").Return(true)
 	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Once()
 
 	var wg sync.WaitGroup
@@ -153,7 +153,7 @@ func TestWatchResources_BroadcastsPatch(t *testing.T) {
 
 	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Status: kube.StatusSuccess}
 	store.On("UpdateResource", res).Return(&res)
-	kubeSvc.On("GetInformerChannels").Return(map[string]chan struct{}{})
+	kubeSvc.On("IsWatching", mock.AnythingOfType("string")).Return(false)
 	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Once()
 
 	rtSvc.On("Broadcast", mock.MatchedBy(func(msg realtime.Message) bool {

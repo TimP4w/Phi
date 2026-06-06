@@ -1,17 +1,10 @@
 package kubernetesusecases
 
 import (
-	"time"
-
 	"github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/realtime"
 	shared "github.com/timp4w/phi/internal/core/shared"
-)
-
-const (
-	eventTTL             = 72 * time.Hour
-	maxEventsPerResource = 100
 )
 
 type WatchEventsInput struct{}
@@ -51,7 +44,7 @@ func (uc *WatchEventsUseCase) onEvent(event *kubernetes.Event) {
 	})
 
 	logger.Debug("Processing event")
-	added := uc.kubeStore.AddEvent(string(event.ResourceUID), *event, eventTTL, maxEventsPerResource)
+	added := uc.kubeStore.AddEvent(string(event.ResourceUID), *event, kubernetes.EventTTL, kubernetes.MaxEventsPerResource)
 	if !added {
 		logger.Debug("Did not add event (duplicate or stale)")
 		return

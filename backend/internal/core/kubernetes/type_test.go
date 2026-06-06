@@ -45,49 +45,32 @@ func createSampleResource() Resource {
 
 func TestCopy(t *testing.T) {
 	original := createSampleResource()
-	copy := Resource{}
+	dst := Resource{}
+	// Copy does not touch Events; pre-set them so DeepEqual passes.
+	dst.Events = append([]Event(nil), original.Events...)
 
-	copy.Copy(original)
+	dst.Copy(original)
 
-	if !reflect.DeepEqual(copy, original) {
-		t.Errorf("Copy() failed, expected %v, got %v", original, copy)
+	if !reflect.DeepEqual(dst, original) {
+		t.Errorf("Copy() failed, expected %v, got %v", original, dst)
 	}
 }
 
-func TestCopyEventsMerging(t *testing.T) {
-	original := createSampleResource()
-
+func TestCopyDoesNotTouchEvents(t *testing.T) {
+	// Copy is not responsible for merging events; AddEvent is the sole writer.
+	// Verify that existing events in the receiver survive a Copy call.
 	now := time.Now()
-	original.Events = []Event{
-		{UID: "event-uid-1", Message: "event-message-1", LastObserved: now.Add(-1 * time.Hour)},
-		{UID: "event-uid-2", Message: "event-message-2", LastObserved: now.Add(-2 * time.Hour)},
+	existing := []Event{
+		{UID: "event-uid-3", Message: "pre-existing", LastObserved: now.Add(-3 * time.Hour)},
 	}
+	dst := Resource{Events: existing}
+	src := createSampleResource() // has different events
 
-	copy := Resource{
-		Events: []Event{
-			{UID: "event-uid-2", Message: "event-message-2", LastObserved: now.Add(-2 * time.Hour)}, // duplicate
-			{UID: "event-uid-3", Message: "event-message-3", LastObserved: now.Add(-3 * time.Hour)}, // unique
-		},
-	}
+	dst.Copy(src)
 
-	copy.Copy(original)
-
-	// Expect all unique events by UID:
-	expectedUIDs := map[string]bool{
-		"event-uid-1": false,
-		"event-uid-2": false,
-		"event-uid-3": false,
-	}
-	for _, ev := range copy.Events {
-		expectedUIDs[string(ev.UID)] = true
-	}
-	for uid, found := range expectedUIDs {
-		if !found {
-			t.Errorf("Expected event with UID %s to be present after Copy", uid)
-		}
-	}
-	if len(copy.Events) != 3 {
-		t.Errorf("Expected 3 unique events after Copy, got %d", len(copy.Events))
+	// Events in dst must be unchanged.
+	if len(dst.Events) != 1 || string(dst.Events[0].UID) != "event-uid-3" {
+		t.Errorf("Copy() must not alter receiver's Events; got %v", dst.Events)
 	}
 }
 
@@ -138,18 +121,27 @@ func TestIsDeepEqual_DifferentPVCMetadata(t *testing.T) {
 	assert.False(t, a.IsDeepEqual(b))
 }
 
-func TestSortAndLimitEvents(t *testing.T) {
-	r := &Resource{}
+func TestAddEventSortAndLimit(t *testing.T) {
+	store := NewKubeStoreImpl().(*KubeStoreImpl)
+	uid := "test-uid"
+	store.resources[uid] = &Resource{UID: uid}
+
 	now := time.Now()
-	events := []Event{
-		{Name: "old", LastObserved: now.Add(-2 * time.Hour)},
-		{Name: "newest", LastObserved: now},
-		{Name: "middle", LastObserved: now.Add(-1 * time.Hour)},
+	// Add 3 events; cap at 2 — should keep the 2 most recent
+	for i, e := range []Event{
+		{UID: "a", Name: "old", LastObserved: now.Add(-2 * time.Hour), ResourceUID: uid},
+		{UID: "b", Name: "newest", LastObserved: now, ResourceUID: uid},
+		{UID: "c", Name: "middle", LastObserved: now.Add(-1 * time.Hour), ResourceUID: uid},
+	} {
+		_ = i
+		store.AddEvent(uid, e, EventTTL, 2)
 	}
-	result := r.sortAndLimitEvents(events, 2)
-	assert.Len(t, result, 2)
-	assert.Equal(t, "newest", result[0].Name)
-	assert.Equal(t, "middle", result[1].Name)
+
+	events := store.resources[uid].Events
+	assert.Len(t, events, 2)
+	names := []string{events[0].Name, events[1].Name}
+	assert.Contains(t, names, "newest")
+	assert.Contains(t, names, "middle")
 }
 
 func TestResourceMap_LookupFound(t *testing.T) {
