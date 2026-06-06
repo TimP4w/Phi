@@ -113,18 +113,16 @@ func TestGetResource_MissingUID(t *testing.T) {
 func TestGetTree_Success(t *testing.T) {
 	store := mocks.NewKubeStore(t)
 
-	res := &kube.Resource{
-		UID: "repo-uid", Kind: "GitRepository", Name: "flux-system", Status: kube.StatusSuccess,
-		Children: []kube.Resource{
-			{
-				UID: "ks-uid", Kind: "Kustomization", Name: "my-app", Status: kube.StatusFailed,
-				Children: []kube.Resource{
-					{UID: "dep-uid", Kind: "Deployment", Name: "my-app", Status: kube.StatusSuccess},
-				},
-			},
-		},
-	}
-	store.On("GetResourceByUID", "repo-uid").Return(res)
+	// The store never nests Children on a stored Resource; parent→child links are
+	// resolved on demand via FindChildrenResourcesByRef(parent.GetRef()).
+	root := &kube.Resource{UID: "repo-uid", Kind: "GitRepository", Name: "flux-system", Status: kube.StatusSuccess}
+	ks := kube.Resource{UID: "ks-uid", Kind: "Kustomization", Name: "my-app", Status: kube.StatusFailed}
+	dep := kube.Resource{UID: "dep-uid", Kind: "Deployment", Name: "my-app", Status: kube.StatusSuccess}
+
+	store.On("GetResourceByUID", "repo-uid").Return(root)
+	store.On("FindChildrenResourcesByRef", root.GetRef()).Return([]kube.Resource{ks})
+	store.On("FindChildrenResourcesByRef", ks.GetRef()).Return([]kube.Resource{dep})
+	store.On("FindChildrenResourcesByRef", dep.GetRef()).Return([]kube.Resource(nil))
 
 	tools := &mcpTools{store: store}
 	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{"uid": "repo-uid"}}}

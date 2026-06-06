@@ -120,15 +120,22 @@ func (t *mcpTools) getTree(_ context.Context, req mcplib.CallToolRequest) (*mcpl
 
 	tree := treeprint.New()
 	tree.SetValue(fmt.Sprintf("%s/%s (%s)", resource.Kind, resource.Name, resource.Status))
-	addChildrenToTree(tree, resource.Children)
+	t.addChildrenToTree(tree, *resource, map[string]struct{}{resource.UID: {}})
 
 	return mcplib.NewToolResultText(tree.String()), nil
 }
 
-func addChildrenToTree(node treeprint.Tree, children []kube.Resource) {
-	for _, child := range children {
+// addChildrenToTree resolves the children of parent via the store's ref index
+// (Resource.Children is never populated on stored resources) and recurses.
+// visited guards against cycles in the ownership graph.
+func (t *mcpTools) addChildrenToTree(node treeprint.Tree, parent kube.Resource, visited map[string]struct{}) {
+	for _, child := range t.store.FindChildrenResourcesByRef(parent.GetRef()) {
+		if _, seen := visited[child.UID]; seen {
+			continue
+		}
+		visited[child.UID] = struct{}{}
 		branch := node.AddBranch(fmt.Sprintf("%s/%s (%s)", child.Kind, child.Name, child.Status))
-		addChildrenToTree(branch, child.Children)
+		t.addChildrenToTree(branch, child, visited)
 	}
 }
 
