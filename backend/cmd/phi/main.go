@@ -21,6 +21,7 @@ import (
 
 	_ "github.com/timp4w/phi/docs"
 	controllers "github.com/timp4w/phi/internal/api/http"
+	mcpapi "github.com/timp4w/phi/internal/api/mcp"
 	wscontrollers "github.com/timp4w/phi/internal/api/ws"
 	"github.com/timp4w/phi/internal/core/kubernetes"
 	kubernetesusecases "github.com/timp4w/phi/internal/core/kubernetes/usecases"
@@ -87,18 +88,19 @@ func main() {
 				fx.ResultTags(`name:"port"`),
 			),
 		),
+		fx.Provide(mcpapi.NewMCPServer),
 		fx.Invoke(registerApp),
 	)
 	app.Run()
 }
 
-func registerApp(useCases UseCases, realtimeService realtime.RealtimeService, lifecycle fx.Lifecycle, p struct {
+func registerApp(useCases UseCases, realtimeService realtime.RealtimeService, mcpSrv *mcpapi.MCPServer, lifecycle fx.Lifecycle, p struct {
 	fx.In
 	Port *string `name:"port"`
 }) {
 	logging.Info("Registering application components")
 	initBackgroundTasks(useCases)
-	r := createRouter(useCases, realtimeService)
+	r := createRouter(useCases, realtimeService, mcpSrv)
 	registerServerLifecycle(lifecycle, r, *p.Port)
 }
 
@@ -122,7 +124,7 @@ func initBackgroundTasks(uc UseCases) {
 }
 
 // createRouter initializes and configures the HTTP router
-func createRouter(uc UseCases, realtimeService realtime.RealtimeService) *chi.Mux {
+func createRouter(uc UseCases, realtimeService realtime.RealtimeService, mcpSrv *mcpapi.MCPServer) *chi.Mux {
 	logger := logging.Logger()
 	logger.Info("Creating router")
 
@@ -134,7 +136,7 @@ func createRouter(uc UseCases, realtimeService realtime.RealtimeService) *chi.Mu
 	r.Use(corsMiddleware)
 
 	// Register API controllers and routes
-	registerAPIRoutes(r, uc, realtimeService)
+	registerAPIRoutes(r, uc, realtimeService, mcpSrv)
 
 	return r
 }
@@ -153,7 +155,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.RealtimeService) {
+func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.RealtimeService, mcpSrv *mcpapi.MCPServer) {
 	staticController := controllers.NewStaticController()
 	resourceController := controllers.NewResourceController(
 		uc.GetResourceYAML,
@@ -174,6 +176,8 @@ func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.Realtim
 
 	// Swagger documentation
 	r.Handle("/swagger/*", httpSwagger.WrapHandler)
+
+	r.Mount("/mcp", mcpSrv.Handler())
 }
 
 func registerServerLifecycle(lifecycle fx.Lifecycle, router http.Handler, port string) {
