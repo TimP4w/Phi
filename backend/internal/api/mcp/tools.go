@@ -51,8 +51,8 @@ func (t *mcpTools) listResources(_ context.Context, req mcplib.CallToolRequest) 
 		if statusFilter != "" && !strings.EqualFold(string(r.Status), statusFilter) {
 			continue
 		}
-		fmt.Fprintf(&sb, "%s/%s (namespace: %s, status: %s, flux: %v)\n",
-			r.Kind, r.Name, r.Namespace, r.Status, r.IsFluxManaged)
+		fmt.Fprintf(&sb, "%s/%s (uid: %s, namespace: %s, status: %s, flux: %v)\n",
+			r.Kind, r.Name, r.UID, r.Namespace, r.Status, r.IsFluxManaged)
 		count++
 	}
 
