@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -192,4 +193,52 @@ func TestDiagnoseResource_NotFound(t *testing.T) {
 	_, err := tools.diagnoseResource(context.Background(), req)
 
 	assert.ErrorContains(t, err, "resource not found")
+}
+
+func TestGetEvents_NoFilter(t *testing.T) {
+	eventsUC := mocks.NewUseCase[kubernetesusecases.GetEventsInput, []kube.Event](t)
+	eventsUC.On("Execute", kubernetesusecases.GetEventsInput{}).Return([]kube.Event{
+		{Reason: "ReconcileFailed", Message: "failed", Namespace: "default", Name: "my-app"},
+		{Reason: "Pulled", Message: "image pulled", Namespace: "default", Name: "other"},
+	}, nil)
+
+	tools := &mcpTools{getEventsUC: eventsUC}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{}}}
+
+	result, err := tools.getEvents(context.Background(), req)
+
+	require.NoError(t, err)
+	text := result.Content[0].(mcplib.TextContent).Text
+	assert.Contains(t, text, "ReconcileFailed")
+	assert.Contains(t, text, "Pulled")
+}
+
+func TestGetEvents_NamespaceFilter(t *testing.T) {
+	eventsUC := mocks.NewUseCase[kubernetesusecases.GetEventsInput, []kube.Event](t)
+	eventsUC.On("Execute", kubernetesusecases.GetEventsInput{}).Return([]kube.Event{
+		{Reason: "ReconcileFailed", Message: "failed", Namespace: "default", Name: "my-app"},
+		{Reason: "Pulled", Message: "image pulled", Namespace: "infra", Name: "other"},
+	}, nil)
+
+	tools := &mcpTools{getEventsUC: eventsUC}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{"namespace": "default"}}}
+
+	result, err := tools.getEvents(context.Background(), req)
+
+	require.NoError(t, err)
+	text := result.Content[0].(mcplib.TextContent).Text
+	assert.Contains(t, text, "ReconcileFailed")
+	assert.NotContains(t, text, "Pulled")
+}
+
+func TestGetEvents_ServiceError(t *testing.T) {
+	eventsUC := mocks.NewUseCase[kubernetesusecases.GetEventsInput, []kube.Event](t)
+	eventsUC.On("Execute", kubernetesusecases.GetEventsInput{}).Return([]kube.Event(nil), fmt.Errorf("k8s unavailable"))
+
+	tools := &mcpTools{getEventsUC: eventsUC}
+	req := mcplib.CallToolRequest{Params: mcplib.CallToolParams{Arguments: map[string]interface{}{}}}
+
+	_, err := tools.getEvents(context.Background(), req)
+
+	assert.ErrorContains(t, err, "failed to get events")
 }

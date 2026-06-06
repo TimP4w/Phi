@@ -189,8 +189,34 @@ func (t *mcpTools) diagnoseResource(_ context.Context, req mcplib.CallToolReques
 	return mcplib.NewToolResultText(sb.String()), nil
 }
 
-func (t *mcpTools) getEvents(_ context.Context, _ mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
-	return mcplib.NewToolResultText("not implemented"), nil
+func (t *mcpTools) getEvents(_ context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+	args := req.GetArguments()
+	nsFilter := getStringArg(args, "namespace")
+	uidFilter := getStringArg(args, "uid")
+
+	events, err := t.getEventsUC.Execute(kubernetesusecases.GetEventsInput{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get events: %w", err)
+	}
+
+	var sb strings.Builder
+	count := 0
+	for _, e := range events {
+		if nsFilter != "" && e.Namespace != nsFilter {
+			continue
+		}
+		if uidFilter != "" && e.ResourceUID != uidFilter {
+			continue
+		}
+		fmt.Fprintf(&sb, "[%s] %s/%s: %s — %s\n",
+			e.Namespace, e.Kind, e.Name, e.Reason, e.Message)
+		count++
+	}
+
+	if count == 0 {
+		return mcplib.NewToolResultText("No events found matching the given filters."), nil
+	}
+	return mcplib.NewToolResultText(fmt.Sprintf("Found %d event(s):\n\n%s", count, sb.String())), nil
 }
 
 func (t *mcpTools) reconcileResource(_ context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
