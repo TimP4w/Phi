@@ -4,7 +4,6 @@ import {
   FluxResource,
   HelmRelease,
   Kustomization,
-  ResourceStatus,
 } from "../../../core/fluxTree/models/tree";
 import Source from "../source/Source";
 import ReconcileSuspendButtonGroup from "../play-pause/ReconcileSuspendButtonGroup";
@@ -26,22 +25,6 @@ import { stringToEnum } from "../../../core/shared/enum.utils";
 
 type AppProps = {
   node: FluxResource;
-};
-
-const statusBorderClass = (status: ResourceStatus): string => {
-  switch (status) {
-    case ResourceStatus.SUCCESS:
-      return "border-l-success";
-    case ResourceStatus.FAILED:
-      return "border-l-danger";
-    case ResourceStatus.PENDING:
-    case ResourceStatus.WARNING:
-      return "border-l-warning";
-    case ResourceStatus.SUSPENDED:
-      return "border-l-default-400";
-    default:
-      return "border-l-default-400";
-  }
 };
 
 const conditionDotClass = (condition: Condition): string => {
@@ -91,7 +74,7 @@ const App: React.FC<AppProps> = observer(({ node }) => {
 
   return (
     <div
-      className={`group flex flex-col rounded-xl bg-content1 border border-default-100 border-l-4 ${statusBorderClass(node.status)} hover:bg-content2 transition-colors cursor-pointer overflow-hidden`}
+      className="group flex flex-col rounded-xl bg-content1 border border-default-100 hover:bg-content2 transition-colors cursor-pointer overflow-hidden"
       onClick={() => navigate(`${ROUTES.RESOURCE}/${node.uid}`)}
     >
       {/* Header */}

@@ -21,16 +21,6 @@ import { Pause } from "lucide-react";
 
 type ResourceProps = NodeProps<Node<VisualizationNodeData>>;
 
-const borderColorClass = (status: ResourceStatus): string => {
-  switch (status) {
-    case ResourceStatus.SUCCESS: return "border-l-success";
-    case ResourceStatus.FAILED: return "border-l-danger";
-    case ResourceStatus.PENDING:
-    case ResourceStatus.WARNING: return "border-l-warning";
-    default: return "border-l-default-300";
-  }
-};
-
 const ACCESS_MODE_SHORT: Record<string, string> = {
   ReadWriteOnce: "RWO",
   ReadOnlyMany: "ROX",
@@ -116,9 +106,7 @@ function Resource({ data }: ResourceProps) {
     <div className="relative">
       <Handle type="target" position={Position.Left} />
 
-      <div
-        className={`w-[240px] bg-content1 border border-default-200 border-l-4 ${borderColorClass(treeNode.status)} rounded-lg shadow-sm`}
-      >
+      <div className="w-[240px] bg-content1 border border-default-200 rounded-lg shadow-sm">
         {/* Main row */}
         <div className="flex items-center gap-2.5 px-3 py-2.5">
           <div className="flex-shrink-0">
