@@ -127,18 +127,19 @@ func TestWatchLogsUseCase_CancelsPreviousSubscription(t *testing.T) {
 	}
 }
 
-func TestWatchLogsUseCase_OnLog_Broadcasts(t *testing.T) {
+func TestWatchLogsUseCase_OnLog_SendsToSubscribingClientOnly(t *testing.T) {
 	uc, _, _, rtSvc := makeWatchLogsUseCase(t)
 
-	rtSvc.On("Broadcast", mock.MatchedBy(func(msg realtime.Message) bool {
+	rtSvc.On("SendMessage", mock.MatchedBy(func(msg realtime.Message) bool {
 		return msg.Type == realtime.LOG
-	})).Return(nil)
+	}), "c1").Return(nil)
 
-	uc.onLog("pod-uid", kube.KubeLog{
+	uc.onLog("c1", "pod-uid", kube.KubeLog{
 		Message:   "hello world",
 		Container: "main",
 		Timestamp: time.Now(),
 	})
 
 	rtSvc.AssertExpectations(t)
+	rtSvc.AssertNotCalled(t, "Broadcast")
 }

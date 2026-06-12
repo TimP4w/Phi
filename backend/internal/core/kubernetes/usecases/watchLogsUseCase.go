@@ -87,13 +87,13 @@ func (uc *WatchLogsUseCase) Execute(in WatchLogsUseCaseInput) (struct{}, error) 
 	}).Info("Starting log watch")
 
 	go uc.kubeService.WatchLogs(*pod, ctx, func(logEntry kubernetes.KubeLog) {
-		uc.onLog(in.ResourceID, logEntry)
+		uc.onLog(in.ClientID, in.ResourceID, logEntry)
 	})
 
 	return struct{}{}, nil
 }
 
-func (uc *WatchLogsUseCase) onLog(uid string, log kubernetes.KubeLog) error {
+func (uc *WatchLogsUseCase) onLog(clientID string, uid string, log kubernetes.KubeLog) error {
 	message := LogMessage{
 		UID:       uid,
 		Timestamp: log.Timestamp,
@@ -106,11 +106,10 @@ func (uc *WatchLogsUseCase) onLog(uid string, log kubernetes.KubeLog) error {
 		WithField("container", log.Container).
 		Debug("Received log entry")
 
-	uc.realtimeService.Broadcast(realtime.Message{
+	return uc.realtimeService.SendMessage(realtime.Message{
 		Type:    realtime.LOG,
 		Message: message,
-	})
-	return nil
+	}, clientID)
 }
 
 type LogMessage struct {
