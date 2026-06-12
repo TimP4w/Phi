@@ -11,7 +11,7 @@ export default function Phi() {
   return (
     <HeroUIProvider navigate={navigate} useHref={useHref}>
       <ToastProvider
-        placement="top-center"
+        placement="bottom-right"
         toastProps={{
           radius: "md",
           color: "primary",
