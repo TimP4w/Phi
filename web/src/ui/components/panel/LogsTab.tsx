@@ -5,7 +5,7 @@ import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { format } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
-import { ArrowDown, Terminal } from "lucide-react";
+import { ArrowUp, Terminal } from "lucide-react";
 
 const ansiToHtml = new AnsiToHtml({ escapeXML: true });
 
@@ -29,26 +29,27 @@ const containerColor = (name: string): string => {
 export const LogsTab = observer(() => {
   const fluxTreeStore = useInjection(FluxTreeStore);
   const logs = fluxTreeStore.selectedResource?.logs ?? [];
+  const displayedLogs = [...logs].reverse();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
   useEffect(() => {
     if (autoScroll && scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      scrollRef.current.scrollTop = 0;
     }
   }, [logs.length, autoScroll]);
 
   const handleScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
-    const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 24;
-    setAutoScroll(atBottom);
+    const atTop = el.scrollTop <= 24;
+    setAutoScroll(atTop);
   };
 
-  const scrollToBottom = () => {
+  const scrollToTop = () => {
     setAutoScroll(true);
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      scrollRef.current.scrollTop = 0;
     }
   };
 
@@ -78,7 +79,7 @@ export const LogsTab = observer(() => {
         onScroll={handleScroll}
         className="flex-1 overflow-y-auto px-4 py-3 space-y-0"
       >
-        {logs.map((log, i) => (
+        {displayedLogs.map((log, i) => (
           <div
             key={`${log.timestamp.getTime()}-${i}`}
             className="flex gap-3 hover:bg-white/5 px-1 py-0.5 rounded group leading-5"
@@ -99,15 +100,14 @@ export const LogsTab = observer(() => {
         ))}
       </div>
 
-      {/* Scroll-to-bottom button — only shown when not at bottom */}
       {!autoScroll && (
         <div className="absolute bottom-4 right-4">
           <Button
             size="sm"
             variant="flat"
             className="bg-content1/90 backdrop-blur-sm shadow-lg"
-            onPress={scrollToBottom}
-            startContent={<ArrowDown className="w-3.5 h-3.5" />}
+            onPress={scrollToTop}
+            startContent={<ArrowUp className="w-3.5 h-3.5" />}
           >
             Latest
           </Button>
