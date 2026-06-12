@@ -74,6 +74,7 @@ func TestGetResource_Success(t *testing.T) {
 		},
 	}
 	store.On("GetResourceByUID", "ks-uid").Return(res)
+	store.On("GetEventsByResourceUID", "ks-uid").Return([]kube.Event(nil))
 	yamlUC.On("Execute", kubernetesusecases.GetResourceYAMLInput{ResourceUid: "ks-uid"}).
 		Return([]byte("apiVersion: kustomize.toolkit.fluxcd.io/v1\nkind: Kustomization\n"), nil)
 
@@ -158,14 +159,14 @@ func TestDiagnoseResource_WithFailures(t *testing.T) {
 			{Type: "Ready", Status: "False", Reason: "ArtifactFailed", Message: "failed to get artifact"},
 			{Type: "Reconciling", Status: "True", Reason: "Progressing", Message: ""},
 		},
-		Events: []kube.Event{
-			{Reason: "ReconcileFailed", Message: "failed to apply manifests"},
-			{Reason: "ImagePulled", Message: "successfully pulled"},
-		},
 		ParentIDs: []string{"repo-uid"},
 	}
 	parent := &kube.Resource{UID: "repo-uid", Kind: "GitRepository", Name: "flux-system", Status: kube.StatusSuccess}
 	store.On("GetResourceByUID", "ks-uid").Return(res)
+	store.On("GetEventsByResourceUID", "ks-uid").Return([]kube.Event{
+		{Reason: "ReconcileFailed", Message: "failed to apply manifests"},
+		{Reason: "ImagePulled", Message: "successfully pulled"},
+	})
 	store.On("GetResourceByUID", "repo-uid").Return(parent)
 
 	tools := &mcpTools{store: store}

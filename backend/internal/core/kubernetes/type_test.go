@@ -23,7 +23,6 @@ func createSampleResource() Resource {
 		Group:         "sample-group",
 		Status:        "Active",
 		Conditions:    []Condition{{Type: "condition1", Status: "True"}},
-		Events:        []Event{{UID: "event-uid", Message: "event-message", LastObserved: time.Now().Add(-1 * time.Hour)}},
 		CreatedAt:     time.Date(2024, 01, 01, 0, 0, 0, 0, time.UTC),
 		DeletedAt:     time.Date(2024, 02, 01, 0, 0, 0, 0, time.UTC),
 		IsFluxManaged: true,
@@ -45,31 +44,11 @@ func createSampleResource() Resource {
 func TestCopy(t *testing.T) {
 	original := createSampleResource()
 	dst := Resource{}
-	// Copy does not touch Events; pre-set them so DeepEqual passes.
-	dst.Events = append([]Event(nil), original.Events...)
 
 	dst.Copy(original)
 
 	if !reflect.DeepEqual(dst, original) {
 		t.Errorf("Copy() failed, expected %v, got %v", original, dst)
-	}
-}
-
-func TestCopyDoesNotTouchEvents(t *testing.T) {
-	// Copy is not responsible for merging events; AddEvent is the sole writer.
-	// Verify that existing events in the receiver survive a Copy call.
-	now := time.Now()
-	existing := []Event{
-		{UID: "event-uid-3", Message: "pre-existing", LastObserved: now.Add(-3 * time.Hour)},
-	}
-	dst := Resource{Events: existing}
-	src := createSampleResource() // has different events
-
-	dst.Copy(src)
-
-	// Events in dst must be unchanged.
-	if len(dst.Events) != 1 || string(dst.Events[0].UID) != "event-uid-3" {
-		t.Errorf("Copy() must not alter receiver's Events; got %v", dst.Events)
 	}
 }
 
@@ -127,38 +106,17 @@ func TestAddEventSortAndLimit(t *testing.T) {
 
 	now := time.Now()
 	// Add 3 events; cap at 2 — should keep the 2 most recent
-	for i, e := range []Event{
+	for _, e := range []Event{
 		{UID: "a", Name: "old", LastObserved: now.Add(-2 * time.Hour), ResourceUID: uid},
 		{UID: "b", Name: "newest", LastObserved: now, ResourceUID: uid},
 		{UID: "c", Name: "middle", LastObserved: now.Add(-1 * time.Hour), ResourceUID: uid},
 	} {
-		_ = i
 		store.AddEvent(uid, e, EventTTL, 2)
 	}
 
-	events := store.resources[uid].Events
+	events := store.GetEventsByResourceUID(uid)
 	assert.Len(t, events, 2)
 	names := []string{events[0].Name, events[1].Name}
 	assert.Contains(t, names, "newest")
 	assert.Contains(t, names, "middle")
-}
-
-func TestResourceMap_LookupFound(t *testing.T) {
-	rm := &ResourceMap{}
-	rm.M.Store("pod", []ApiResource{{Kind: "Pod"}})
-
-	result := rm.Lookup("Pod")
-	assert.Len(t, result, 1)
-	assert.Equal(t, "Pod", result[0].Kind)
-}
-
-func TestResourceMap_LookupNotFound(t *testing.T) {
-	rm := &ResourceMap{}
-	result := rm.Lookup("Deployment")
-	assert.Nil(t, result)
-}
-
-func TestResourceMap_Resources(t *testing.T) {
-	rm := &ResourceMap{List: []ApiResource{{Kind: "Pod"}, {Kind: "Service"}}}
-	assert.Len(t, rm.Resources(), 2)
 }

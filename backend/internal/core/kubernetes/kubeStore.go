@@ -12,25 +12,25 @@ type KubeStore interface {
 	// RemoveResource removes a resource from the store by its UID.
 	// It also removes the resource from its parent's references if it exists.
 	RemoveResource(uid string)
-	// SetResources sets the resources map and returns it.
-	SetResources(resources map[string]*Resource) map[string]*Resource
 	// GetResources returns a snapshot of the resources map as pointers.
 	GetResources() map[string]*Resource
 	// FindChildrenResourcesByRef retrieves all child resources for a given reference.
-	// Reference is a string that uniquely identifies a resource, in the format `name_namespace_kind_version`.
+	// Reference is a string that uniquely identifies a resource, in the format
+	// `group/version/Kind:namespace/name` (group "core" for the core API group).
 	//
 	// Example:
 	//
 	//	// Find all children of the Pod named "nginx" in "default" namespace:
-	//	children := store.FindChildrenResourcesByRef("nginx_default_Pod_v1")
+	//	children := store.FindChildrenResourcesByRef("core/v1/Pod:default/nginx")
 	FindChildrenResourcesByRef(ref string) []Resource
-	// RegisterResource registers a resource and its parent/owner references in the store.
-	RegisterResource(resource *Resource)
 
+	// AddEvent records an event for the resource with the given UID. It returns false
+	// if the resource is unknown, the event is older than ttl, or it is a stale
+	// duplicate; recurring events (same UID, newer observation/count) replace the
+	// stored copy and return true.
 	AddEvent(resourceUID string, ev Event, ttl time.Duration, max int) bool
-	// GetKnownResourceAPIRefs returns the set of resource API ref keys (resource_version_group)
-	// for all resources currently in the store. Used to determine which K8s resource types to watch.
-	GetKnownResourceAPIRefs() map[string]struct{}
+	// GetEventsByResourceUID returns the recorded events for the resource with the given UID.
+	GetEventsByResourceUID(resourceUID string) []Event
 	// SetSuspended mutates the IsSuspended flag on a resource under the store lock.
 	// Returns false if the resource does not exist.
 	SetSuspended(uid string, suspended bool) bool

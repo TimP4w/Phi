@@ -94,9 +94,9 @@ func (t *mcpTools) getResource(_ context.Context, req mcplib.CallToolRequest) (*
 		}
 	}
 
-	if len(resource.Events) > 0 {
+	if events := t.store.GetEventsByResourceUID(uid); len(events) > 0 {
 		sb.WriteString("\nRecent Events:\n")
-		for _, e := range resource.Events {
+		for _, e := range events {
 			fmt.Fprintf(&sb, "  - %s (%s): %s\n", e.Reason, e.LastObserved.Format("2006-01-02 15:04"), e.Message)
 		}
 	}
@@ -170,7 +170,7 @@ func (t *mcpTools) diagnoseResource(_ context.Context, req mcplib.CallToolReques
 	}
 
 	var errorEvents []kube.Event
-	for _, e := range resource.Events {
+	for _, e := range t.store.GetEventsByResourceUID(uid) {
 		r := strings.ToLower(e.Reason)
 		if strings.Contains(r, "error") || strings.Contains(r, "fail") || strings.Contains(r, "backoff") {
 			errorEvents = append(errorEvents, e)

@@ -1,8 +1,6 @@
 package kubernetesusecases
 
 import (
-	"sync"
-
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/realtime"
@@ -16,7 +14,6 @@ type WatchResourcesUseCase struct {
 	realtimeService realtime.RealtimeService
 	kubeStore       kube.KubeStore
 	logger          logging.PhiLogger
-	informerMu      sync.Mutex
 }
 
 func NewWatchResourcesUseCase(
@@ -32,13 +29,19 @@ func NewWatchResourcesUseCase(
 	}
 }
 
+// Execute discovers the cluster's API resources and starts informers for all of
+// them. The informers' initial sync populates the store.
 func (uc *WatchResourcesUseCase) Execute(in WatchResourcesInput) (struct{}, error) {
 	uc.logger.Info("Starting resources watcher")
 
-	uniqueKinds := uc.kubeStore.GetKnownResourceAPIRefs()
-	uc.logger.WithField("count", len(uniqueKinds)).Debug("Setting up resource watchers")
+	apis, err := uc.kubeService.DiscoverApis()
+	if err != nil {
+		uc.logger.WithError(err).Error("Error discovering cluster APIs")
+		return struct{}{}, err
+	}
+	uc.logger.WithField("count", len(apis)).Debug("Setting up resource watchers")
 
-	uc.kubeService.WatchResources(uniqueKinds, uc.onResourceAdd, uc.onResourceUpdate, uc.onResourceDelete)
+	uc.kubeService.WatchResources(apis, uc.onResourceAdd, uc.onResourceUpdate, uc.onResourceDelete)
 	return struct{}{}, nil
 }
 
@@ -52,23 +55,6 @@ func (uc *WatchResourcesUseCase) onResourceAdd(el kube.Resource) {
 	logger.Debug("Resource added")
 
 	updated := uc.kubeStore.UpdateResource(el)
-
-	// Start watching new resource types discovered at runtime (e.g. new CRDs).
-	// The mutex serializes the check+call so concurrent events for the same new
-	// type cannot both pass the !exists guard and spawn duplicate informers.
-	resourceKey := el.Resource + "_" + el.Version + "_" + el.Group
-	uc.informerMu.Lock()
-	if !uc.kubeService.IsWatching(resourceKey) {
-		logger.WithField("resourceKey", resourceKey).Debug("Creating new informer for resource")
-		uc.kubeService.WatchResources(
-			map[string]struct{}{resourceKey: {}},
-			uc.onResourceAdd,
-			uc.onResourceUpdate,
-			uc.onResourceDelete,
-		)
-	}
-	uc.informerMu.Unlock()
-
 	uc.broadcastPatch(realtime.PatchOpUpsert, updated)
 }
 

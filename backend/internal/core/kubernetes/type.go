@@ -4,7 +4,6 @@ import (
 	"errors"
 	"maps"
 	"strings"
-	"sync"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -31,7 +30,6 @@ type Resource struct {
 	Group                 string                `json:"group"`
 	Status                Status                `json:"status"`
 	Conditions            []Condition           `json:"conditions"`
-	Events                []Event               `json:"events"`
 	CreatedAt             time.Time             `json:"createdAt"`
 	DeletedAt             time.Time             `json:"deletedAt"`
 	IsFluxManaged         bool                  `json:"isFluxManaged"`
@@ -161,15 +159,6 @@ func (e *Resource) IsDeepEqual(other Resource) bool {
 	}
 	for i := range e.Conditions {
 		if e.Conditions[i] != other.Conditions[i] {
-			return false
-		}
-	}
-
-	if len(e.Events) != len(other.Events) {
-		return false
-	}
-	for i := range e.Events {
-		if e.Events[i] != other.Events[i] {
 			return false
 		}
 	}
@@ -408,18 +397,3 @@ type ApiResource struct {
 	Group        string
 	Version      string
 }
-
-type ResourceMap struct {
-	List []ApiResource
-	M    sync.Map // sync.Map for concurrent writes
-}
-
-func (rm *ResourceMap) Lookup(s string) []ApiResource {
-	v, ok := rm.M.Load(strings.ToLower(s))
-	if !ok {
-		return nil
-	}
-	return v.([]ApiResource)
-}
-
-func (rm *ResourceMap) Resources() []ApiResource { return rm.List }

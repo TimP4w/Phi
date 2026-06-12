@@ -21,7 +21,6 @@ func makeResource(uid, name, namespace, kind, version, group string) Resource {
 		Resource:   kind,
 		Labels:     map[string]string{},
 		Conditions: []Condition{},
-		Events:     []Event{},
 		ParentRefs: []string{},
 	}
 }
@@ -94,33 +93,7 @@ func TestKubeStore_RemoveResource_NonExistent(t *testing.T) {
 	})
 }
 
-// ── SetResources / GetResources ───────────────────────────────────────────────
-
-func TestKubeStore_SetResources(t *testing.T) {
-	s := newStore()
-	r1 := makeResource("uid-1", "pod-a", "default", "Pod", "v1", "")
-	r2 := makeResource("uid-2", "pod-b", "default", "Pod", "v1", "")
-	newMap := map[string]*Resource{"uid-1": &r1, "uid-2": &r2}
-
-	returned := s.SetResources(newMap)
-
-	assert.Len(t, returned, 2)
-	assert.NotNil(t, s.GetResourceByUID("uid-1"))
-	assert.NotNil(t, s.GetResourceByUID("uid-2"))
-}
-
-func TestKubeStore_SetResources_ClearsOldRefs(t *testing.T) {
-	s := newStore()
-	// Add a resource so refs are built
-	parent := makeResource("p-uid", "kustomization", "flux-system", "Kustomization", "kustomize.toolkit.fluxcd.io/v1", "kustomize.toolkit.fluxcd.io")
-	s.UpdateResource(parent)
-
-	// Replace with empty map
-	s.SetResources(map[string]*Resource{})
-
-	assert.Nil(t, s.GetResourceByUID("p-uid"))
-	// refs map should be reset — verified implicitly by no crash on subsequent ops
-}
+// ── GetResources ──────────────────────────────────────────────────────────────
 
 func TestKubeStore_GetResources(t *testing.T) {
 	s := newStore()
@@ -147,7 +120,7 @@ func TestKubeStore_GetResources_ReturnsCopy(t *testing.T) {
 	assert.Equal(t, "pod", s.GetResourceByUID("uid-1").Name)
 }
 
-// ── RegisterResource / FindChildrenResourcesByRef ─────────────────────────────
+// ── FindChildrenResourcesByRef ────────────────────────────────────────────────
 
 func TestKubeStore_FindChildrenResourcesByRef_Found(t *testing.T) {
 	s := newStore()
@@ -177,11 +150,11 @@ func TestKubeStore_FindChildrenResourcesByRef_NotFound(t *testing.T) {
 	assert.Nil(t, children)
 }
 
-// ── RegisterResource with Flux labels ─────────────────────────────────────────
+// ── Flux label registration ──────────────────────────────────────────────────
 
-func TestKubeStore_RegisterResource_WithKustomizationLabel(t *testing.T) {
+func TestKubeStore_UpdateResource_WithKustomizationLabel(t *testing.T) {
 	s := newStore()
-	res := &Resource{
+	res := Resource{
 		UID:       "uid-1",
 		Name:      "nginx",
 		Namespace: "default",
@@ -194,15 +167,15 @@ func TestKubeStore_RegisterResource_WithKustomizationLabel(t *testing.T) {
 		ParentRefs: []string{},
 	}
 
-	s.RegisterResource(res)
+	s.UpdateResource(res)
 
-	// IsFluxManaged should be set on the resource
-	assert.True(t, res.IsFluxManaged)
+	// IsFluxManaged should be set on the stored resource
+	assert.True(t, s.GetResourceByUID("uid-1").IsFluxManaged)
 }
 
-func TestKubeStore_RegisterResource_WithHelmLabel(t *testing.T) {
+func TestKubeStore_UpdateResource_WithHelmLabel(t *testing.T) {
 	s := newStore()
-	res := &Resource{
+	res := Resource{
 		UID:       "uid-2",
 		Name:      "app",
 		Namespace: "default",
@@ -215,9 +188,52 @@ func TestKubeStore_RegisterResource_WithHelmLabel(t *testing.T) {
 		ParentRefs: []string{},
 	}
 
-	s.RegisterResource(res)
+	s.UpdateResource(res)
 
-	assert.True(t, res.IsFluxManaged)
+	assert.True(t, s.GetResourceByUID("uid-2").IsFluxManaged)
+}
+
+// ── Out-of-order parent arrival ───────────────────────────────────────────────
+
+func TestKubeStore_UpdateResource_ParentArrivesAfterChild_BackfillsParentIDs(t *testing.T) {
+	s := newStore()
+
+	// Child arrives first (informers deliver resources in arbitrary order)
+	child := makeResource("pod-uid", "nginx", "default", "Pod", "v1", "")
+	child.Labels = map[string]string{
+		KustomizationNameLabel:      "my-ks",
+		KustomizationNamespaceLabel: "flux-system",
+	}
+	s.UpdateResource(child)
+	assert.Empty(t, s.GetResourceByUID("pod-uid").ParentIDs)
+
+	// Parent arrives later
+	parent := makeResource("ks-uid", "my-ks", "flux-system", "Kustomization", "v1", "kustomize.toolkit.fluxcd.io")
+	s.UpdateResource(parent)
+
+	assert.Equal(t, []string{"ks-uid"}, s.GetResourceByUID("pod-uid").ParentIDs)
+	children := s.FindChildrenResourcesByRef(parent.GetRef())
+	assert.Len(t, children, 1)
+	assert.Equal(t, "pod-uid", children[0].UID)
+}
+
+func TestKubeStore_AddResourceToRef_KeepsOwnerReferenceParentIDs(t *testing.T) {
+	s := newStore()
+
+	// Child carries owner-reference UIDs from the mapper plus a flux label;
+	// registering the flux ref must not clobber the owner UIDs.
+	parent := makeResource("ks-uid", "my-ks", "flux-system", "Kustomization", "v1", "kustomize.toolkit.fluxcd.io")
+	s.UpdateResource(parent)
+
+	child := makeResource("pod-uid", "nginx", "default", "Pod", "v1", "")
+	child.ParentIDs = []string{"owner-uid"}
+	child.Labels = map[string]string{
+		KustomizationNameLabel:      "my-ks",
+		KustomizationNamespaceLabel: "flux-system",
+	}
+	s.UpdateResource(child)
+
+	assert.ElementsMatch(t, []string{"owner-uid", "ks-uid"}, s.GetResourceByUID("pod-uid").ParentIDs)
 }
 
 // ── AddEvent ──────────────────────────────────────────────────────────────────
@@ -235,8 +251,7 @@ func TestKubeStore_AddEvent_NewEvent(t *testing.T) {
 	added := s.AddEvent("uid-1", ev, 72*time.Hour, 100)
 
 	assert.True(t, added)
-	got := s.GetResourceByUID("uid-1")
-	assert.Len(t, got.Events, 1)
+	assert.Len(t, s.GetEventsByResourceUID("uid-1"), 1)
 }
 
 func TestKubeStore_AddEvent_ResourceNotFound(t *testing.T) {
@@ -261,7 +276,7 @@ func TestKubeStore_AddEvent_TooOld(t *testing.T) {
 	added := s.AddEvent("uid-1", old, 72*time.Hour, 100)
 
 	assert.False(t, added)
-	assert.Empty(t, s.GetResourceByUID("uid-1").Events)
+	assert.Empty(t, s.GetEventsByResourceUID("uid-1"))
 }
 
 func TestKubeStore_AddEvent_Duplicate(t *testing.T) {
@@ -269,15 +284,36 @@ func TestKubeStore_AddEvent_Duplicate(t *testing.T) {
 	res := makeResource("uid-1", "pod", "default", "Pod", "v1", "")
 	s.UpdateResource(res)
 
-	ev := Event{UID: "event-uid-1", Name: "BackOff", LastObserved: time.Now()}
+	now := time.Now()
+	ev := Event{UID: "event-uid-1", Name: "BackOff", LastObserved: now, Count: 1}
 	s.AddEvent("uid-1", ev, 72*time.Hour, 100)
 
-	// Same UID → duplicate
-	duplicate := Event{UID: "event-uid-1", Name: "BackOff", LastObserved: time.Now()}
+	// Same UID, same observation → duplicate
+	duplicate := Event{UID: "event-uid-1", Name: "BackOff", LastObserved: now, Count: 1}
 	added := s.AddEvent("uid-1", duplicate, 72*time.Hour, 100)
 
 	assert.False(t, added)
-	assert.Len(t, s.GetResourceByUID("uid-1").Events, 1)
+	assert.Len(t, s.GetEventsByResourceUID("uid-1"), 1)
+}
+
+func TestKubeStore_AddEvent_RecurringEventReplacesStoredCopy(t *testing.T) {
+	s := newStore()
+	res := makeResource("uid-1", "pod", "default", "Pod", "v1", "")
+	s.UpdateResource(res)
+
+	now := time.Now()
+	first := Event{UID: "event-uid-1", Name: "BackOff", LastObserved: now.Add(-time.Minute), Count: 1}
+	s.AddEvent("uid-1", first, 72*time.Hour, 100)
+
+	// K8s updates the same Event in place: count++ and a newer lastTimestamp
+	recurring := Event{UID: "event-uid-1", Name: "BackOff", LastObserved: now, Count: 2}
+	added := s.AddEvent("uid-1", recurring, 72*time.Hour, 100)
+
+	assert.True(t, added)
+	events := s.GetEventsByResourceUID("uid-1")
+	if assert.Len(t, events, 1) {
+		assert.Equal(t, int32(2), events[0].Count)
+	}
 }
 
 func TestKubeStore_AddEvent_MaxEvents_EvictsOldest(t *testing.T) {
@@ -295,15 +331,25 @@ func TestKubeStore_AddEvent_MaxEvents_EvictsOldest(t *testing.T) {
 		s.AddEvent("uid-1", ev, 72*time.Hour, 3)
 	}
 
-	got := s.GetResourceByUID("uid-1")
-	assert.Len(t, got.Events, 3)
+	assert.Len(t, s.GetEventsByResourceUID("uid-1"), 3)
 
 	// Add one more with unique UID — oldest should be evicted
 	newest := Event{UID: "event-newest", Name: "Event", LastObserved: now.Add(10 * time.Second)}
 	added := s.AddEvent("uid-1", newest, 72*time.Hour, 3)
 
 	assert.True(t, added)
-	assert.Len(t, s.GetResourceByUID("uid-1").Events, 3)
+	assert.Len(t, s.GetEventsByResourceUID("uid-1"), 3)
+}
+
+func TestKubeStore_RemoveResource_DropsItsEvents(t *testing.T) {
+	s := newStore()
+	res := makeResource("uid-1", "pod", "default", "Pod", "v1", "")
+	s.UpdateResource(res)
+	s.AddEvent("uid-1", Event{UID: "ev-1", LastObserved: time.Now()}, 72*time.Hour, 100)
+
+	s.RemoveResource("uid-1")
+
+	assert.Empty(t, s.GetEventsByResourceUID("uid-1"))
 }
 
 // ── Parent/child ref cleanup on removal ───────────────────────────────────────

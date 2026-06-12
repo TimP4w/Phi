@@ -19,6 +19,7 @@ const (
 type KubeStoreImpl struct {
 	resources     map[string]*Resource
 	resourcesRefs map[string][]*Resource
+	events        map[string][]Event
 	mu            sync.RWMutex
 }
 
@@ -31,24 +32,10 @@ func NewKubeStoreImpl() KubeStore {
 	service := &KubeStoreImpl{
 		resources:     make(map[string]*Resource),
 		resourcesRefs: make(map[string][]*Resource),
+		events:        make(map[string][]Event),
 	}
 
 	return service
-}
-
-func (k *KubeStoreImpl) RegisterResource(resource *Resource) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	logger := logging.Logger().WithResource(resource.Kind, resource.Name, resource.Namespace, resource.UID)
-
-	ref := resource.GetRef()
-	if _, exists := k.resourcesRefs[ref]; !exists {
-		k.resourcesRefs[ref] = make([]*Resource, 0)
-		logger.WithField("ref", ref).Debug("Created new resourceRefs entry")
-	}
-
-	k.registerParentRefs(resource)
 }
 
 // parentRefsForResource returns the parent ref strings for a resource, along with
@@ -87,16 +74,12 @@ func (k *KubeStoreImpl) addResourceToRef(ref string, resource *Resource) {
 		logger.WithField("ref", ref).Debug("Created new reference entry")
 	}
 
-	var parentUIDs []string
+	// Merge any parents found in the store into ParentIDs without discarding the
+	// owner-reference UIDs the mapper already extracted, or parents from other refs.
 	for _, parentRes := range k.resources {
 		if parentRes.GetRef() == ref {
-			parentUIDs = append(parentUIDs, parentRes.UID)
+			resource.ParentIDs = appendUIDIfMissing(resource.ParentIDs, parentRes.UID)
 		}
-	}
-	if len(parentUIDs) > 0 {
-		resource.ParentIDs = parentUIDs
-	} else {
-		resource.ParentIDs = nil
 	}
 
 	k.resourcesRefs[ref] = append(k.resourcesRefs[ref], resource)
@@ -117,6 +100,7 @@ func (k *KubeStoreImpl) RemoveResource(uid string) {
 
 	// Remove the resource from the main resources map
 	delete(k.resources, uid)
+	delete(k.events, uid)
 	logger.Debug("Removed resource from main store")
 
 	// Remove this resource from any refs it owns (as a parent)
@@ -189,7 +173,7 @@ func (k *KubeStoreImpl) removeResourceFromRef(ref, uid string) {
 }
 
 // generateRef creates a unique reference string for a resource based on its name, namespace, kind, and version.
-// The format is `name_namespace_kind_version`.
+// The format is `group/version/Kind:namespace/name`.
 func (k *KubeStoreImpl) generateRef(name, namespace, kind, version, group string) string {
 	if group == "" {
 		group = "core"
@@ -227,15 +211,6 @@ func (k *KubeStoreImpl) GetResourceByUID(uid string) *Resource {
 	return resource
 }
 
-func (k *KubeStoreImpl) SetResources(resources map[string]*Resource) map[string]*Resource {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	logging.Logger().WithField("resource_count", len(resources)).Debug("Setting resources map")
-	k.resources = resources
-	k.resourcesRefs = make(map[string][]*Resource)
-	return resources
-}
-
 func (k *KubeStoreImpl) GetResources() map[string]*Resource {
 	k.mu.RLock()
 	defer k.mu.RUnlock()
@@ -260,6 +235,7 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 			k.resourcesRefs[selfRef] = []*Resource{}
 		}
 		k.registerParentRefs(&newResource)
+		k.backfillChildrenParentIDs(&newResource)
 		snapshot := Resource{}
 		snapshot.Copy(newResource)
 		return &snapshot
@@ -289,20 +265,28 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 	}
 
 	k.registerParentRefs(updated)
+	k.backfillChildrenParentIDs(updated)
 	snapshot := Resource{}
 	snapshot.Copy(*updated)
 	return &snapshot
 }
 
-func (k *KubeStoreImpl) GetKnownResourceAPIRefs() map[string]struct{} {
-	k.mu.RLock()
-	defer k.mu.RUnlock()
-	result := make(map[string]struct{})
-	for _, r := range k.resources {
-		key := r.Resource + "_" + r.Version + "_" + r.Group
-		result[key] = struct{}{}
+// backfillChildrenParentIDs adds this resource's UID to the ParentIDs of children
+// already registered under its ref. Resources arrive from informers in arbitrary
+// order, so a parent may show up after its children.
+func (k *KubeStoreImpl) backfillChildrenParentIDs(parent *Resource) {
+	for _, child := range k.resourcesRefs[parent.GetRef()] {
+		child.ParentIDs = appendUIDIfMissing(child.ParentIDs, parent.UID)
 	}
-	return result
+}
+
+func appendUIDIfMissing(uids []string, uid string) []string {
+	for _, existing := range uids {
+		if existing == uid {
+			return uids
+		}
+	}
+	return append(uids, uid)
 }
 
 func (k *KubeStoreImpl) SetSuspended(uid string, suspended bool) bool {
@@ -327,8 +311,7 @@ func (k *KubeStoreImpl) AddEvent(resourceUID string, event Event, ttl time.Durat
 		"resource_uid":    event.ResourceUID,
 	})
 
-	res := k.resources[resourceUID]
-	if res == nil {
+	if _, exists := k.resources[resourceUID]; !exists {
 		logger.Debug("Resource not found for event")
 		return false
 	}
@@ -339,21 +322,29 @@ func (k *KubeStoreImpl) AddEvent(resourceUID string, event Event, ttl time.Durat
 	}
 
 	cutoff := time.Now().Add(-ttl)
-	existingUIDs := make(map[string]struct{}, len(res.Events))
 	var valid []Event
-	for _, e := range res.Events {
-		if e.LastObserved.After(cutoff) {
-			valid = append(valid, e)
-			existingUIDs[string(e.UID)] = struct{}{}
+	updated := false
+	for _, e := range k.events[resourceUID] {
+		if !e.LastObserved.After(cutoff) {
+			continue
 		}
-	}
-
-	if _, dup := existingUIDs[string(event.UID)]; dup {
-		logger.Debug("Duplicate event found, not adding")
-		return false
+		if e.UID == event.UID {
+			// Recurring event (same UID, count++/newer lastTimestamp): replace the
+			// stored copy; an older or identical observation is a stale duplicate.
+			if !event.LastObserved.After(e.LastObserved) && event.Count <= e.Count {
+				logger.Debug("Duplicate event found, not adding")
+				return false
+			}
+			updated = true
+			continue
+		}
+		valid = append(valid, e)
 	}
 
 	valid = append(valid, event)
+	if updated {
+		logger.Debug("Updated recurring event")
+	}
 
 	if len(valid) > max {
 		sort.Slice(valid, func(i, j int) bool {
@@ -362,6 +353,12 @@ func (k *KubeStoreImpl) AddEvent(resourceUID string, event Event, ttl time.Durat
 		valid = valid[:max]
 	}
 
-	res.Events = valid
+	k.events[resourceUID] = valid
 	return true
+}
+
+func (k *KubeStoreImpl) GetEventsByResourceUID(resourceUID string) []Event {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	return append([]Event(nil), k.events[resourceUID]...)
 }

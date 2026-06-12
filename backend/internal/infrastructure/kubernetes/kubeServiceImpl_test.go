@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/timp4w/phi/internal/core/kubernetes"
@@ -19,9 +20,48 @@ import (
 	k8stesting "k8s.io/client-go/testing"
 )
 
-func TestKubeServiceImplIsWatchingEmpty(t *testing.T) {
-	service := &KubeServiceImpl{informersChannels: make(map[string]chan struct{})}
-	assert.False(t, service.IsWatching("pods_v1_"))
+func TestCrdToApiResource(t *testing.T) {
+	crd := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiextensions.k8s.io/v1",
+			"kind":       "CustomResourceDefinition",
+			"metadata":   map[string]interface{}{"name": "widgets.example.com"},
+			"spec": map[string]interface{}{
+				"group": "example.com",
+				"names": map[string]interface{}{
+					"plural":   "widgets",
+					"singular": "widget",
+					"kind":     "Widget",
+				},
+				"versions": []interface{}{
+					map[string]interface{}{"name": "v1alpha1", "served": true, "storage": false},
+					map[string]interface{}{"name": "v1", "served": true, "storage": true},
+				},
+			},
+		},
+	}
+
+	api, err := crdToApiResource(crd)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "example.com", api.Group)
+	assert.Equal(t, "v1", api.Version)
+	assert.Equal(t, "widgets", api.Name)
+	assert.Equal(t, "Widget", api.Kind)
+}
+
+func TestCrdToApiResource_MissingSpec(t *testing.T) {
+	crd := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apiextensions.k8s.io/v1",
+			"kind":       "CustomResourceDefinition",
+			"metadata":   map[string]interface{}{"name": "broken"},
+		},
+	}
+
+	_, err := crdToApiResource(crd)
+
+	assert.Error(t, err)
 }
 
 func normalizeYAML(yaml string) string {
@@ -103,41 +143,39 @@ func TestKubeServiceImplWatchLogsResourceNotAPod(t *testing.T) {
 func TestKubeServiceImplWatchResources(t *testing.T) {
 	namespace := "default"
 	podName := "test"
+	existingPodName := "pre-existing"
 
 	unstructuredPod := newUnstructuredPod(podName, namespace)
 
-	service := newTestKubeServiceImpl()
+	// A pod that exists before the informers start must be delivered as an add
+	// event during the initial cache sync (the store is populated this way).
+	service := newTestKubeServiceImpl(newUnstructuredPod(existingPodName, namespace))
 
-	resourceKey := "pods_v1_"
-	uniqueResources := map[string]struct{}{
-		resourceKey: {},
-	}
+	apis := []kubernetes.ApiResource{{Name: "pods", Version: "v1", Group: "", Kind: "Pod"}}
 
-	var added, updated, deleted []kubernetes.Resource
-	addCh := make(chan kubernetes.Resource, 1)
-	updateCh := make(chan kubernetes.Resource, 1)
-	deleteCh := make(chan kubernetes.Resource, 1)
+	addCh := make(chan kubernetes.Resource, 8)
+	updateCh := make(chan kubernetes.Resource, 8)
+	deleteCh := make(chan kubernetes.Resource, 8)
 
 	addFunc := func(r kubernetes.Resource) {
-		added = append(added, r)
 		addCh <- r
 	}
 	updateFunc := func(oldEl, newEl kubernetes.Resource) {
-		updated = append(updated, newEl)
 		updateCh <- newEl
 	}
 	deleteFunc := func(r kubernetes.Resource) {
-		deleted = append(deleted, r)
 		deleteCh <- r
 	}
 
-	done := make(chan struct{})
-	go func() {
-		service.WatchResources(uniqueResources, addFunc, updateFunc, deleteFunc)
-		close(done)
-	}()
+	// Blocks until the initial cache sync is complete.
+	service.WatchResources(apis, addFunc, updateFunc, deleteFunc)
 
-	time.Sleep(200 * time.Millisecond) // Wait for informer to start
+	select {
+	case r := <-addCh:
+		assert.Equal(t, existingPodName, r.Name)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for initial-sync add event")
+	}
 
 	gvr := service.gvrFromResource(kubernetes.Resource{
 		Group:    "",

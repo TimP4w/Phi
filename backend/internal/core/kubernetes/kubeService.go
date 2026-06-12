@@ -17,19 +17,18 @@ type KubeService interface {
 	GetResourceYAML(resource Resource) ([]byte, error)
 	// WatchLogs starts watching logs for a specific pod and calls the provided onLog function for each log line received.
 	WatchLogs(pod Resource, ctx context.Context, onLog func(KubeLog)) error
-	// WatchResources starts watching Kubernetes resources
-	WatchResources(kinds map[string]struct{}, addFunc func(Resource), updateFunc func(oldEl, newEl Resource), deleteFunc func(Resource))
+	// WatchResources starts informers for the given API resources and blocks until their
+	// caches complete the initial sync, during which every existing object is delivered
+	// through addFunc. CustomResourceDefinitions added at runtime automatically get an
+	// informer for the resource type they define.
+	WatchResources(apis []ApiResource, addFunc func(Resource), updateFunc func(oldEl, newEl Resource), deleteFunc func(Resource))
 	// WatchEvents starts watching Kubernetes events and calls the provided onEvent function for each event received.
 	WatchEvents(onEvent func(*Event))
-	// DiscoverApis discovers all API resources available in the connected Kubernetes cluster.
-	DiscoverApis() (*ResourceMap, error)
-	// Concurrently queries all Kubernetes API resources specified in the given ResourceMap and constructs a map keyed by their UID.
-	// If any error occurs during resource discovery, the first encountered error is returned alongside the results.
-	DiscoverResources(rm *ResourceMap) (map[string]*Resource, error)
+	// DiscoverApis returns all API resources available in the connected Kubernetes
+	// cluster that support list and watch.
+	DiscoverApis() ([]ApiResource, error)
 	// GetEvents retrieves all Kubernetes events from the cluster
 	GetEvents() ([]Event, error)
-	// IsWatching reports whether an informer is currently running for the given resource key.
-	IsWatching(resourceKey string) bool
 	// PatchResource applies a patch to a Kubernetes resource and returns the updated resource.
 	PatchResource(pr PatchableResource) (*Resource, error)
 }

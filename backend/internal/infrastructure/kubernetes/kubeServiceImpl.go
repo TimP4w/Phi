@@ -36,10 +36,10 @@ const (
 	// informerResyncPeriod is how often the informer re-lists all resources from
 	// the API server to reconcile any missed watch events.
 	informerResyncPeriod = 15 * time.Minute
-	// recentEventWindow is the age threshold below which add/delete events from
-	// the informer are forwarded. Events older than this are assumed to have been
-	// processed during the initial sync and are dropped to avoid duplicates.
-	recentEventWindow = 2 * time.Minute
+	// informerSyncTimeout bounds how long WatchResources blocks waiting for the
+	// initial cache sync of all informers; types that have not synced by then keep
+	// syncing in the background.
+	informerSyncTimeout = 2 * time.Minute
 )
 
 type KubeServiceImpl struct {
@@ -48,6 +48,7 @@ type KubeServiceImpl struct {
 	clientSet         clientset.Interface
 	mu                sync.RWMutex
 	mapper            *KubeMapper
+	factory           dynamicinformer.DynamicSharedInformerFactory
 	informersChannels map[string]chan struct{}
 }
 
@@ -205,22 +206,26 @@ func (k *KubeServiceImpl) WatchLogs(pod kube.Resource, ctx context.Context, onLo
 	return nil
 }
 
-func (k *KubeServiceImpl) WatchResources(resourceApiRefsSet map[string]struct{}, addFunc func(kube.Resource), updateFunc func(oldEl, newEl kube.Resource), deleteFunc func(kube.Resource)) {
-	factory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(k.dynamicClient, informerResyncPeriod, "", nil)
-	for encodedResourceApiRef := range resourceApiRefsSet {
-		resource, version, group, err := k.decodeResourceApiRef(encodedResourceApiRef)
-		if err != nil {
-			logging.Logger().WithFields(map[string]interface{}{
-				"encoded_resource_api_ref": encodedResourceApiRef,
-				"error":                    err,
-			}).Error("Error decoding resource api ref")
-			continue
+func (k *KubeServiceImpl) WatchResources(apis []kube.ApiResource, addFunc func(kube.Resource), updateFunc func(oldEl, newEl kube.Resource), deleteFunc func(kube.Resource)) {
+	handlers := resourceHandlers{add: addFunc, update: updateFunc, delete: deleteFunc}
+
+	var synced []cache.InformerSynced
+	for _, api := range apis {
+		if informer := k.startInformer(api, handlers); informer != nil {
+			synced = append(synced, informer.HasSynced)
 		}
-		gvr := schema.GroupVersionResource{Group: group, Version: version, Resource: resource}
-		informer := factory.ForResource(gvr).Informer()
-		informer.AddEventHandler(k.defaultResourceEventHandler(resource, addFunc, updateFunc, deleteFunc))
-		go k.runInformer(encodedResourceApiRef, resource, version, informer)
 	}
+
+	// Block until the informer caches have delivered their initial state (as add
+	// events) so the store reflects the full cluster before startup completes.
+	timeout := make(chan struct{})
+	timer := time.AfterFunc(informerSyncTimeout, func() { close(timeout) })
+	defer timer.Stop()
+	if !cache.WaitForCacheSync(timeout, synced...) {
+		logging.Logger().Warn("Some informer caches did not sync within timeout; they continue syncing in the background")
+		return
+	}
+	logging.Logger().WithField("informer_count", len(synced)).Info("Informer caches synced")
 }
 
 func (k *KubeServiceImpl) GetEvents() ([]kube.Event, error) {
@@ -279,79 +284,130 @@ func (k *KubeServiceImpl) WatchEvents(onEvent func(*kube.Event)) {
 	}()
 }
 
-func (k *KubeServiceImpl) defaultResourceEventHandler(resource string, addFunc func(kube.Resource), updateFunc func(oldEl, newEl kube.Resource), deleteFunc func(kube.Resource)) cache.ResourceEventHandler {
+// resourceHandlers bundles the callbacks informer events are forwarded to.
+type resourceHandlers struct {
+	add    func(kube.Resource)
+	update func(oldEl, newEl kube.Resource)
+	delete func(kube.Resource)
+}
+
+// startInformer creates and runs an informer for the given API resource, unless one
+// is already running for it. It returns the informer, or nil if it was already
+// being watched. Informers are keyed by resource name + group (version excluded):
+// all versions of a resource serve the same objects, and the version started via
+// discovery may differ from a CRD's storage version.
+func (k *KubeServiceImpl) startInformer(api kube.ApiResource, handlers resourceHandlers) cache.SharedIndexInformer {
+	key := api.Name + "." + api.Group
+
+	k.mu.Lock()
+	if _, exists := k.informersChannels[key]; exists {
+		k.mu.Unlock()
+		return nil
+	}
+	stopCh := make(chan struct{})
+	k.informersChannels[key] = stopCh
+	if k.factory == nil {
+		k.factory = dynamicinformer.NewFilteredDynamicSharedInformerFactory(k.dynamicClient, informerResyncPeriod, "", nil)
+	}
+	factory := k.factory
+	k.mu.Unlock()
+
+	gvr := schema.GroupVersionResource{Group: api.Group, Version: api.Version, Resource: api.Name}
+	informer := factory.ForResource(gvr).Informer()
+	informer.AddEventHandler(k.resourceEventHandler(api.Name, handlers))
+	go informer.Run(stopCh)
+
+	logging.Logger().WithFields(map[string]any{
+		"resource": api.Name,
+		"version":  api.Version,
+		"group":    api.Group,
+	}).Debug("Started informer")
+	return informer
+}
+
+func (k *KubeServiceImpl) resourceEventHandler(resource string, handlers resourceHandlers) cache.ResourceEventHandler {
 	return cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
-			if time.Since(obj.(*unstructured.Unstructured).GetCreationTimestamp().Time) <= recentEventWindow { // ignore old resources since we already have them
-				el := k.mapper.ToResource(*obj.(*unstructured.Unstructured), resource)
-				addFunc(el)
+			u, ok := obj.(*unstructured.Unstructured)
+			if !ok {
+				return
 			}
+			handlers.add(k.mapper.ToResource(*u, resource))
+			k.watchNewCRDKind(u, handlers)
 		},
 		UpdateFunc: func(oldObj, newObj any) {
-			newEl := k.mapper.ToResource(*newObj.(*unstructured.Unstructured), resource)
-			oldEl := k.mapper.ToResource(*oldObj.(*unstructured.Unstructured), resource)
-
-			updateFunc(oldEl, newEl)
+			oldU, okOld := oldObj.(*unstructured.Unstructured)
+			newU, okNew := newObj.(*unstructured.Unstructured)
+			if !okOld || !okNew {
+				return
+			}
+			handlers.update(k.mapper.ToResource(*oldU, resource), k.mapper.ToResource(*newU, resource))
 		},
 		DeleteFunc: func(obj any) {
-			if (obj.(*unstructured.Unstructured)).GetDeletionTimestamp() == nil || time.Since(obj.(*unstructured.Unstructured).GetDeletionTimestamp().Time) <= recentEventWindow { // ignore old resources since we already have them
-				el := k.mapper.ToResource(*obj.(*unstructured.Unstructured), resource)
-				deleteFunc(el)
+			u, ok := obj.(*unstructured.Unstructured)
+			if !ok {
+				tombstone, isTombstone := obj.(cache.DeletedFinalStateUnknown)
+				if !isTombstone {
+					return
+				}
+				if u, ok = tombstone.Obj.(*unstructured.Unstructured); !ok {
+					return
+				}
 			}
+			handlers.delete(k.mapper.ToResource(*u, resource))
 		},
 	}
 }
 
-func (k *KubeServiceImpl) IsWatching(resourceKey string) bool {
-	k.mu.RLock()
-	defer k.mu.RUnlock()
-	_, exists := k.informersChannels[resourceKey]
-	return exists
-}
-
-// createInformerChannel creates a new channel for a specific resource informer.
-// If a channel already exists for the resource, it closes the old channel and creates a new one.
-func (k *KubeServiceImpl) createInformerChannel(encodedResourceApiRef string) *chan struct{} {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	channel, exists := k.informersChannels[encodedResourceApiRef]
-	if exists {
-		close(channel)
-		delete(k.informersChannels, encodedResourceApiRef)
-	}
-	newChannel := make(chan struct{})
-	k.informersChannels[encodedResourceApiRef] = newChannel
-	return &newChannel
-}
-
-// CleanupInformerChannel closes and removes the informer channel for the given resource.
-func (k *KubeServiceImpl) CleanupInformerChannel(encodedResourceApiRef string) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if channel, exists := k.informersChannels[encodedResourceApiRef]; exists {
-		close(channel)
-		delete(k.informersChannels, encodedResourceApiRef)
-	}
-}
-
-// runInformer starts a Kubernetes informer for a specific resource and version.
-func (k *KubeServiceImpl) runInformer(encodedResourceApiRef string, resource string, version string, informer cache.SharedInformer) {
-	newChannel := k.createInformerChannel(encodedResourceApiRef)
-	defer k.CleanupInformerChannel(encodedResourceApiRef)
-
-	go informer.Run(*newChannel)
-
-	logger := logging.Logger().WithFields(map[string]any{
-		"resource": resource,
-		"version":  version,
-	})
-
-	if !cache.WaitForCacheSync(*newChannel, informer.HasSynced) {
-		logger.Warn("Failed to sync cache")
+// watchNewCRDKind starts an informer for the resource type a CustomResourceDefinition
+// defines. CRD add events flow through the CRD informer like any other resource, so
+// kinds installed after startup are picked up at runtime; CRDs whose resource type is
+// already watched are skipped by startInformer.
+func (k *KubeServiceImpl) watchNewCRDKind(u *unstructured.Unstructured, handlers resourceHandlers) {
+	gvk := u.GroupVersionKind()
+	if gvk.Group != "apiextensions.k8s.io" || gvk.Kind != "CustomResourceDefinition" {
+		return
 	}
 
-	logger.Debug("Synced cache")
-	<-*newChannel
+	api, err := crdToApiResource(u)
+	if err != nil {
+		logging.Logger().WithField("crd", u.GetName()).WithError(err).Warn("Could not derive API resource from CRD")
+		return
+	}
+	k.startInformer(api, handlers)
+}
+
+// crdToApiResource extracts the storage-version API resource served by a CRD.
+func crdToApiResource(u *unstructured.Unstructured) (kube.ApiResource, error) {
+	group, _, _ := unstructured.NestedString(u.Object, "spec", "group")
+	plural, _, _ := unstructured.NestedString(u.Object, "spec", "names", "plural")
+	kind, _, _ := unstructured.NestedString(u.Object, "spec", "names", "kind")
+	singular, _, _ := unstructured.NestedString(u.Object, "spec", "names", "singular")
+
+	var version string
+	versions, _, _ := unstructured.NestedSlice(u.Object, "spec", "versions")
+	for _, v := range versions {
+		vm, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		if storage, _, _ := unstructured.NestedBool(vm, "storage"); storage {
+			version, _, _ = unstructured.NestedString(vm, "name")
+			break
+		}
+	}
+
+	if group == "" || plural == "" || version == "" {
+		return kube.ApiResource{}, fmt.Errorf("CRD is missing group, plural name or storage version")
+	}
+
+	return kube.ApiResource{
+		Group:        group,
+		Version:      version,
+		Name:         plural,
+		Kind:         kind,
+		SingularName: singular,
+	}, nil
 }
 
 func (k *KubeServiceImpl) PatchResource(pr kube.PatchableResource) (*kube.Resource, error) {
@@ -436,41 +492,7 @@ func (k *KubeServiceImpl) findKubeResource(el kube.Resource) (unstructured.Unstr
 	return *unstructuredObj, nil
 }
 
-// decodeResourceApiRef decodes a resource version string into its components: resource, version, and group.
-// The expected format is "resource_version_group", e.g., "pods_v1_core".
-func (k *KubeServiceImpl) decodeResourceApiRef(encodedResourceApiRef string) (string, string, string, error) {
-	parts := strings.SplitN(encodedResourceApiRef, "_", 3)
-	if len(parts) < 3 {
-		return "", "", "", fmt.Errorf("invalid resourceApiRef format: %s", encodedResourceApiRef)
-	}
-	resource := parts[0]
-	version := parts[1]
-	group := parts[2]
-	if strings.Contains(version, "/") {
-		versionParts := strings.Split(version, "/")
-		version = versionParts[1]
-	}
-	return resource, version, group, nil
-}
-
-/*
-Copyright 2024 ahmetb
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-	http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-Original version: https://github.com/ahmetb/kubectl-tree/blob/8c32ac5fddbb59972a0d42e10f34500592fbacb5/cmd/kubectl-tree/apis.go
-*/
-
-func (k *KubeServiceImpl) DiscoverApis() (*kube.ResourceMap, error) {
+func (k *KubeServiceImpl) DiscoverApis() ([]kube.ApiResource, error) {
 	logger := logging.Logger()
 	start := time.Now()
 	resList, err := k.discoveryClient.ServerPreferredResources()
@@ -481,170 +503,29 @@ func (k *KubeServiceImpl) DiscoverApis() (*kube.ResourceMap, error) {
 	logger.WithField("duration_ms", time.Since(start).Milliseconds()).Debug("Queried API discovery")
 	logger.WithField("group_count", len(resList)).Debug("Found server-preferred API resource groups")
 
-	rm := &kube.ResourceMap{}
-	var wg sync.WaitGroup
-	var mu sync.Mutex // Mutex to protect shared data
-
+	var apis []kube.ApiResource
 	for _, group := range resList {
-		wg.Add(1)
-		go func(group *metav1.APIResourceList) {
-			defer wg.Done()
-
-			gv, err := schema.ParseGroupVersion(group.GroupVersion)
-			if err != nil {
-				logging.Logger().WithField("group_version", group.GroupVersion).WithError(err).Warn("Failed to parse group version")
-				return
-			}
-
-			for _, apiRes := range group.APIResources {
-				if !utils.Contains(apiRes.Verbs, "list") || !utils.Contains(apiRes.Verbs, "watch") { // Skip resources that cannot be listed or watched
-					continue
-				}
-				api := kube.ApiResource{
-					Group:        gv.Group,
-					Version:      gv.Version,
-					SingularName: apiRes.SingularName,
-					Kind:         apiRes.Kind,
-					Name:         apiRes.Name,
-					ShortNames:   apiRes.ShortNames,
-				}
-				names := k.getApiNamesByResource(apiRes, gv)
-
-				// Temporary slice to avoid modifying shared slices concurrently
-				var newList []kube.ApiResource
-				for _, name := range names {
-					mu.Lock()
-					rm.M.Store(name, append(rm.Lookup(name), api))
-					newList = append(newList, api)
-					mu.Unlock()
-				}
-
-				mu.Lock()
-				rm.List = append(rm.List, newList...)
-				mu.Unlock()
-			}
-		}(group)
-	}
-	wg.Wait()
-
-	logging.Logger().WithField("api_count", len(rm.List)).Info("API discovery completed")
-	return rm, nil
-}
-
-func (k *KubeServiceImpl) DiscoverResources(rm *kube.ResourceMap) (map[string]*kube.Resource, error) {
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	out := make(map[string]*kube.Resource)
-
-	logger := logging.Logger()
-	start := time.Now()
-	var errResult error
-	for _, api := range rm.Resources() {
-		wg.Add(1)
-		go func(a kube.ApiResource) {
-			defer wg.Done()
-			apiLogger := logger.WithField("resource_group", k.groupVersionResource(a).String())
-			apiLogger.Debug("Starting API resource query")
-
-			v, err := k.listResourcesByApi(a)
-			if err != nil {
-				apiLogger.WithError(err).Error("Error querying API resource")
-				mu.Lock()
-				if errResult == nil {
-					errResult = err
-				}
-				mu.Unlock()
-				return
-			}
-			mu.Lock()
-			for _, el := range v {
-				out[string(el.UID)] = &el
-			}
-			mu.Unlock()
-			apiLogger.WithField("resource_count", len(v)).Debug("Completed API resource query")
-		}(api)
-	}
-
-	logger.Debug("Started all API query goroutines")
-	wg.Wait()
-	logger.WithFields(map[string]interface{}{
-		"duration_ms":    time.Since(start).Milliseconds(),
-		"error":          errResult != nil,
-		"resource_count": len(out),
-	}).Info("Completed resource discovery")
-
-	return out, errResult
-}
-
-// Generates a list of possible API name variants for a given Kubernetes API resource.
-func (k *KubeServiceImpl) getApiNamesByResource(a metav1.APIResource, gv schema.GroupVersion) []string {
-	var out []string
-	singularName := a.SingularName
-	if singularName == "" {
-		singularName = strings.ToLower(a.Kind)
-	}
-	names := []string{singularName, a.Name}
-	names = append(names, a.ShortNames...)
-
-	for _, n := range names {
-		out = append(out,
-			n,
-			strings.Join([]string{n, gv.Group}, "."),
-			strings.Join([]string{n, gv.Version, gv.Group}, "."))
-	}
-	return out
-}
-
-func (k *KubeServiceImpl) groupVersionResource(api kube.ApiResource) schema.GroupVersionResource {
-	return schema.GroupVersionResource{
-		Group:    api.Group,
-		Version:  api.Version,
-		Resource: api.Name,
-	}
-}
-
-// listResourcesByApi retrieves all resources of the specified Kubernetes API resource type
-func (k *KubeServiceImpl) listResourcesByApi(api kube.ApiResource) ([]kube.Resource, error) {
-	var out []kube.Resource
-	var next string
-
-	logger := logging.Logger().WithFields(map[string]interface{}{
-		"api_group":    api.Group,
-		"api_version":  api.Version,
-		"api_resource": api.Name,
-	})
-
-	pageCount := 0
-	for {
-		pageCount++
-		intf := k.dynamicClient.Resource(k.groupVersionResource(api))
-		resp, err := intf.List(context.TODO(), metav1.ListOptions{
-			Limit:    250,
-			Continue: next,
-		})
+		gv, err := schema.ParseGroupVersion(group.GroupVersion)
 		if err != nil {
-			logger.WithError(err).Error("Listing resources failed")
-			return nil, fmt.Errorf("listing resources failed (%s): %w", k.groupVersionResource(api), err)
+			logger.WithField("group_version", group.GroupVersion).WithError(err).Warn("Failed to parse group version")
+			continue
 		}
 
-		for _, item := range resp.Items {
-			out = append(out, k.mapper.ToResource(item, api.Name))
-		}
-
-		next = resp.GetContinue()
-		if next == "" {
-			break
+		for _, apiRes := range group.APIResources {
+			if !utils.Contains(apiRes.Verbs, "list") || !utils.Contains(apiRes.Verbs, "watch") { // Skip resources that cannot be listed or watched
+				continue
+			}
+			apis = append(apis, kube.ApiResource{
+				Group:        gv.Group,
+				Version:      gv.Version,
+				SingularName: apiRes.SingularName,
+				Kind:         apiRes.Kind,
+				Name:         apiRes.Name,
+				ShortNames:   apiRes.ShortNames,
+			})
 		}
 	}
 
-	if pageCount > 1 {
-		logger.WithFields(map[string]interface{}{
-			"page_count":     pageCount,
-			"resource_count": len(out),
-		}).Debug("Completed paginated resource listing")
-	}
-
-	return out, nil
+	logger.WithField("api_count", len(apis)).Info("API discovery completed")
+	return apis, nil
 }
-
-// ^ END OF Copyright 2024 ahmetb CODE ^

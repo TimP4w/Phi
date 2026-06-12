@@ -35,7 +35,6 @@ import (
 
 type UseCases struct {
 	fx.In
-	SyncResources     shared.UseCase[kubernetesusecases.SyncResourcesInput, map[string]*kubernetes.Resource]
 	WatchLogs         shared.UseCase[kubernetesusecases.WatchLogsUseCaseInput, struct{}]
 	GetResourceYAML   shared.UseCase[kubernetesusecases.GetResourceYAMLInput, []byte]
 	UpgradeConnection shared.UseCase[realtimeusecases.UpgradeConnectionInput, bool]
@@ -73,7 +72,6 @@ func main() {
 			kubernetes.NewFluxServiceImpl,
 
 			// Usecase providers
-			kubernetesusecases.NewSyncResourcesUseCase,
 			kubernetesusecases.NewWatchLogsUseCase,
 			kubernetesusecases.NewGetResourceYAMlUseCase,
 			realtimeusecases.NewUpgradeConnectionUseCase,
@@ -110,13 +108,10 @@ func initBackgroundTasks(uc UseCases) {
 	logger := logging.Logger()
 	logger.Info("Initializing background tasks")
 
-	logger.Debug("Starting resource synchronization")
-	if _, err := uc.SyncResources.Execute(struct{}{}); err != nil {
-		logger.WithError(err).Error("Resource synchronization failed; watchers will start with empty store")
-	}
-
 	logger.Debug("Starting resource watching")
-	uc.WatchResources.Execute(struct{}{})
+	if _, err := uc.WatchResources.Execute(struct{}{}); err != nil {
+		logger.WithError(err).Error("Failed to start resource watchers; store will stay empty")
+	}
 
 	logger.Debug("Starting events watching")
 	uc.WatchEvents.Execute(struct{}{})

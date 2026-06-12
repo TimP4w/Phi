@@ -23,23 +23,23 @@ func (_m *KubeService) EXPECT() *KubeService_Expecter {
 }
 
 // DiscoverApis provides a mock function with no fields
-func (_m *KubeService) DiscoverApis() (*kubernetes.ResourceMap, error) {
+func (_m *KubeService) DiscoverApis() ([]kubernetes.ApiResource, error) {
 	ret := _m.Called()
 
 	if len(ret) == 0 {
 		panic("no return value specified for DiscoverApis")
 	}
 
-	var r0 *kubernetes.ResourceMap
+	var r0 []kubernetes.ApiResource
 	var r1 error
-	if rf, ok := ret.Get(0).(func() (*kubernetes.ResourceMap, error)); ok {
+	if rf, ok := ret.Get(0).(func() ([]kubernetes.ApiResource, error)); ok {
 		return rf()
 	}
-	if rf, ok := ret.Get(0).(func() *kubernetes.ResourceMap); ok {
+	if rf, ok := ret.Get(0).(func() []kubernetes.ApiResource); ok {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*kubernetes.ResourceMap)
+			r0 = ret.Get(0).([]kubernetes.ApiResource)
 		}
 	}
 
@@ -69,70 +69,12 @@ func (_c *KubeService_DiscoverApis_Call) Run(run func()) *KubeService_DiscoverAp
 	return _c
 }
 
-func (_c *KubeService_DiscoverApis_Call) Return(_a0 *kubernetes.ResourceMap, _a1 error) *KubeService_DiscoverApis_Call {
+func (_c *KubeService_DiscoverApis_Call) Return(_a0 []kubernetes.ApiResource, _a1 error) *KubeService_DiscoverApis_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *KubeService_DiscoverApis_Call) RunAndReturn(run func() (*kubernetes.ResourceMap, error)) *KubeService_DiscoverApis_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// DiscoverResources provides a mock function with given fields: rm
-func (_m *KubeService) DiscoverResources(rm *kubernetes.ResourceMap) (map[string]*kubernetes.Resource, error) {
-	ret := _m.Called(rm)
-
-	if len(ret) == 0 {
-		panic("no return value specified for DiscoverResources")
-	}
-
-	var r0 map[string]*kubernetes.Resource
-	var r1 error
-	if rf, ok := ret.Get(0).(func(*kubernetes.ResourceMap) (map[string]*kubernetes.Resource, error)); ok {
-		return rf(rm)
-	}
-	if rf, ok := ret.Get(0).(func(*kubernetes.ResourceMap) map[string]*kubernetes.Resource); ok {
-		r0 = rf(rm)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(map[string]*kubernetes.Resource)
-		}
-	}
-
-	if rf, ok := ret.Get(1).(func(*kubernetes.ResourceMap) error); ok {
-		r1 = rf(rm)
-	} else {
-		r1 = ret.Error(1)
-	}
-
-	return r0, r1
-}
-
-// KubeService_DiscoverResources_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DiscoverResources'
-type KubeService_DiscoverResources_Call struct {
-	*mock.Call
-}
-
-// DiscoverResources is a helper method to define mock.On call
-//   - rm *kubernetes.ResourceMap
-func (_e *KubeService_Expecter) DiscoverResources(rm interface{}) *KubeService_DiscoverResources_Call {
-	return &KubeService_DiscoverResources_Call{Call: _e.mock.On("DiscoverResources", rm)}
-}
-
-func (_c *KubeService_DiscoverResources_Call) Run(run func(rm *kubernetes.ResourceMap)) *KubeService_DiscoverResources_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(*kubernetes.ResourceMap))
-	})
-	return _c
-}
-
-func (_c *KubeService_DiscoverResources_Call) Return(_a0 map[string]*kubernetes.Resource, _a1 error) *KubeService_DiscoverResources_Call {
-	_c.Call.Return(_a0, _a1)
-	return _c
-}
-
-func (_c *KubeService_DiscoverResources_Call) RunAndReturn(run func(*kubernetes.ResourceMap) (map[string]*kubernetes.Resource, error)) *KubeService_DiscoverResources_Call {
+func (_c *KubeService_DiscoverApis_Call) RunAndReturn(run func() ([]kubernetes.ApiResource, error)) *KubeService_DiscoverApis_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -190,52 +132,6 @@ func (_c *KubeService_GetEvents_Call) Return(_a0 []kubernetes.Event, _a1 error) 
 }
 
 func (_c *KubeService_GetEvents_Call) RunAndReturn(run func() ([]kubernetes.Event, error)) *KubeService_GetEvents_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// IsWatching provides a mock function with given fields: resourceKey
-func (_m *KubeService) IsWatching(resourceKey string) bool {
-	ret := _m.Called(resourceKey)
-
-	if len(ret) == 0 {
-		panic("no return value specified for IsWatching")
-	}
-
-	var r0 bool
-	if rf, ok := ret.Get(0).(func(string) bool); ok {
-		r0 = rf(resourceKey)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	return r0
-}
-
-// KubeService_IsWatching_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'IsWatching'
-type KubeService_IsWatching_Call struct {
-	*mock.Call
-}
-
-// IsWatching is a helper method to define mock.On call
-//   - resourceKey string
-func (_e *KubeService_Expecter) IsWatching(resourceKey interface{}) *KubeService_IsWatching_Call {
-	return &KubeService_IsWatching_Call{Call: _e.mock.On("IsWatching", resourceKey)}
-}
-
-func (_c *KubeService_IsWatching_Call) Run(run func(resourceKey string)) *KubeService_IsWatching_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string))
-	})
-	return _c
-}
-
-func (_c *KubeService_IsWatching_Call) Return(_a0 bool) *KubeService_IsWatching_Call {
-	_c.Call.Return(_a0)
-	return _c
-}
-
-func (_c *KubeService_IsWatching_Call) RunAndReturn(run func(string) bool) *KubeService_IsWatching_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -437,9 +333,9 @@ func (_c *KubeService_WatchLogs_Call) RunAndReturn(run func(kubernetes.Resource,
 	return _c
 }
 
-// WatchResources provides a mock function with given fields: kinds, addFunc, updateFunc, deleteFunc
-func (_m *KubeService) WatchResources(kinds map[string]struct{}, addFunc func(kubernetes.Resource), updateFunc func(kubernetes.Resource, kubernetes.Resource), deleteFunc func(kubernetes.Resource)) {
-	_m.Called(kinds, addFunc, updateFunc, deleteFunc)
+// WatchResources provides a mock function with given fields: apis, addFunc, updateFunc, deleteFunc
+func (_m *KubeService) WatchResources(apis []kubernetes.ApiResource, addFunc func(kubernetes.Resource), updateFunc func(kubernetes.Resource, kubernetes.Resource), deleteFunc func(kubernetes.Resource)) {
+	_m.Called(apis, addFunc, updateFunc, deleteFunc)
 }
 
 // KubeService_WatchResources_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WatchResources'
@@ -448,17 +344,17 @@ type KubeService_WatchResources_Call struct {
 }
 
 // WatchResources is a helper method to define mock.On call
-//   - kinds map[string]struct{}
+//   - apis []kubernetes.ApiResource
 //   - addFunc func(kubernetes.Resource)
 //   - updateFunc func(kubernetes.Resource , kubernetes.Resource)
 //   - deleteFunc func(kubernetes.Resource)
-func (_e *KubeService_Expecter) WatchResources(kinds interface{}, addFunc interface{}, updateFunc interface{}, deleteFunc interface{}) *KubeService_WatchResources_Call {
-	return &KubeService_WatchResources_Call{Call: _e.mock.On("WatchResources", kinds, addFunc, updateFunc, deleteFunc)}
+func (_e *KubeService_Expecter) WatchResources(apis interface{}, addFunc interface{}, updateFunc interface{}, deleteFunc interface{}) *KubeService_WatchResources_Call {
+	return &KubeService_WatchResources_Call{Call: _e.mock.On("WatchResources", apis, addFunc, updateFunc, deleteFunc)}
 }
 
-func (_c *KubeService_WatchResources_Call) Run(run func(kinds map[string]struct{}, addFunc func(kubernetes.Resource), updateFunc func(kubernetes.Resource, kubernetes.Resource), deleteFunc func(kubernetes.Resource))) *KubeService_WatchResources_Call {
+func (_c *KubeService_WatchResources_Call) Run(run func(apis []kubernetes.ApiResource, addFunc func(kubernetes.Resource), updateFunc func(kubernetes.Resource, kubernetes.Resource), deleteFunc func(kubernetes.Resource))) *KubeService_WatchResources_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(map[string]struct{}), args[1].(func(kubernetes.Resource)), args[2].(func(kubernetes.Resource, kubernetes.Resource)), args[3].(func(kubernetes.Resource)))
+		run(args[0].([]kubernetes.ApiResource), args[1].(func(kubernetes.Resource)), args[2].(func(kubernetes.Resource, kubernetes.Resource)), args[3].(func(kubernetes.Resource)))
 	})
 	return _c
 }
@@ -468,7 +364,7 @@ func (_c *KubeService_WatchResources_Call) Return() *KubeService_WatchResources_
 	return _c
 }
 
-func (_c *KubeService_WatchResources_Call) RunAndReturn(run func(map[string]struct{}, func(kubernetes.Resource), func(kubernetes.Resource, kubernetes.Resource), func(kubernetes.Resource))) *KubeService_WatchResources_Call {
+func (_c *KubeService_WatchResources_Call) RunAndReturn(run func([]kubernetes.ApiResource, func(kubernetes.Resource), func(kubernetes.Resource, kubernetes.Resource), func(kubernetes.Resource))) *KubeService_WatchResources_Call {
 	_c.Run(run)
 	return _c
 }

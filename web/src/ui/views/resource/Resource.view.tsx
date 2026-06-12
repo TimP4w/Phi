@@ -37,6 +37,7 @@ import ResourceStatusWidget from "../../components/widgets/ResourceStatusWidget"
 import ResourceCountWidget from "../../components/widgets/ResourcesCountWidget";
 import KustomizationDependsOnWidget from "../../components/widgets/KustomizationDependsOnWidget";
 import EventsPanel, { EventFilter } from "../../components/events/EventsPanel";
+import { EventsStore } from "../../../core/fluxTree/stores/events.store";
 
 const STATUS_FILTER_OPTIONS: { value: ResourceStatus; label: string; dot: string }[] = [
   { value: ResourceStatus.FAILED, label: "Failed", dot: "bg-danger" },
@@ -174,6 +175,7 @@ const ResourceView: React.FC = observer(() => {
   const { nodeUid } = useParams();
   const navigate = useNavigate();
   const fluxTreeStore = useInjection(FluxTreeStore);
+  const eventsStore = useInjection(EventsStore);
 
   const resource = fluxTreeStore.findResourceByUid(nodeUid ?? "");
 
@@ -231,7 +233,7 @@ const ResourceView: React.FC = observer(() => {
     onOpen();
   };
 
-  const allEvents = resource?.events ?? [];
+  const allEvents = resource ? eventsStore.eventsForResource(resource.uid) : [];
   const displayedEvents = allEvents
     .filter((e) => eventFilter === "all" || e.type === eventFilter)
     .slice()

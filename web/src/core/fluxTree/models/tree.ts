@@ -1,6 +1,5 @@
 import { ConditionDto, LogMessageDto, TreeNodeDto } from "./dtos/treeDto";
 import { FLUX_NAMESPACE, RESOURCE_TYPE } from "../constants/resources.const";
-import { KubeEvent } from "./kubeEvent";
 
 export class Tree {
   root: KubeResource;
@@ -62,7 +61,6 @@ export class KubeResource {
   parentIDs: string[];
   status: ResourceStatus;
   conditions: Condition[] = [];
-  events: KubeEvent[] = [];
   logs: PodLog[] = [];
   isFluxManaged: boolean = false;
   isReconcilable: boolean = false;
@@ -95,9 +93,6 @@ export class KubeResource {
       this.status = dto.status
         ? stringToResourceStatus(dto.status)
         : ResourceStatus.UNKNOWN;
-      this.events = dto.events
-        ? dto.events.map((event) => new KubeEvent(event))
-        : [];
       this.isFluxManaged = dto.isFluxManaged;
     } else {
       this.uid = "";
@@ -112,7 +107,6 @@ export class KubeResource {
       this.parentIDs = [];
       this.createdAt = new Date();
       this.status = ResourceStatus.UNKNOWN;
-      this.events = [];
     }
   }
 

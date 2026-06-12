@@ -8,6 +8,9 @@ import {
   KubeResource,
 } from "../../../core/fluxTree/models/tree";
 import TooltipedDate from "../tooltiped-date/TooltipedDate";
+import { observer } from "mobx-react-lite";
+import { useInjection } from "inversify-react";
+import { EventsStore } from "../../../core/fluxTree/stores/events.store";
 
 type InfoTabProps = {
   resource: KubeResource | null;
@@ -185,7 +188,9 @@ const renderKindFields = (resource: KubeResource) => {
   }
 };
 
-export const InfoTab = ({ resource }: InfoTabProps) => {
+export const InfoTab = observer(({ resource }: InfoTabProps) => {
+  const eventsStore = useInjection(EventsStore);
+
   if (!resource) {
     return (
       <p className="text-default-400 text-sm px-2">No resource selected.</p>
@@ -217,7 +222,10 @@ export const InfoTab = ({ resource }: InfoTabProps) => {
           value={<TooltipedDate date={resource.createdAt} />}
         />
         <InfoRow label="Children" value={resource.children.length.toString()} />
-        <InfoRow label="Events" value={resource.events.length.toString()} />
+        <InfoRow
+          label="Events"
+          value={eventsStore.eventsForResource(resource.uid).length.toString()}
+        />
         <InfoRow
           label="Reconcilable"
           value={resource.isReconcilable.toString()}
@@ -246,4 +254,4 @@ export const InfoTab = ({ resource }: InfoTabProps) => {
       {renderKindFields(resource)}
     </div>
   );
-};
+});

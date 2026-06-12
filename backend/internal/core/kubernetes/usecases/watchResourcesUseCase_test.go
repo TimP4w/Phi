@@ -1,7 +1,7 @@
 package kubernetesusecases
 
 import (
-	"sync"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,18 +31,15 @@ func expectBroadcastPatch(rtSvc *mocks.RealtimeService, op string) {
 }
 
 func TestWatchResources_onResourceAdd_UpdatesStore(t *testing.T) {
-	uc, kubeSvc, store, rtSvc := makeWatchResourcesUseCase(t)
+	uc, _, store, rtSvc := makeWatchResourcesUseCase(t)
 
 	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod"}
 	store.On("UpdateResource", res).Return(&res)
-	kubeSvc.On("IsWatching", mock.AnythingOfType("string")).Return(false)
-	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Once()
 	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
 
 	uc.onResourceAdd(res)
 
 	store.AssertCalled(t, "UpdateResource", res)
-	kubeSvc.AssertCalled(t, "WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestWatchResources_onResourceUpdate_DeepEqual_Skips(t *testing.T) {
@@ -94,67 +91,35 @@ func TestWatchResources_onResourceDelete_NonExistent(t *testing.T) {
 	store.AssertNotCalled(t, "RemoveResource", mock.Anything)
 }
 
-func TestWatchResources_Execute_CallsWatchResources(t *testing.T) {
-	uc, kubeSvc, store, _ := makeWatchResourcesUseCase(t)
+func TestWatchResources_Execute_DiscoversApisAndWatches(t *testing.T) {
+	uc, kubeSvc, _, _ := makeWatchResourcesUseCase(t)
 
-	kinds := map[string]struct{}{"pods_v1_": {}}
-	store.On("GetKnownResourceAPIRefs").Return(kinds)
-	kubeSvc.On("WatchResources", kinds, mock.Anything, mock.Anything, mock.Anything).Return()
+	apis := []kube.ApiResource{{Name: "pods", Version: "v1", Group: "", Kind: "Pod"}}
+	kubeSvc.On("DiscoverApis").Return(apis, nil)
+	kubeSvc.On("WatchResources", apis, mock.Anything, mock.Anything, mock.Anything).Return()
 
 	_, err := uc.Execute(WatchResourcesInput{})
 
 	assert.NoError(t, err)
-	kubeSvc.AssertCalled(t, "WatchResources", kinds, mock.Anything, mock.Anything, mock.Anything)
+	kubeSvc.AssertCalled(t, "WatchResources", apis, mock.Anything, mock.Anything, mock.Anything)
 }
 
-func TestWatchResources_onResourceAdd_InformerAlreadyRunning_SkipsWatchResources(t *testing.T) {
-	uc, kubeSvc, store, rtSvc := makeWatchResourcesUseCase(t)
+func TestWatchResources_Execute_DiscoverApisError(t *testing.T) {
+	uc, kubeSvc, _, _ := makeWatchResourcesUseCase(t)
 
-	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Resource: "pods", Version: "v1", Group: ""}
-	store.On("UpdateResource", res).Return(&res)
-	kubeSvc.On("IsWatching", "pods_v1_").Return(true)
-	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
+	kubeSvc.On("DiscoverApis").Return(nil, errors.New("discovery failed"))
 
-	uc.onResourceAdd(res)
+	_, err := uc.Execute(WatchResourcesInput{})
 
-	kubeSvc.AssertNotCalled(t, "WatchResources")
-}
-
-func TestWatchResources_onResourceAdd_ConcurrentCallsSameType_StartsInformerOnce(t *testing.T) {
-	uc, kubeSvc, store, rtSvc := makeWatchResourcesUseCase(t)
-
-	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Resource: "pods", Version: "v1", Group: ""}
-	store.On("UpdateResource", res).Return(&res)
-	expectBroadcastPatch(rtSvc, realtime.PatchOpUpsert)
-
-	// First call reports not watching; second (serialized by mutex) reports watching.
-	kubeSvc.On("IsWatching", "pods_v1_").Return(false).Once()
-	kubeSvc.On("IsWatching", "pods_v1_").Return(true)
-	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Once()
-
-	var wg sync.WaitGroup
-	start := make(chan struct{})
-	for range 2 {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-start
-			uc.onResourceAdd(res)
-		}()
-	}
-	close(start)
-	wg.Wait()
-
-	kubeSvc.AssertNumberOfCalls(t, "WatchResources", 1)
+	assert.Error(t, err)
+	kubeSvc.AssertNotCalled(t, "WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
 }
 
 func TestWatchResources_BroadcastsPatch(t *testing.T) {
-	uc, kubeSvc, store, rtSvc := makeWatchResourcesUseCase(t)
+	uc, _, store, rtSvc := makeWatchResourcesUseCase(t)
 
 	res := kube.Resource{UID: "pod-uid", Kind: "Pod", Name: "my-pod", Status: kube.StatusSuccess}
 	store.On("UpdateResource", res).Return(&res)
-	kubeSvc.On("IsWatching", mock.AnythingOfType("string")).Return(false)
-	kubeSvc.On("WatchResources", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return().Once()
 
 	rtSvc.On("Broadcast", mock.MatchedBy(func(msg realtime.Message) bool {
 		if msg.Type != realtime.RESOURCE_PATCH {

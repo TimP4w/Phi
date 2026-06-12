@@ -53,7 +53,6 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		Group:       obj.GetObjectKind().GroupVersionKind().Group,
 		Status:      kube.StatusUnknown,
 		Conditions:  []kube.Condition{},
-		Events:      []kube.Event{},
 		CreatedAt:   obj.GetCreationTimestamp().Time,
 		ParentRefs:  []string{},
 	}

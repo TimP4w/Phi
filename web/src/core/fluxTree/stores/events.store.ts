@@ -24,11 +24,14 @@ class EventsStore {
   }
 
   addEvent(event: KubeEvent) {
-    if (this.events.find(e => e.uid === event.uid)) {
-      return;
-    }
+    const existingIndex = this.events.findIndex(e => e.uid === event.uid);
     const events = [...this.events];
-    events.push(event);
+    if (existingIndex >= 0) {
+      // Recurring event (same UID, count++/newer lastObserved) — replace the stored copy
+      events[existingIndex] = event;
+    } else {
+      events.push(event);
+    }
     this.setEvents(events);
     if (!this.isPanelOpen) {
       this.hasNewEvents = true;
@@ -36,6 +39,10 @@ class EventsStore {
         this.hasNewWarnings = true;
       }
     }
+  }
+
+  eventsForResource(resourceUID: string): KubeEvent[] {
+    return this.events.filter(e => e.resourceUID === resourceUID);
   }
 
   clearEventsHint() {

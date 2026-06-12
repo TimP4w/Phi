@@ -1,5 +1,3 @@
-import { EventDto } from "./eventDto";
-
 export type TreeDto = {
   root: TreeNodeDto;
 };
@@ -17,7 +15,6 @@ export type TreeNodeDto = {
   annotations: Record<string, string>;
   labels: Record<string, string>;
   conditions: ConditionDto[];
-  events: EventDto[];
   status: "unknown" | "success" | "failed" | "pending" | "warning";
   isFluxManaged: boolean;
   createdAt: Date;
