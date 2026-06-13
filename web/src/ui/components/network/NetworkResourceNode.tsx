@@ -8,7 +8,7 @@ import { RESOURCE_TYPE, ROUTE_KINDS } from "../../../core/fluxTree/constants/res
 import { NetworkNodeData, NetworkTLSInfo } from "../../../core/network/usecases/NetworkTopology.usecase";
 import AppLogo from "../resource-icon/ResourceIcon";
 import StatusChip from "../status-chip/StatusChip";
-import { ROUTES } from "../../routes/routes.enum";
+import { NETWORK_SUBPATH, ROUTES } from "../../routes/routes.enum";
 
 type NetworkResourceNodeProps = NodeProps<Node<NetworkNodeData>>;
 
@@ -138,7 +138,7 @@ function NetworkResourceNode({ data }: NetworkResourceNodeProps) {
           </div>
           <div className="flex-1 min-w-0">
             <Link
-              to={`${ROUTES.NETWORK}/${treeNode.uid}`}
+              to={`${ROUTES.RESOURCE}/${treeNode.uid}/${NETWORK_SUBPATH}`}
               onClick={(e) => e.stopPropagation()}
               className="text-sm font-semibold truncate block hover:text-primary transition-colors leading-tight"
             >

@@ -4,7 +4,6 @@ import { useNavigate, useHref, Routes, Route } from "react-router-dom";
 import { ROUTES } from "./routes/routes.enum";
 import ResourceView from "./views/resource/Resource.view";
 import DashboardView from "./views/dashboard/Dashboard.view";
-import NetworkView from "./views/network/Network.view";
 
 export default function Phi() {
   const navigate = useNavigate();
@@ -29,12 +28,8 @@ export default function Phi() {
         <Routes>
           <Route path={ROUTES.DASHBOARD} element={<DashboardView />} />
           <Route
-            path={ROUTES.RESOURCE + "/:nodeUid"}
+            path={ROUTES.RESOURCE + "/:nodeUid/:view?"}
             element={<ResourceView />}
-          />
-          <Route
-            path={ROUTES.NETWORK + "/:nodeUid"}
-            element={<NetworkView />}
           />
         </Routes>
       </ReactFlowProvider>

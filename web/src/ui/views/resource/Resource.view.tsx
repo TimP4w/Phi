@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import {
   FluxResource,
   HelmRelease,
@@ -22,8 +22,11 @@ import {
 import AppLogo from "../../components/resource-icon/ResourceIcon";
 import ResourceDrawer from "../../components/panel/ResourceDrawer";
 import Header from "../../components/layout/Header";
-import { ROUTES } from "../../routes/routes.enum";
+import { NETWORK_SUBPATH, ROUTES } from "../../routes/routes.enum";
 import RenderTreeNode from "../../components/resource-tree/ResourceTree";
+import NetworkGraph from "../../components/network/NetworkGraph";
+import { ReactFlowProvider } from "@xyflow/react";
+import { COLOR_HEALTHY, COLOR_UNHEALTHY } from "../../../core/network/usecases/NetworkTopology.usecase";
 import { ResourceFilter } from "../../shared/resourceFilter";
 import ReconcileSuspendButtonGroup from "../../components/play-pause/ReconcileSuspendButtonGroup";
 import { Bell, Check, ChevronDown, Info, List, Network, PanelRightClose, PanelRightOpen, Workflow, X } from "lucide-react";
@@ -44,6 +47,13 @@ import { TYPES } from "../../../core/shared/types";
 import { WatchMetricsUseCase } from "../../../core/metrics/usecases/watchMetrics.usecase";
 import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatchMetrics.usecase";
 import { METRICS_KINDS } from "../../../core/metrics/constants/metrics.const";
+
+type ResourceViewMode = "graph" | "tree" | "network";
+
+const NETWORK_LEGEND: { color: string; label: string; dash: boolean }[] = [
+  { color: COLOR_HEALTHY, label: "Routable", dash: false },
+  { color: COLOR_UNHEALTHY, label: "Pending / not ready", dash: true },
+];
 
 const STATUS_FILTER_OPTIONS: { value: ResourceStatus; label: string; dot: string }[] = [
   { value: ResourceStatus.FAILED, label: "Failed", dot: "bg-danger" },
@@ -172,18 +182,38 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
 }
 
 const ResourceView: React.FC = observer(() => {
-  const [activeView, setActiveView] = useState<"graph" | "tree">("graph");
+  const { nodeUid, view } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [activeView, setActiveView] = useState<ResourceViewMode>(
+    view === NETWORK_SUBPATH ? "network" : "graph"
+  );
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [eventSidebarOpen, setEventSidebarOpen] = useState(false);
   const [eventFilter, setEventFilter] = useState<EventFilter>("all");
   const [statusFilters, setStatusFilters] = useState<ResourceStatus[]>([]);
   const [kindFilters, setKindFilters] = useState<string[]>([]);
-  const { nodeUid } = useParams();
-  const navigate = useNavigate();
   const fluxTreeStore = useInjection(FluxTreeStore);
   const eventsStore = useInjection(EventsStore);
 
   const resource = fluxTreeStore.findResourceByUid(nodeUid ?? "");
+
+  // Keep the active view in sync with the URL so browser back/forward and deep
+  // links (e.g. /resource/:uid/network) land on the right sub-view. Only the
+  // network view carries a URL segment; graph/tree share the base path.
+  useEffect(() => {
+    if (view === NETWORK_SUBPATH) setActiveView("network");
+    else setActiveView((prev) => (prev === "network" ? "graph" : prev));
+  }, [view]);
+
+  // Switch sub-view, reflecting the network view in the URL for shareability.
+  const selectView = (next: ResourceViewMode) => {
+    setActiveView(next);
+    if (!resource) return;
+    const base = `${ROUTES.RESOURCE}/${resource.uid}`;
+    const target = next === "network" ? `${base}/${NETWORK_SUBPATH}` : base;
+    if (location.pathname !== target) navigate(target);
+  };
 
   const watchMetrics = useInjection<WatchMetricsUseCase>(TYPES.WatchMetricsUseCase);
   const stopWatchMetrics = useInjection<StopWatchMetricsUseCase>(TYPES.StopWatchMetricsUseCase);
@@ -324,7 +354,7 @@ const ResourceView: React.FC = observer(() => {
             <Button
               size="sm"
               variant={activeView === "graph" ? "solid" : "light"}
-              onPress={() => setActiveView("graph")}
+              onPress={() => selectView("graph")}
               startContent={<Network className="w-3.5 h-3.5" />}
             >
               Graph
@@ -332,12 +362,21 @@ const ResourceView: React.FC = observer(() => {
             <Button
               size="sm"
               variant={activeView === "tree" ? "solid" : "light"}
-              onPress={() => setActiveView("tree")}
+              onPress={() => selectView("tree")}
               startContent={<List className="w-3.5 h-3.5" />}
             >
               Tree
             </Button>
+            <Button
+              size="sm"
+              variant={activeView === "network" ? "solid" : "light"}
+              onPress={() => selectView("network")}
+              startContent={<Workflow className="w-3.5 h-3.5" />}
+            >
+              Network
+            </Button>
           </div>
+          {activeView !== "network" && (
           <div className="flex-1 min-w-0 overflow-x-auto">
             <div className="flex items-center gap-1 w-max">
               {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
@@ -381,6 +420,7 @@ const ResourceView: React.FC = observer(() => {
               )}
             </div>
           </div>
+          )}
         </div>
 
         {/* Graph + sidebars row */}
@@ -394,7 +434,7 @@ const ResourceView: React.FC = observer(() => {
               <Button
                 size="sm"
                 variant={activeView === "graph" ? "solid" : "light"}
-                onPress={() => setActiveView("graph")}
+                onPress={() => selectView("graph")}
                 startContent={<Network className="w-3.5 h-3.5" />}
               >
                 Graph
@@ -402,16 +442,15 @@ const ResourceView: React.FC = observer(() => {
               <Button
                 size="sm"
                 variant={activeView === "tree" ? "solid" : "light"}
-                onPress={() => setActiveView("tree")}
+                onPress={() => selectView("tree")}
                 startContent={<List className="w-3.5 h-3.5" />}
               >
                 Tree
               </Button>
-              <div className="w-px h-5 bg-default-200 mx-0.5" />
               <Button
                 size="sm"
-                variant="light"
-                onPress={() => resource && navigate(`${ROUTES.NETWORK}/${resource.uid}`)}
+                variant={activeView === "network" ? "solid" : "light"}
+                onPress={() => selectView("network")}
                 startContent={<Workflow className="w-3.5 h-3.5" />}
               >
                 Network
@@ -432,7 +471,28 @@ const ResourceView: React.FC = observer(() => {
               </Button>
             </div>
 
-            {/* Filter bar — desktop only */}
+            {/* Network legend — desktop only, replaces filters in network view */}
+            {activeView === "network" && (
+              <div className="hidden md:flex absolute top-3 left-4 z-10 items-center gap-3 bg-content1/90 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-default-200 shadow-sm">
+                {NETWORK_LEGEND.map((item) => (
+                  <span key={item.label} className="flex items-center gap-1.5 text-xs text-default-500">
+                    <span
+                      className="inline-block w-4 h-0.5"
+                      style={{
+                        backgroundColor: item.color,
+                        backgroundImage: item.dash
+                          ? `repeating-linear-gradient(to right, ${item.color} 0 4px, transparent 4px 7px)`
+                          : undefined,
+                      }}
+                    />
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Filter bar — desktop only (graph/tree only) */}
+            {activeView !== "network" && (
             <div className="hidden md:flex absolute top-3 left-4 z-10 items-center gap-1 bg-content1/90 backdrop-blur-sm rounded-lg px-2 py-1 border border-default-200 shadow-sm">
               {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
                 const active = statusFilters.includes(value);
@@ -474,6 +534,7 @@ const ResourceView: React.FC = observer(() => {
                 </>
               )}
             </div>
+            )}
 
             {/* Graph */}
             <div
@@ -497,6 +558,20 @@ const ResourceView: React.FC = observer(() => {
                   onResourceClick={(node) => openInfo(node)}
                   filter={activeFilter}
                 />
+              </div>
+            )}
+
+            {/* Network — mounted only when active, in its own ReactFlow store so
+                it never shares state with the resource graph (app-level provider) */}
+            {activeView === "network" && (
+              <div className="absolute inset-0">
+                <ReactFlowProvider>
+                  <NetworkGraph
+                    rootResource={resource}
+                    onResourceClick={(node) => openInfo(node)}
+                    treeSize={fluxTreeStore.resourceCount}
+                  />
+                </ReactFlowProvider>
               </div>
             )}
           </div>
