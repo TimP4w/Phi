@@ -5,17 +5,18 @@ import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { container } from "../../../core/shared/inversify.config";
 import Widget from "./Widget";
 import {
-  Button,
+  Chip,
+  Input,
   Modal,
   ModalBody,
   ModalContent,
-  ModalFooter,
   ModalHeader,
   Skeleton,
   useDisclosure,
 } from "@heroui/react";
-import { useEffect, useState } from "react";
-import { AlertTriangle, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { AlertTriangle, CheckCircle2, Search } from "lucide-react";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import ResourceRow from "../resource-row/ResourceRow";
 
@@ -25,11 +26,44 @@ type ResourceCountWidgetProps = {
   compact?: boolean;
 };
 
-function reconcilingLabel(resources: KubeResource[]): string {
-  const names = resources.map((r) => r.name);
-  if (names.length === 1) return `${names[0]} is reconciling`;
-  if (names.length === 2) return `${names[0]} and ${names[1]} are reconciling`;
-  return `${names[0]}, ${names[1]} and ${names.length - 2} other${names.length - 2 === 1 ? "" : "s"} are reconciling`;
+// All statuses a resource can carry, in the order they should surface (worst
+// first, so failures lead).
+const ALL_STATUSES = [
+  ResourceStatus.FAILED,
+  ResourceStatus.WARNING,
+  ResourceStatus.PENDING,
+  ResourceStatus.UNKNOWN,
+  ResourceStatus.SUSPENDED,
+  ResourceStatus.SUCCESS,
+] as const;
+
+const STATUS_ORDER: Record<string, number> = Object.fromEntries(
+  ALL_STATUSES.map((s, i) => [s, i]),
+);
+
+const STATUS_LABEL: Record<string, string> = {
+  [ResourceStatus.FAILED]: "Failed",
+  [ResourceStatus.WARNING]: "Warning",
+  [ResourceStatus.PENDING]: "Reconciling",
+  [ResourceStatus.UNKNOWN]: "Unknown",
+  [ResourceStatus.SUSPENDED]: "Suspended",
+  [ResourceStatus.SUCCESS]: "Ready",
+};
+
+function statusChipColor(
+  status: ResourceStatus,
+): "danger" | "warning" | "success" | "default" {
+  switch (status) {
+    case ResourceStatus.FAILED:
+      return "danger";
+    case ResourceStatus.WARNING:
+    case ResourceStatus.PENDING:
+      return "warning";
+    case ResourceStatus.SUCCESS:
+      return "success";
+    default:
+      return "default";
+  }
 }
 
 const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
@@ -38,9 +72,11 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     const tree: Tree = store.tree; 
 
     const { isOpen, onOpen, onOpenChange } = useDisclosure();
-    const [criticalResources, setCriticalResources] = useState<KubeResource[]>([]);
-    const [reconcilingResources, setReconcilingResources] = useState<KubeResource[]>([]);
-    const [showReconciling, setShowReconciling] = useState(false);
+    const [allResources, setAllResources] = useState<KubeResource[]>([]);
+    const [activeStatuses, setActiveStatuses] = useState<Set<string>>(
+      new Set([ResourceStatus.FAILED]),
+    );
+    const [query, setQuery] = useState("");
     const [resourceCounts, setResourceCounts] = useState({
       total: 0,
       ready: 0,
@@ -52,10 +88,8 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     useEffect(() => {
       if (!resource) return;
 
-      const seenUids = new Set<string>();
       const visited = new Set<string>();
-      const newCritical: KubeResource[] = [];
-      const newReconciling: KubeResource[] = [];
+      const collected: KubeResource[] = [];
 
       const countResources = (
         node: KubeResource | null,
@@ -63,6 +97,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       ): { total: number; ready: number; notReady: number; suspended: number; unknown: number } => {
         if (!node || visited.has(node.uid)) return { total: 0, ready: 0, notReady: 0, suspended: 0, unknown: 0 };
         visited.add(node.uid);
+        collected.push(node);
 
         let total = 1;
         let ready = node.status === ResourceStatus.SUCCESS ? 1 : 0;
@@ -74,15 +109,6 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
           node.status !== ResourceStatus.SUSPENDED
             ? 1
             : 0;
-
-        if (notReady === 1 && !seenUids.has(node.uid)) {
-          seenUids.add(node.uid);
-          if (node.status === ResourceStatus.PENDING) {
-            newReconciling.push(node);
-          } else {
-            newCritical.push(node);
-          }
-        }
 
         const skipChildren =
           depth > 0 &&
@@ -106,13 +132,71 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
 
       const counts = countResources(resource);
       setResourceCounts(counts);
-      setCriticalResources(newCritical);
-      setReconcilingResources(newReconciling);
+      setAllResources(collected);
     }, [resource, tree, skipGrandChildren]);
 
-    // reset collapsed state when modal closes
+    const sortedResources = useMemo(
+      () =>
+        [...allResources].sort(
+          (a, b) =>
+            (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9),
+        ),
+      [allResources],
+    );
+
+    // Only show status chips for statuses actually present.
+    const presentStatuses = useMemo(
+      () =>
+        ALL_STATUSES.filter((s) =>
+          sortedResources.some((r) => r.status === s),
+        ),
+      [sortedResources],
+    );
+
+    const filteredResources = useMemo(() => {
+      const q = query.trim().toLowerCase();
+      return sortedResources.filter((r) => {
+        if (activeStatuses.size > 0 && !activeStatuses.has(r.status)) return false;
+        if (
+          q &&
+          !r.name.toLowerCase().includes(q) &&
+          !r.kind.toLowerCase().includes(q) &&
+          !(r.namespace?.toLowerCase().includes(q) ?? false)
+        )
+          return false;
+        return true;
+      });
+    }, [sortedResources, activeStatuses, query]);
+
+    const toggleStatus = (status: string) =>
+      setActiveStatuses((prev) => {
+        const next = new Set(prev);
+        if (next.has(status)) next.delete(status);
+        else next.add(status);
+        return next;
+      });
+
+    // Fixed-height rows: total size is always count × ROW_HEIGHT, so the scroll
+    // range shrinks correctly when filtering and rows never overlap.
+    const ROW_HEIGHT = 56;
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const virtualizer = useVirtualizer({
+      count: filteredResources.length,
+      getScrollElement: () => scrollRef.current,
+      estimateSize: () => ROW_HEIGHT,
+      overscan: 12,
+      getItemKey: (index) => filteredResources[index]?.uid ?? index,
+    });
+
+    // Jump back to the top whenever the visible set changes.
+    useEffect(() => {
+      virtualizer.scrollToOffset(0);
+    }, [filteredResources, virtualizer]);
+
+    // reset filters back to the Failed default when modal closes
     const handleOpenChange = () => {
-      setShowReconciling(false);
+      setActiveStatuses(new Set([ResourceStatus.FAILED]));
+      setQuery("");
       onOpenChange();
     };
 
@@ -124,7 +208,60 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       );
     }
 
-    const totalNotReady = criticalResources.length + reconcilingResources.length;
+    const failedCount = sortedResources.filter(
+      (r) => r.status === ResourceStatus.FAILED,
+    ).length;
+    const pendingCount = sortedResources.filter(
+      (r) =>
+        r.status === ResourceStatus.PENDING ||
+        r.status === ResourceStatus.WARNING,
+    ).length;
+
+    // Overall health: red if anything failed, yellow if anything is still
+    // reconciling/warning, otherwise green.
+    const health: "danger" | "warning" | "success" =
+      failedCount > 0 ? "danger" : pendingCount > 0 ? "warning" : "success";
+
+    const HEALTH_STYLES = {
+      danger: {
+        border: "border-danger/30",
+        bg: "bg-danger/[0.06] hover:bg-danger/10",
+        text: "text-danger",
+        muted: "text-danger/60",
+      },
+      warning: {
+        border: "border-warning/30",
+        bg: "bg-warning/[0.06] hover:bg-warning/10",
+        text: "text-warning",
+        muted: "text-warning/60",
+      },
+      success: {
+        border: "border-success/30",
+        bg: "bg-success/[0.06] hover:bg-success/10",
+        text: "text-success",
+        muted: "text-success/60",
+      },
+    }[health];
+
+    const healthLabel =
+      failedCount > 0
+        ? `${failedCount} failed${pendingCount > 0 ? ` · ${pendingCount} reconciling` : ""}`
+        : pendingCount > 0
+          ? `${pendingCount} reconciling`
+          : "All ready";
+
+    // Open the modal pre-filtered to the worst tier present.
+    const openModal = () => {
+      const seed =
+        failedCount > 0
+          ? new Set([ResourceStatus.FAILED])
+          : pendingCount > 0
+            ? new Set([ResourceStatus.PENDING, ResourceStatus.WARNING])
+            : new Set<string>();
+      setActiveStatuses(seed);
+      setQuery("");
+      onOpen();
+    };
 
     return (
       <Widget span={1} title="Resources" subtitle="Status of all resources" compact={compact}>
@@ -151,83 +288,115 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
           </div>
         </div>
 
-        {!compact && totalNotReady > 0 && (
+        {!compact && (
           <button
-            onClick={onOpen}
-            className="mt-3 w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-danger/30 bg-danger/[0.06] hover:bg-danger/10 transition-colors text-left"
+            onClick={openModal}
+            className={`mt-3 w-full flex items-center gap-2 px-3 py-2 rounded-lg border ${HEALTH_STYLES.border} ${HEALTH_STYLES.bg} transition-colors text-left`}
           >
-            <AlertTriangle className="w-3.5 h-3.5 text-danger flex-shrink-0" />
-            <span className="text-xs text-danger flex-1">
-              {criticalResources.length > 0
-                ? `${criticalResources.length} not ready`
-                : `${reconcilingResources.length} reconciling`}
-              {criticalResources.length > 0 && reconcilingResources.length > 0 && (
-                <span className="text-danger/60"> · {reconcilingResources.length} reconciling</span>
-              )}
-            </span>
-            <span className="text-xs text-danger/60">View →</span>
+            {health === "success" ? (
+              <CheckCircle2 className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`} />
+            ) : (
+              <AlertTriangle className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`} />
+            )}
+            <span className={`text-xs flex-1 ${HEALTH_STYLES.text}`}>{healthLabel}</span>
+            <span className={`text-xs ${HEALTH_STYLES.muted}`}>View →</span>
           </button>
         )}
 
         <Modal
           isOpen={isOpen}
           onOpenChange={handleOpenChange}
-          scrollBehavior="inside"
           size="2xl"
           className="dark"
         >
           <ModalContent>
-            {(onClose) => (
+            {() => (
               <>
                 <ModalHeader className="flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 text-danger" />
-                  Not Ready Resources
+                  Resources
                   <span className="text-sm font-normal text-default-400 ml-1">
-                    ({totalNotReady})
+                    ({filteredResources.length}
+                    {filteredResources.length !== sortedResources.length
+                      ? ` / ${sortedResources.length}`
+                      : ""}
+                    )
                   </span>
                 </ModalHeader>
-                <ModalBody className="px-0 py-0">
-                  {/* Critical resources — failed / warning */}
-                  {criticalResources.length > 0 && (
-                    <div className="divide-y divide-default-100">
-                      {criticalResources.map((res) => (
-                        <ResourceRow key={res.uid} resource={res} className="rounded-none px-4" />
-                      ))}
-                    </div>
-                  )}
+                <ModalBody className="px-0 py-0 gap-0">
+                  {/* Filters */}
+                  <div className="flex flex-col gap-2 px-4 py-3 border-b border-default-100">
+                    <Input
+                      size="sm"
+                      placeholder="Filter resources…"
+                      value={query}
+                      onValueChange={setQuery}
+                      startContent={
+                        <Search className="w-3.5 h-3.5 text-default-400" />
+                      }
+                      isClearable
+                      onClear={() => setQuery("")}
+                    />
+                    {presentStatuses.length > 1 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {presentStatuses.map((status) => {
+                          const active = activeStatuses.has(status);
+                          return (
+                            <Chip
+                              key={status}
+                              size="sm"
+                              variant={active ? "solid" : "flat"}
+                              color={statusChipColor(status)}
+                              className="cursor-pointer"
+                              onClick={() => toggleStatus(status)}
+                            >
+                              {STATUS_LABEL[status] ?? status}
+                            </Chip>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
 
-                  {/* Reconciling — collapsed by default */}
-                  {reconcilingResources.length > 0 && (
-                    <div className={criticalResources.length > 0 ? "border-t border-default-100" : ""}>
-                      <button
-                        className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-content2 transition-colors text-left"
-                        onClick={() => setShowReconciling((v) => !v)}
+                  {/* List */}
+                  {filteredResources.length === 0 ? (
+                    <div className="text-center text-default-400 text-sm py-10">
+                      No resources.
+                    </div>
+                  ) : (
+                    <div
+                      ref={scrollRef}
+                      className="overflow-y-auto"
+                      style={{ height: "60vh" }}
+                    >
+                      <div
+                        style={{
+                          height: `${virtualizer.getTotalSize()}px`,
+                          position: "relative",
+                          width: "100%",
+                        }}
                       >
-                        <Loader2 className="w-3.5 h-3.5 text-warning flex-shrink-0 animate-spin" />
-                        <span className="text-xs text-default-400 flex-1 truncate">
-                          {reconcilingLabel(reconcilingResources)}
-                        </span>
-                        {showReconciling ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-default-400 flex-shrink-0" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-default-400 flex-shrink-0" />
-                        )}
-                      </button>
-                      {showReconciling && (
-                        <div className="divide-y divide-default-100 border-t border-default-100">
-                          {reconcilingResources.map((res) => (
-                            <ResourceRow key={res.uid} resource={res} className="rounded-none px-4" />
-                          ))}
-                        </div>
-                      )}
+                        {virtualizer.getVirtualItems().map((vItem) => {
+                          const res = filteredResources[vItem.index];
+                          return (
+                            <div
+                              key={vItem.key}
+                              className="absolute top-0 left-0 w-full border-b border-default-100 overflow-hidden"
+                              style={{
+                                height: `${ROW_HEIGHT}px`,
+                                transform: `translateY(${vItem.start}px)`,
+                              }}
+                            >
+                              <ResourceRow
+                                resource={res}
+                                className="rounded-none px-4 h-full"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </ModalBody>
-                <ModalFooter>
-                  <Button color="default" variant="light" onPress={onClose}>
-                    Close
-                  </Button>
-                </ModalFooter>
               </>
             )}
           </ModalContent>
