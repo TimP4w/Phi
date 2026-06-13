@@ -48,6 +48,14 @@ export enum RESOURCE_TYPE {
   CRD = "CustomResourceDefinition"
 }
 
+// Resource kinds that carry RouteMetadata and act as HTTP routing entry points
+// in the network topology (Ingress, Traefik IngressRoute, Gateway API HTTPRoute).
+export const ROUTE_KINDS = new Set<string>([
+  RESOURCE_TYPE.INGRESS,
+  RESOURCE_TYPE.INGRESSROUTE,
+  RESOURCE_TYPE.HTTPROUTE,
+]);
+
 export enum FLUX_CONTROLLER {
   KUSTOMIZATION = "kustomize-controller",
   HELM = "helm-controller",

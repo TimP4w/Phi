@@ -22,6 +22,7 @@ import {
 import AppLogo from "../../components/resource-icon/ResourceIcon";
 import ResourceDrawer from "../../components/panel/ResourceDrawer";
 import Header from "../../components/layout/Header";
+import { ROUTES } from "../../routes/routes.enum";
 import RenderTreeNode from "../../components/resource-tree/ResourceTree";
 import { ResourceFilter } from "../../shared/resourceFilter";
 import ReconcileSuspendButtonGroup from "../../components/play-pause/ReconcileSuspendButtonGroup";
@@ -410,7 +411,7 @@ const ResourceView: React.FC = observer(() => {
               <Button
                 size="sm"
                 variant="light"
-                onPress={() => resource && navigate(`/network/${resource.uid}`)}
+                onPress={() => resource && navigate(`${ROUTES.NETWORK}/${resource.uid}`)}
                 startContent={<Workflow className="w-3.5 h-3.5" />}
               >
                 Network

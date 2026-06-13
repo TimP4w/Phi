@@ -4,7 +4,7 @@ import UseCase from "../../shared/usecase";
 import { FluxTreeStore } from "../../fluxTree/stores/fluxTree.store";
 import ELK, { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk.bundled.js";
 import { KubeResource } from "../../fluxTree/models/tree";
-import { RESOURCE_TYPE } from "../../fluxTree/constants/resources.const";
+import { RESOURCE_TYPE, ROUTE_KINDS } from "../../fluxTree/constants/resources.const";
 import { NetworkProvider } from "../providers/networkProvider";
 import { TraefikProvider } from "../providers/traefik.provider";
 
@@ -84,14 +84,8 @@ function gatewayLabel(gateway: KubeResource): string {
   return `Gateway · ${addrs}${ports ? ` · :${ports}` : ""}`;
 }
 
-const ROUTE_KINDS = new Set<string>([
-  RESOURCE_TYPE.INGRESS,
-  RESOURCE_TYPE.INGRESSROUTE,
-  RESOURCE_TYPE.HTTPROUTE,
-]);
-
-const COLOR_HEALTHY = "#17c964"; // heroui success
-const COLOR_UNHEALTHY = "#f5a524"; // heroui warning
+export const COLOR_HEALTHY = "#17c964"; // heroui success
+export const COLOR_UNHEALTHY = "#f5a524"; // heroui warning
 
 @injectable()
 export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {

@@ -14,6 +14,7 @@ import AppLogo from "../../components/resource-icon/ResourceIcon";
 import StatusChip from "../../components/status-chip/StatusChip";
 import ResourceDrawer from "../../components/panel/ResourceDrawer";
 import NetworkGraph from "../../components/network/NetworkGraph";
+import { COLOR_HEALTHY, COLOR_UNHEALTHY } from "../../../core/network/usecases/NetworkTopology.usecase";
 
 const NetworkView: React.FC = observer(() => {
   const { nodeUid } = useParams();
@@ -31,8 +32,8 @@ const NetworkView: React.FC = observer(() => {
 
   const legend = useMemo(
     () => [
-      { color: "#17c964", label: "Routable", dash: false },
-      { color: "#f5a524", label: "Pending / not ready", dash: true },
+      { color: COLOR_HEALTHY, label: "Routable", dash: false },
+      { color: COLOR_UNHEALTHY, label: "Pending / not ready", dash: true },
     ],
     [],
   );

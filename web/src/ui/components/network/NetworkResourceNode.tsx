@@ -4,7 +4,7 @@ import { Handle, NodeProps, Position, Node } from "@xyflow/react";
 import { Lock } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@heroui/react";
 import { KubeResource } from "../../../core/fluxTree/models/tree";
-import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
+import { RESOURCE_TYPE, ROUTE_KINDS } from "../../../core/fluxTree/constants/resources.const";
 import { NetworkNodeData, NetworkTLSInfo } from "../../../core/network/usecases/NetworkTopology.usecase";
 import AppLogo from "../resource-icon/ResourceIcon";
 import StatusChip from "../status-chip/StatusChip";
@@ -12,11 +12,11 @@ import { ROUTES } from "../../routes/routes.enum";
 
 type NetworkResourceNodeProps = NodeProps<Node<NetworkNodeData>>;
 
-const ROUTE_KINDS = new Set<string>([
-  RESOURCE_TYPE.INGRESS,
-  RESOURCE_TYPE.INGRESSROUTE,
-  RESOURCE_TYPE.HTTPROUTE,
-]);
+// Whole days from now until an ISO timestamp; null when unparseable.
+function daysUntil(iso: string): number | null {
+  const days = Math.round((new Date(iso).getTime() - Date.now()) / 86_400_000);
+  return Number.isNaN(days) ? null : days;
+}
 
 function networkDetail(node: KubeResource): string | null {
   if (node.kind === RESOURCE_TYPE.SERVICE && node.serviceMetadata) {
@@ -47,8 +47,8 @@ function networkDetail(node: KubeResource): string | null {
     const parts: string[] = [];
     if (m.issuer) parts.push(m.issuer);
     if (m.notAfter) {
-      const days = Math.round((new Date(m.notAfter).getTime() - Date.now()) / 86_400_000);
-      if (!Number.isNaN(days)) parts.push(`expires ${days}d`);
+      const days = daysUntil(m.notAfter);
+      if (days != null) parts.push(`expires ${days}d`);
     }
     parts.push(m.ready ? "Ready" : "NOT READY");
     return parts.join(" · ") || null;
@@ -63,9 +63,7 @@ function networkDetail(node: KubeResource): string | null {
 }
 
 function TLSLockPopover({ tls }: { tls: NetworkTLSInfo }) {
-  const days = tls.notAfter
-    ? Math.round((new Date(tls.notAfter).getTime() - Date.now()) / 86_400_000)
-    : null;
+  const days = tls.notAfter ? daysUntil(tls.notAfter) : null;
   return (
     <Popover placement="top" showArrow>
       <PopoverTrigger>
