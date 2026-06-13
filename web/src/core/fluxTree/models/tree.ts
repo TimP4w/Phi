@@ -1,4 +1,15 @@
-import { ConditionDto, LogMessageDto, TreeNodeDto } from "./dtos/treeDto";
+import {
+  ConditionDto,
+  LogMessageDto,
+  TreeNodeDto,
+  ServiceMetadataDto,
+  RouteMetadataDto,
+  EndpointSliceMetadataDto,
+  GatewayMetadataDto,
+  CertificateMetadataDto,
+  NetworkPolicyMetadataDto,
+  ProxyMetadataDto,
+} from "./dtos/treeDto";
 import { FLUX_NAMESPACE, RESOURCE_TYPE } from "../constants/resources.const";
 
 export class Tree {
@@ -64,6 +75,15 @@ export class KubeResource {
   logs: PodLog[] = [];
   isFluxManaged: boolean = false;
   isReconcilable: boolean = false;
+  // Networking metadata — present only on the relevant kinds, used by the
+  // network topology view to resolve traffic edges.
+  serviceMetadata?: ServiceMetadataDto;
+  routeMetadata?: RouteMetadataDto;
+  endpointSliceMetadata?: EndpointSliceMetadataDto;
+  gatewayMetadata?: GatewayMetadataDto;
+  certificateMetadata?: CertificateMetadataDto;
+  networkPolicyMetadata?: NetworkPolicyMetadataDto;
+  proxyMetadata?: ProxyMetadataDto;
 
   constructor();
   constructor(dto: TreeNodeDto);
@@ -94,6 +114,13 @@ export class KubeResource {
         ? stringToResourceStatus(dto.status)
         : ResourceStatus.UNKNOWN;
       this.isFluxManaged = dto.isFluxManaged;
+      this.serviceMetadata = dto.serviceMetadata;
+      this.routeMetadata = dto.routeMetadata;
+      this.endpointSliceMetadata = dto.endpointSliceMetadata;
+      this.gatewayMetadata = dto.gatewayMetadata;
+      this.certificateMetadata = dto.certificateMetadata;
+      this.networkPolicyMetadata = dto.networkPolicyMetadata;
+      this.proxyMetadata = dto.proxyMetadata;
     } else {
       this.uid = "";
       this.name = "";

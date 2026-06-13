@@ -12,6 +12,7 @@ const TYPES = {
   DescribeNodeUseCase: Symbol.for("DescribeNodeUseCase"),
   FetchEventsUseCase: Symbol.for("FetchEventsUseCase"),
   LayoutTreeUseCase: Symbol.for("LayoutTreeUseCase"),
+  NetworkTopologyUseCase: Symbol.for("NetworkTopologyUseCase"),
   HandleWsMessageUseCase: Symbol.for("HandleWsMessageUseCase"),
   WatchMetricsUseCase: Symbol.for("WatchMetricsUseCase"),
   StopWatchMetricsUseCase: Symbol.for("StopWatchMetricsUseCase"),
