@@ -18,6 +18,8 @@ import StatusChip from "../status-chip/StatusChip";
 import { Handle, NodeProps, Position, Node } from "@xyflow/react";
 import { ROUTES } from "../../routes/routes.enum";
 import { Pause } from "lucide-react";
+import UsageChip from "../metrics/UsageChip";
+import { METRICS_KINDS } from "../../../core/metrics/constants/metrics.const";
 
 type ResourceProps = NodeProps<Node<VisualizationNodeData>>;
 
@@ -144,6 +146,11 @@ function Resource({ data }: ResourceProps) {
             ) : (
               <p className="text-xs text-default-500 truncate">{extraInfo}</p>
             )}
+          </div>
+        )}
+        {METRICS_KINDS.has(treeNode.kind) && (
+          <div className="px-3 pb-2">
+            <UsageChip uid={treeNode.uid} />
           </div>
         )}
       </div>

@@ -43,7 +43,7 @@ const FluxControllersWidget: React.FC = observer(() => {
   }, [fluxDeployments]);
 
   return (
-    <WidgetCard span={2} title="FluxCD Controllers">
+    <WidgetCard title="FluxCD Controllers">
       <div className="flex flex-col gap-0.5">
         <div className="flex items-center gap-2 mb-3">
           <span className="text-xs text-default-400">Version</span>

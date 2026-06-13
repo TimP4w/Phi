@@ -1,6 +1,6 @@
 import "reflect-metadata";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
@@ -17,6 +17,10 @@ import { SiFlux } from "@icons-pack/react-simple-icons";
 import ResourceCountWidget from "../../components/widgets/ResourcesCountWidget";
 import { EventsStore } from "../../../core/fluxTree/stores/events.store";
 import { Bell, Search, X } from "lucide-react";
+import { TYPES } from "../../../core/shared/types";
+import { WatchMetricsUseCase } from "../../../core/metrics/usecases/watchMetrics.usecase";
+import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatchMetrics.usecase";
+import NodeUsageWidget from "../../components/widgets/NodeUsageWidget";
 import EventsPanel, { EventFilter } from "../../components/events/EventsPanel";
 
 const kindsFilter = [
@@ -118,6 +122,27 @@ enum APP_FILTER {
 const AppsView: React.FC = observer(() => {
   const fluxTreeStore = useInjection(FluxTreeStore);
   const eventsStore = useInjection(EventsStore);
+  const watchMetrics = useInjection<WatchMetricsUseCase>(TYPES.WatchMetricsUseCase);
+  const stopWatchMetrics = useInjection<StopWatchMetricsUseCase>(TYPES.StopWatchMetricsUseCase);
+
+  const appUids = useMemo(
+    () =>
+      fluxTreeStore.applications
+        .filter((a) => a.kind === RESOURCE_TYPE.KUSTOMIZATION || a.kind === RESOURCE_TYPE.HELM_RELEASE)
+        .map((a) => a.uid)
+        .sort()
+        .join(","),
+    [fluxTreeStore.applications]
+  );
+
+  useEffect(() => {
+    watchMetrics.execute({
+      channel: "dashboard",
+      uids: appUids ? appUids.split(",") : [],
+      nodes: true,
+    });
+    return () => stopWatchMetrics.execute("dashboard");
+  }, [appUids, watchMetrics, stopWatchMetrics]);
 
   const [selectedKindsToFilter, setSelectedKindsToFilter] = useSessionState<string[]>("KindsFilter", []);
   const [selectedStatusesToFilter, setSelectedStatusesToFilter] = useSessionState<string[]>("StatusesFilter", []);
@@ -247,9 +272,7 @@ const AppsView: React.FC = observer(() => {
 
             {/* Widgets row */}
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <div className="xl:col-span-2">
-                <FluxControllersWidget />
-              </div>
+              <FluxControllersWidget />
               <FluxApplicationsWidget
                 filters={selectedStatusesToFilter}
                 toggleStatusFilter={(status) => onFilterToggle(status, APP_FILTER.STATUS)}
@@ -259,6 +282,7 @@ const AppsView: React.FC = observer(() => {
                 toggleKindsFilter={(kind) => onFilterToggle(kind, APP_FILTER.KIND)}
               />
               <ResourceCountWidget resource={fluxTreeStore.root} />
+              <NodeUsageWidget />
             </div>
 
             {/* Section header */}

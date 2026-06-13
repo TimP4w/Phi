@@ -13,6 +13,8 @@ const TYPES = {
   FetchEventsUseCase: Symbol.for("FetchEventsUseCase"),
   LayoutTreeUseCase: Symbol.for("LayoutTreeUseCase"),
   HandleWsMessageUseCase: Symbol.for("HandleWsMessageUseCase"),
+  WatchMetricsUseCase: Symbol.for("WatchMetricsUseCase"),
+  StopWatchMetricsUseCase: Symbol.for("StopWatchMetricsUseCase"),
 };
 
 export { TYPES };

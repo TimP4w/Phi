@@ -9,6 +9,13 @@ import { EventsStore } from "../../fluxTree/stores/events.store";
 import { KubeEvent } from "../../fluxTree/models/kubeEvent";
 import { EventDto } from "../../fluxTree/models/dtos/eventDto";
 import { addToast } from "@heroui/react";
+import { MetricsStore } from "../../metrics/stores/metrics.store";
+import {
+  MetricsCurrentMessageDto,
+  MetricsResourceMessageDto,
+  MetricsStatusDto,
+  NodeUsageDto,
+} from "../../metrics/models/dtos/metricsDto";
 
 const FLUX_KINDS = new Set([
   "HelmRelease", "Kustomization", "GitRepository",
@@ -52,6 +59,7 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
   constructor(
     @inject(FluxTreeStore) private fluxTreeStore: FluxTreeStore,
     @inject(EventsStore) private eventsStore: EventsStore,
+    @inject(MetricsStore) private metricsStore: MetricsStore,
   ) {
     super();
   }
@@ -71,6 +79,20 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
         break;
       case REALTIME_CONST.EVENT:
         this.handleEventMessage(message.message as EventDto);
+        break;
+      case REALTIME_CONST.METRICS_STATUS:
+        this.metricsStore.applyStatus(message.message as MetricsStatusDto);
+        break;
+      case REALTIME_CONST.METRICS_CURRENT:
+        this.metricsStore.applyCurrent((message.message as MetricsCurrentMessageDto)?.usages ?? {});
+        break;
+      case REALTIME_CONST.METRICS_RESOURCE: {
+        const payload = message.message as MetricsResourceMessageDto;
+        if (payload?.uid) this.metricsStore.applyResource(payload.uid, payload.metrics);
+        break;
+      }
+      case REALTIME_CONST.METRICS_NODES:
+        this.metricsStore.applyNodes((message.message as NodeUsageDto[]) ?? []);
         break;
       default:
     }

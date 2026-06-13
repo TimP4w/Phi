@@ -18,12 +18,16 @@ import { DescribeNodeUseCase } from "../resource/usecases/describeNode.usecase";
 import { FetchEventsUseCase } from "../fluxTree/usecases/FetchEvents.usecase";
 import { LayoutTreeUseCase } from "../fluxTree/usecases/LayoutTree.usecase";
 import { HandleWsMessageUseCase } from "../realtime/usecases/handleWsMessage.usecase";
+import { MetricsStore } from "../metrics/stores/metrics.store";
+import { WatchMetricsUseCase } from "../metrics/usecases/watchMetrics.usecase";
+import { StopWatchMetricsUseCase } from "../metrics/usecases/stopWatchMetrics.usecase";
 
 const container = new Container();
 
 /* Stores */
 container.bind(FluxTreeStore).toSelf().inSingletonScope();
 container.bind(EventsStore).toSelf().inSingletonScope();
+container.bind(MetricsStore).toSelf().inSingletonScope();
 
 /* Core */
 container.bind<TreeService>(TYPES.TreeService).to(TreeServiceImpl).inSingletonScope();
@@ -42,5 +46,7 @@ container.bind(TYPES.DescribeNodeUseCase).to(DescribeNodeUseCase).inSingletonSco
 container.bind(TYPES.FetchEventsUseCase).to(FetchEventsUseCase).inSingletonScope();
 container.bind(TYPES.LayoutTreeUseCase).to(LayoutTreeUseCase).inSingletonScope();
 container.bind(TYPES.HandleWsMessageUseCase).to(HandleWsMessageUseCase).inSingletonScope();
+container.bind(TYPES.WatchMetricsUseCase).to(WatchMetricsUseCase).inSingletonScope();
+container.bind(TYPES.StopWatchMetricsUseCase).to(StopWatchMetricsUseCase).inSingletonScope();
 
 export { container };

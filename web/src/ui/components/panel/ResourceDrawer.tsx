@@ -5,14 +5,20 @@ import { InfoTab } from "./InfoTab";
 import { DescribeTab } from "./DescribeTab";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import { LogsTab } from "./LogsTab";
+import MetricsTab from "./MetricsTab";
 import { useEffect, useState } from "react";
 import { useInjection } from "inversify-react";
+import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { DescribeNodeUseCase } from "../../../core/resource/usecases/describeNode.usecase";
 import { WatchLogsUseCase } from "../../../core/resource/usecases/watchLogs.usecase";
 import { WebSocketService } from "../../../core/realtime/services/webSocket.service";
 import { TYPES } from "../../../core/shared/types";
 import StatusChip from "../status-chip/StatusChip";
+import { MetricsStore } from "../../../core/metrics/stores/metrics.store";
+import { WatchMetricsUseCase } from "../../../core/metrics/usecases/watchMetrics.usecase";
+import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatchMetrics.usecase";
+import { METRICS_KINDS } from "../../../core/metrics/constants/metrics.const";
 
 type ResourceDrawerProps = {
   onOpenChange: () => void;
@@ -20,13 +26,16 @@ type ResourceDrawerProps = {
   node?: KubeResource;
 };
 
-type TabKey = "info" | "describe" | "logs";
+type TabKey = "info" | "describe" | "logs" | "metrics";
 
-function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
+const ResourceDrawer = observer(function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
   const fluxTreeStore = useInjection(FluxTreeStore);
   const realtimeService = useInjection<WebSocketService>(TYPES.WebSocket);
   const describeNodeUseCase = useInjection<DescribeNodeUseCase>(TYPES.DescribeNodeUseCase);
   const watchLogsUseCase = useInjection<WatchLogsUseCase>(TYPES.WatchLogsUseCase);
+  const metricsStore = useInjection(MetricsStore);
+  const watchMetrics = useInjection<WatchMetricsUseCase>(TYPES.WatchMetricsUseCase);
+  const stopWatchMetrics = useInjection<StopWatchMetricsUseCase>(TYPES.StopWatchMetricsUseCase);
   const [selectedNodeDescribe, setSelectedNodeDescribe] = useState<string>("");
   const [isLoadingDescribe, setIsLoadingDescribe] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("info");
@@ -54,9 +63,19 @@ function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
 
   const isPod = node?.kind === RESOURCE_TYPE.POD;
 
+  const showMetrics = !!node && METRICS_KINDS.has(node.kind) && metricsStore.prometheusActive;
+
+  useEffect(() => {
+    if (isOpen && showMetrics && node) {
+      watchMetrics.execute({ channel: "detail", uid: node.uid });
+      return () => stopWatchMetrics.execute("detail");
+    }
+  }, [isOpen, showMetrics, node, watchMetrics, stopWatchMetrics]);
+
   const tabs: { key: TabKey; label: string }[] = [
     { key: "info", label: "Info" },
     { key: "describe", label: "Describe" },
+    ...(showMetrics ? [{ key: "metrics" as TabKey, label: "Metrics" }] : []),
     ...(isPod ? [{ key: "logs" as TabKey, label: "Logs" }] : []),
   ];
 
@@ -112,12 +131,17 @@ function ResourceDrawer({ node, onOpenChange, isOpen }: ResourceDrawerProps) {
                 />
               )}
               {activeTab === "logs" && isPod && <LogsTab />}
+              {activeTab === "metrics" && node && (
+                <div className="p-6">
+                  <MetricsTab uid={node.uid} />
+                </div>
+              )}
             </div>
           </div>
         )}
       </DrawerContent>
     </Drawer>
   );
-}
+});
 
 export default ResourceDrawer;

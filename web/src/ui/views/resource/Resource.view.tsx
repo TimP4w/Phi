@@ -35,9 +35,14 @@ import HelmReleaseSourceWidget from "../../components/widgets/HelmReleaseSourceW
 import FluxSyncStatusWidget from "../../components/widgets/FluxSyncStatusWidget";
 import ResourceStatusWidget from "../../components/widgets/ResourceStatusWidget";
 import ResourceCountWidget from "../../components/widgets/ResourcesCountWidget";
+import ResourceUsageWidget from "../../components/widgets/ResourceUsageWidget";
 import KustomizationDependsOnWidget from "../../components/widgets/KustomizationDependsOnWidget";
 import EventsPanel, { EventFilter } from "../../components/events/EventsPanel";
 import { EventsStore } from "../../../core/fluxTree/stores/events.store";
+import { TYPES } from "../../../core/shared/types";
+import { WatchMetricsUseCase } from "../../../core/metrics/usecases/watchMetrics.usecase";
+import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatchMetrics.usecase";
+import { METRICS_KINDS } from "../../../core/metrics/constants/metrics.const";
 
 const STATUS_FILTER_OPTIONS: { value: ResourceStatus; label: string; dot: string }[] = [
   { value: ResourceStatus.FAILED, label: "Failed", dot: "bg-danger" },
@@ -178,6 +183,34 @@ const ResourceView: React.FC = observer(() => {
   const eventsStore = useInjection(EventsStore);
 
   const resource = fluxTreeStore.findResourceByUid(nodeUid ?? "");
+
+  const watchMetrics = useInjection<WatchMetricsUseCase>(TYPES.WatchMetricsUseCase);
+  const stopWatchMetrics = useInjection<StopWatchMetricsUseCase>(TYPES.StopWatchMetricsUseCase);
+
+  // Whitelisted UIDs in the visible subtree; joined string keeps the effect
+  // dependency stable across tree rebuilds.
+  const metricsUids = useMemo(() => {
+    if (!resource) return "";
+    const uids = new Set<string>();
+    const visit = (node: KubeResource, visited: Set<string>) => {
+      if (visited.has(node.uid)) return;
+      visited.add(node.uid);
+      if (METRICS_KINDS.has(node.kind)) uids.add(node.uid);
+      for (const child of node.children ?? []) visit(child, visited);
+    };
+    visit(resource, new Set());
+    // Always include the viewed resource so the sidebar usage widget has its
+    // aggregate, even when its kind is outside the chip whitelist.
+    uids.add(resource.uid);
+    return [...uids].sort().join(",");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resource, fluxTreeStore.tree]);
+
+  useEffect(() => {
+    if (!metricsUids) return;
+    watchMetrics.execute({ channel: "tree", uids: metricsUids.split(",") });
+    return () => stopWatchMetrics.execute("tree");
+  }, [metricsUids, watchMetrics, stopWatchMetrics]);
 
   const [selectedNode, setSelectedNode] = useState<KubeResource | undefined>(undefined);
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
@@ -486,6 +519,7 @@ const ResourceView: React.FC = observer(() => {
 
               {/* Scrollable widgets */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {resource && <ResourceUsageWidget uid={resource.uid} />}
                 {showKustomizationSourceWidget && (
                   <KustomizationSourceWidget resource={resource as Kustomization} />
                 )}
