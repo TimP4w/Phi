@@ -70,9 +70,10 @@ function TLSLockPopover({ tls }: { tls: NetworkTLSInfo }) {
         <button
           aria-label="TLS details"
           onClick={(e) => e.stopPropagation()}
-          className="text-success-500 hover:text-success-400"
+          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-success-600 hover:text-success-500 hover:bg-success-500/10 transition-colors cursor-pointer flex-shrink-0"
         >
           <Lock className="w-3.5 h-3.5" />
+          TLS
         </button>
       </PopoverTrigger>
       <PopoverContent>
@@ -150,13 +151,19 @@ function NetworkResourceNode({ data }: NetworkResourceNodeProps) {
             </p>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
-            {d.tls && <TLSLockPopover tls={d.tls} />}
             <StatusChip resource={treeNode} />
           </div>
         </div>
-        {detail && (
-          <div className="px-3 pb-2 border-t border-default-100 pt-1.5">
-            <p className="text-xs text-default-500 truncate">{detail}</p>
+        {(detail || d.tls) && (
+          <div className="px-3 pb-2 border-t border-default-100 pt-1.5 flex items-center gap-1.5">
+            {detail && (
+              <p className="text-xs text-default-500 truncate flex-1 min-w-0">{detail}</p>
+            )}
+            {d.tls && (
+              <div className={detail ? "flex-shrink-0" : "ml-auto"}>
+                <TLSLockPopover tls={d.tls} />
+              </div>
+            )}
           </div>
         )}
       </div>
