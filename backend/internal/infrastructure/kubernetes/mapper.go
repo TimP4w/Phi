@@ -1,7 +1,6 @@
 package kubernetes
 
 import (
-	"strconv"
 	"strings"
 	"time"
 
@@ -65,9 +64,6 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 
 	for _, ownerRef := range obj.GetOwnerReferences() {
 		el.ParentIDs = append(el.ParentIDs, string(ownerRef.UID))
-	}
-
-	for _, ownerRef := range obj.GetOwnerReferences() {
 		el.ParentRefs = append(el.ParentRefs, makeRef(ownerRef.Name, obj.GetNamespace(), ownerRef.Kind, ownerRef.APIVersion))
 	}
 
@@ -100,6 +96,8 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 	case "PersistentVolume":
 		mapPVData(&el, obj)
 	case "Volume":
+		// Longhorn-specific mapping lives in longhorn.go (an additive provider);
+		// other storage backends can add their own without touching this file.
 		if el.Group == "longhorn.io" {
 			mapLonghornVolume(&el, obj)
 		}
@@ -351,10 +349,6 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 			if cond.Type == "Ready" && cond.Reason == "ContainersNotReady" {
 				return kube.StatusPending
 			}
-			if cond.Type == "Ready" && cond.Status == "ContainersNotReady" {
-				return kube.StatusPending
-			}
-
 		}
 
 		switch pod.Status.Phase {
@@ -466,169 +460,6 @@ func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 			pv.Spec.ClaimRef.Kind,
 			pv.Spec.ClaimRef.APIVersion,
 		))
-	}
-}
-
-func mapLonghornVolume(el *kube.Resource, obj unstructured.Unstructured) {
-	// A Longhorn Volume shares its name with the PersistentVolume it backs.
-	el.ParentRefs = append(el.ParentRefs, makeRef(
-		obj.GetName(),
-		"", // cluster-scoped
-		"PersistentVolume",
-		"v1",
-	))
-
-	state, _, _ := unstructured.NestedString(obj.Object, "status", "state")
-	robustness, _, _ := unstructured.NestedString(obj.Object, "status", "robustness")
-	frontend, _, _ := unstructured.NestedString(obj.Object, "spec", "frontend")
-	accessMode, _, _ := unstructured.NestedString(obj.Object, "spec", "accessMode")
-	nodeID, _, _ := unstructured.NestedString(obj.Object, "status", "currentNodeID")
-
-	el.LonghornVolumeMetadata = kube.LonghornVolumeMetadata{
-		State:            state,
-		Robustness:       robustness,
-		Size:             nestedNumber(obj.Object, "spec", "size"),
-		ActualSize:       nestedNumber(obj.Object, "status", "actualSize"),
-		NumberOfReplicas: nestedNumber(obj.Object, "spec", "numberOfReplicas"),
-		NodeID:           nodeID,
-		Frontend:         frontend,
-		AccessMode:       accessMode,
-	}
-
-	for _, cond := range extractUnstructuredConditions(obj) {
-		condType, _ := cond["type"].(string)
-		condStatus, _ := cond["status"].(string)
-		reason, _ := cond["reason"].(string)
-		message, _ := cond["message"].(string)
-		var lastTransition time.Time
-		if ts, ok := cond["lastTransitionTime"].(string); ok {
-			lastTransition, _ = time.Parse(time.RFC3339, ts)
-		}
-		el.Conditions = append(el.Conditions, kube.Condition{
-			Type:               condType,
-			Status:             condStatus,
-			Reason:             reason,
-			Message:            message,
-			LastTransitionTime: lastTransition,
-		})
-	}
-
-	el.Status = mapLonghornVolumeStatus(obj, state, robustness)
-}
-
-// mapLonghornVolumeStatus ties the volume's readiness directly to its Longhorn
-// robustness: healthy is ready regardless of attachment, degraded warns and
-// faulted fails. Longhorn reports "unknown" robustness while detached (a normal
-// idle state, ready) or mid-attach (still settling, pending).
-func mapLonghornVolumeStatus(obj unstructured.Unstructured, state, robustness string) kube.Status {
-	if obj.GetDeletionTimestamp() != nil {
-		return kube.StatusPending
-	}
-	switch strings.ToLower(robustness) {
-	case "healthy":
-		return kube.StatusSuccess
-	case "degraded":
-		return kube.StatusWarning
-	case "faulted":
-		return kube.StatusFailed
-	default: // unknown / empty
-		if strings.EqualFold(state, "detached") || state == "" {
-			return kube.StatusSuccess
-		}
-		return kube.StatusPending
-	}
-}
-
-// mapLonghornNode aggregates the disk capacity reported by a Node.longhorn.io
-// object into LonghornNodeMetadata, replicating how the Longhorn dashboard
-// derives Total / Used / Reserved / Schedulable / Disabled.
-func mapLonghornNode(el *kube.Resource, obj unstructured.Unstructured) {
-	meta := kube.LonghornNodeMetadata{}
-
-	// spec.allowScheduling defaults to true when Longhorn omits it.
-	nodeAllow := true
-	if a, found, _ := unstructured.NestedBool(obj.Object, "spec", "allowScheduling"); found {
-		nodeAllow = a
-	}
-
-	specDisks, _, _ := unstructured.NestedMap(obj.Object, "spec", "disks")
-	statusDisks, _, _ := unstructured.NestedMap(obj.Object, "status", "diskStatus")
-
-	for name, raw := range statusDisks {
-		ds, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		// storageScheduled is the space Longhorn has allocated to replicas; the
-		// dashboard surfaces it as "Used" (distinct from raw filesystem usage).
-		max := nestedNumber(ds, "storageMaximum")
-		scheduled := nestedNumber(ds, "storageScheduled")
-		meta.StorageMaximum += max
-
-		var reserved int64
-		allow := nodeAllow
-		if sd, ok := specDisks[name].(map[string]any); ok {
-			reserved = nestedNumber(sd, "storageReserved")
-			if a, found, _ := unstructured.NestedBool(sd, "allowScheduling"); found {
-				allow = allow && a
-			}
-		}
-
-		// On a schedulable disk the capacity splits cleanly into
-		// reserved + used(scheduled) + schedulable; a disabled disk's whole
-		// capacity is unusable for scheduling.
-		if allow {
-			meta.StorageReserved += reserved
-			meta.StorageUsed += scheduled
-			if sched := max - reserved - scheduled; sched > 0 {
-				meta.StorageSchedulable += sched
-			}
-		} else {
-			meta.StorageDisabled += max
-		}
-	}
-
-	for _, cond := range extractUnstructuredConditions(obj) {
-		condType, _ := cond["type"].(string)
-		condStatus, _ := cond["status"].(string)
-		switch condType {
-		case "Ready":
-			meta.Ready = condStatus == "True"
-		case "Schedulable":
-			meta.Schedulable = condStatus == "True"
-		}
-	}
-
-	el.LonghornNodeMetadata = meta
-
-	switch {
-	case !meta.Ready:
-		el.Status = kube.StatusFailed
-	case !meta.Schedulable:
-		el.Status = kube.StatusWarning
-	default:
-		el.Status = kube.StatusSuccess
-	}
-}
-
-// nestedNumber reads an integer-valued field that Longhorn may serialise as a
-// JSON number (int64/float64) or a string (e.g. spec.size). Missing or
-// unparseable values yield 0.
-func nestedNumber(obj map[string]any, fields ...string) int64 {
-	v, found, err := unstructured.NestedFieldNoCopy(obj, fields...)
-	if !found || err != nil {
-		return 0
-	}
-	switch n := v.(type) {
-	case int64:
-		return n
-	case float64:
-		return int64(n)
-	case string:
-		parsed, _ := strconv.ParseInt(n, 10, 64)
-		return parsed
-	default:
-		return 0
 	}
 }
 
@@ -1176,6 +1007,29 @@ func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	el.Status = mapStatefulSetStatus(ss)
+}
+
+// appendUnstructuredConditions converts an unstructured object's
+// status.conditions into domain Conditions and appends them to el. Used by
+// providers (e.g. Longhorn) whose CRDs aren't imported as typed Go packages.
+func appendUnstructuredConditions(el *kube.Resource, obj unstructured.Unstructured) {
+	for _, cond := range extractUnstructuredConditions(obj) {
+		condType, _ := cond["type"].(string)
+		condStatus, _ := cond["status"].(string)
+		reason, _ := cond["reason"].(string)
+		message, _ := cond["message"].(string)
+		var lastTransition time.Time
+		if ts, ok := cond["lastTransitionTime"].(string); ok {
+			lastTransition, _ = time.Parse(time.RFC3339, ts)
+		}
+		el.Conditions = append(el.Conditions, kube.Condition{
+			Type:               condType,
+			Status:             condStatus,
+			Reason:             reason,
+			Message:            message,
+			LastTransitionTime: lastTransition,
+		})
+	}
 }
 
 // extractUnstructuredConditions pulls status.conditions from an unstructured object.
