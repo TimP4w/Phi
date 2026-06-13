@@ -26,10 +26,12 @@ import (
 	wscontrollers "github.com/timp4w/phi/internal/api/ws"
 	"github.com/timp4w/phi/internal/core/kubernetes"
 	kubernetesusecases "github.com/timp4w/phi/internal/core/kubernetes/usecases"
+	metricsusecases "github.com/timp4w/phi/internal/core/metrics/usecases"
 	"github.com/timp4w/phi/internal/core/realtime"
 	realtimeusecases "github.com/timp4w/phi/internal/core/realtime/usecases"
 	shared "github.com/timp4w/phi/internal/core/shared"
 	kubeInfra "github.com/timp4w/phi/internal/infrastructure/kubernetes"
+	prometheusInfra "github.com/timp4w/phi/internal/infrastructure/prometheus"
 	websocket "github.com/timp4w/phi/internal/infrastructure/websockets"
 )
 
@@ -44,6 +46,7 @@ type UseCases struct {
 	Suspend           shared.UseCase[kubernetesusecases.SuspendUseCaseInput, struct{}]
 	Resume            shared.UseCase[kubernetesusecases.ResumeUseCaseInput, struct{}]
 	GetEvents         shared.UseCase[kubernetesusecases.GetEventsInput, []kubernetes.Event]
+	WatchMetrics      shared.UseCase[metricsusecases.WatchMetricsInput, struct{}]
 }
 
 func main() {
@@ -70,6 +73,8 @@ func main() {
 			kubernetes.NewKubeStoreImpl,
 			websocket.NewWebSocketManager,
 			kubernetes.NewFluxServiceImpl,
+			prometheusInfra.NewClient,
+			prometheusInfra.NewMetricsService,
 
 			// Usecase providers
 			kubernetesusecases.NewWatchLogsUseCase,
@@ -81,6 +86,7 @@ func main() {
 			kubernetesusecases.NewGetEventsUseCase,
 			kubernetesusecases.NewWatchResourcesUseCase,
 			kubernetesusecases.NewWatchEventsUseCase,
+			metricsusecases.NewWatchMetricsUseCase,
 
 			fx.Annotate(
 				func() *string { return port },
@@ -168,6 +174,7 @@ func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.Realtim
 
 	// Register WebSocket controllers
 	wscontrollers.NewResourceWSController(uc.WatchLogs, realtimeService)
+	wscontrollers.NewMetricsWSController(uc.WatchMetrics, realtimeService)
 
 	// Register routes
 	resourceController.RegisterRoutes(r)

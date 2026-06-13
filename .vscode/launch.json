@@ -10,7 +10,8 @@
       "preLaunchTask": "Build Backend",
       "env": {
         "PHI_DEV": "true",
-        "PHI_KUBE_CONFIG_PATH": "/home/timp4w/.kube/config"
+        "PHI_KUBE_CONFIG_PATH": "/home/timp4w/.kube/config",
+        "PHI_PROMETHEUS_URL": "http://localhost:9090"
       }
     },
     {
@@ -31,7 +32,7 @@
       "env": {
         "VITE_VERSION": "local",
         "VITE_URL": "http://localhost:8080",
-        "VITE_WS": "http://localhost:8080/ws",
+        "VITE_WS": "http://localhost:8080/ws"
       }
     }
   ],
