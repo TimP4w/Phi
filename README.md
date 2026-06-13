@@ -10,35 +10,30 @@ I work on it when I have time and feel like it, focusing on what I need, so expe
 
 Recently it has moved to an "agentic" supported development, since it does what I need it to do for my homelab, and I can focus my time on other projects.
 
-![img](./docs/dashboard.png)
-
-![img](./docs/tree.png)
+<table>
+  <tr>
+    <td><img src="./docs/dashboard.png" alt="img" width="500"></td>
+    <td><img src="./docs/tree.png" alt="img" width="500"></td>
+  </tr>
+  <tr>
+    <td><img src="./docs/network.png" alt="img" width="500"></td>
+    <td><img src="./docs/mcp.png" alt="MCP server" width="500"></td>
+  </tr>
+</table>
 
 ## Features
 
-- [X] Filter by Kind, Status, Suspended/Resumed
-- [X] Show FluxCD version
-- [X] Show FluxCD controllers status
-- [X] Show all flux resources (kustomizations, helmreleases, ...) and their repositories
-- [X] Show all resources created
-  - [X] Show ANY resource that has a problem
-- [X] Resource
-  - [X] Show graph / tree view
-  - [X] Show resources created count and status
-  - [X] Show resources created count and status
-  - [X] Show Sync Status
-    - [X] Show conditions
-  - [X] Show Depends On for kustomizations
-  - [X] Show Dependency Chain for kustomizations
-  - [X] Show repositories for Kustomizations and Helmreleases
-  - [X] Manually reconcile
-  - [X] Manually Suspend/Resume
-  - [X] Show resource events
-  - [X] Describe resource
-  - [X] Show pod logs
-- [X] Events
-  - [X] Show Cluster Events
-  - [X] Show FluxCD Events
+- Check resource status
+- Show resource dependencies
+- Sync / Pause sync from UI
+- Realtime logs per pod
+- Highlight not ready resources immediately
+- MCP server
+- Show network graph, including TLS status & traefik integration
+- Prometheus integration: show resource usage per pod and aggregate per kustomization, helmrelease
+- Trivy integration: show vulnerabilities aggregated per kustomization or helmrelease
+- Longhorn integration: show disk usage
+
 
 ## Local Development
 
