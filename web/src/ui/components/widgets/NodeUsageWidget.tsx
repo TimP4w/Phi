@@ -3,7 +3,7 @@ import { useInjection } from "inversify-react";
 import { Progress } from "@heroui/react";
 import WidgetCard from "./Widget";
 import { MetricsStore } from "../../../core/metrics/stores/metrics.store";
-import { formatBytes, formatCores } from "../../shared/format";
+import { formatBytes, formatCores, usageColor } from "../../shared/format";
 
 const NodeUsageWidget: React.FC = observer(() => {
   const metricsStore = useInjection(MetricsStore);
@@ -18,7 +18,7 @@ const NodeUsageWidget: React.FC = observer(() => {
             <Progress
               size="sm"
               value={n.cpu.percent}
-              color={n.cpu.percent > 85 ? "danger" : n.cpu.percent > 65 ? "warning" : "primary"}
+              color={usageColor(n.cpu.percent, "primary")}
               label={`CPU ${formatCores(n.cpu.used)} / ${formatCores(n.cpu.capacity)}`}
               showValueLabel
               classNames={{ label: "text-xs", value: "text-xs" }}
@@ -26,7 +26,7 @@ const NodeUsageWidget: React.FC = observer(() => {
             <Progress
               size="sm"
               value={n.memory.percent}
-              color={n.memory.percent > 85 ? "danger" : n.memory.percent > 65 ? "warning" : "success"}
+              color={usageColor(n.memory.percent)}
               label={`Mem ${formatBytes(n.memory.used)} / ${formatBytes(n.memory.capacity)}`}
               showValueLabel
               classNames={{ label: "text-xs", value: "text-xs" }}

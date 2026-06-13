@@ -63,14 +63,18 @@ const ResourceDrawer = observer(function ResourceDrawer({ node, onOpenChange, is
 
   const isPod = node?.kind === RESOURCE_TYPE.POD;
 
-  const showMetrics = !!node && METRICS_KINDS.has(node.kind) && metricsStore.prometheusActive;
+  const metricsEligible = !!node && METRICS_KINDS.has(node.kind);
+  // The tab only renders once we know Prometheus is active, but we subscribe
+  // regardless: the subscription's METRICS_STATUS reply is what sets
+  // prometheusActive, so gating the subscription on it would never bootstrap.
+  const showMetrics = metricsEligible && metricsStore.prometheusActive;
 
   useEffect(() => {
-    if (isOpen && showMetrics && node) {
+    if (isOpen && metricsEligible && node) {
       watchMetrics.execute({ channel: "detail", uid: node.uid });
       return () => stopWatchMetrics.execute("detail");
     }
-  }, [isOpen, showMetrics, node, watchMetrics, stopWatchMetrics]);
+  }, [isOpen, metricsEligible, node, watchMetrics, stopWatchMetrics]);
 
   const tabs: { key: TabKey; label: string }[] = [
     { key: "info", label: "Info" },

@@ -148,11 +148,9 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
       colorMode={"dark"}
       onPaneClick={() => setSelectedId(null)}
       onNodeClick={(_, node) => {
-        // Left click only toggles the forward-path highlight.
         setSelectedId((current) => (current === node.id ? null : node.id));
       }}
       onNodeContextMenu={(e, node) => {
-        // Right click opens the resource details.
         e.preventDefault();
         const treeNode = (node?.data as { treeNode?: KubeResource })?.treeNode;
         if (treeNode) onResourceClick(treeNode);

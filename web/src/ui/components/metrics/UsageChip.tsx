@@ -14,13 +14,10 @@ type UsageChipProps = {
 const UsageChip = observer(({ uid }: UsageChipProps) => {
   const metricsStore = useInjection(MetricsStore);
   if (!metricsStore.prometheusActive) return null;
-  const usage = metricsStore.currentUsage.get(uid);
-  if (!usage) return null;
+  const latest = metricsStore.latestUsage(uid);
+  if (!latest) return null;
 
-  const lastCpu = usage.cpu[usage.cpu.length - 1]?.v;
-  const lastMem = usage.memory[usage.memory.length - 1]?.v;
-  const cpuLimit = usage.spec.cpu.limits;
-  const memLimit = usage.spec.memory.limits;
+  const { cpu: lastCpu, memory: lastMem, cpuLimit, memoryLimit: memLimit } = latest;
 
   const cpuOver = lastCpu !== undefined && cpuLimit != null && lastCpu > cpuLimit;
   const memOver = lastMem !== undefined && memLimit != null && lastMem > memLimit;

@@ -49,14 +49,47 @@ func (l *locator) Resolve() (string, error) {
 
 func (l *locator) discover() (string, error) {
 	for _, r := range l.store.GetResources() {
-		if r.Kind != "Service" {
-			continue
-		}
-		if r.Labels["app.kubernetes.io/name"] == "prometheus" || r.Name == "prometheus-operated" {
-			return fmt.Sprintf("http://%s.%s.svc:%d", r.Name, r.Namespace, defaultPort), nil
+		if r.Kind == "Service" && isPrometheusService(r) {
+			return fmt.Sprintf("http://%s.%s.svc:%d", r.Name, r.Namespace, prometheusPort(r)), nil
 		}
 	}
 	// Undiscovered maps to ErrDisabled: the integration simply stays off until
 	// a Prometheus service appears in the store or an URL is configured.
 	return "", fmt.Errorf("no prometheus service discovered in cluster: %w", metrics.ErrDisabled)
+}
+
+// isPrometheusService recognises the Service fronting a Prometheus-compatible
+// HTTP API across the common packagings: the prometheus-operator (the
+// "prometheus-operated" headless Service or the app.kubernetes.io/name label,
+// also used by kube-prometheus-stack and the modern Helm chart) and the legacy
+// "app" label / chart Service names. Other PromQL-speaking backends (Thanos,
+// Mimir, VictoriaMetrics) are reached via PHI_PROMETHEUS_URL.
+func isPrometheusService(r *kube.Resource) bool {
+	if r.Labels["app.kubernetes.io/name"] == "prometheus" || r.Labels["app"] == "prometheus" {
+		return true
+	}
+	switch r.Name {
+	case "prometheus-operated", "prometheus-k8s", "prometheus-server":
+		return true
+	}
+	return false
+}
+
+// prometheusPort prefers the Service's HTTP API port (named web/http-web/http,
+// or the well-known 9090), falling back to the first declared port and finally
+// to defaultPort so a non-standard listener is still reachable.
+func prometheusPort(r *kube.Resource) int32 {
+	for _, p := range r.ServiceMetadata.Ports {
+		switch p.Name {
+		case "web", "http-web", "http":
+			return p.Port
+		}
+		if p.Port == defaultPort {
+			return p.Port
+		}
+	}
+	if len(r.ServiceMetadata.Ports) > 0 {
+		return r.ServiceMetadata.Ports[0].Port
+	}
+	return defaultPort
 }

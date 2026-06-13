@@ -18,10 +18,8 @@ const ResourceUsageWidget: React.FC<ResourceUsageWidgetProps> = observer(
     const usage = metricsStore.currentUsage.get(uid);
     if (!usage || (usage.cpu.length === 0 && usage.memory.length === 0)) return null;
 
-    const lastCpu = usage.cpu[usage.cpu.length - 1]?.v;
-    const lastMem = usage.memory[usage.memory.length - 1]?.v;
-    const cpuLimit = usage.spec.cpu.limits;
-    const memLimit = usage.spec.memory.limits;
+    const { cpu: lastCpu, memory: lastMem, cpuLimit, memoryLimit: memLimit } =
+      metricsStore.latestUsage(uid)!;
 
     const row = (
       label: string,

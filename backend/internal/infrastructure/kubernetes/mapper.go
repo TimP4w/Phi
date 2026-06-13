@@ -96,8 +96,6 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 	case "PersistentVolume":
 		mapPVData(&el, obj)
 	case "Volume":
-		// Longhorn-specific mapping lives in longhorn.go (an additive provider);
-		// other storage backends can add their own without touching this file.
 		if el.Group == "longhorn.io" {
 			mapLonghornVolume(&el, obj)
 		}
@@ -132,8 +130,8 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 	case "StatefulSet":
 		mapStatefulSetData(&el, obj)
 	case "DaemonSet":
-		// Proxy workloads (Traefik, …) are often DaemonSets; the provider parses
-		// their entrypoint config and no-ops for non-proxy workloads.
+		// Proxy workloads (e.g. Traefik) are often DaemonSets; the provider
+		// no-ops for non-proxy workloads.
 		traefikProxyData(&el, obj)
 	default:
 	}
@@ -728,9 +726,6 @@ func mapIngressData(el *kube.Resource, obj unstructured.Unstructured) {
 
 	el.RouteMetadata = route
 }
-
-// Traefik-specific mapping lives in traefik.go (an additive provider). Other
-// ingress controllers can add their own providers without touching this file.
 
 func mapNetworkPolicyData(el *kube.Resource, obj unstructured.Unstructured) {
 	np := &networkingv1.NetworkPolicy{}

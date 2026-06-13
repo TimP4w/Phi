@@ -15,8 +15,20 @@ const (
 	ActionStart = "start"
 	ActionStop  = "stop"
 
+	// Subscription channels. Each view subscribes on its own channel so they
+	// coexist on one connection; these must match the frontend MetricsChannel
+	// union (web/src/core/metrics/usecases/watchMetrics.usecase.ts).
+	ChannelTree      = "tree"      // per-resource sparklines in the tree view
+	ChannelDashboard = "dashboard" // aggregate + node usage on the dashboard
+	ChannelDetail    = "detail"    // 24h detail series for one resource drawer
+
 	tickInterval = 30 * time.Second
 	queryTimeout = 20 * time.Second
+	// minImmediateInterval rate-limits the on-subscribe payload so a client that
+	// resubscribes rapidly (navigation, panel toggles, StrictMode remounts) does
+	// not trigger a fresh Prometheus query burst per message — the 30s ticker
+	// covers it once an immediate serve has run recently.
+	minImmediateInterval = 5 * time.Second
 )
 
 // WatchMetricsInput carries both START and STOP subscription messages.
@@ -53,6 +65,7 @@ type WatchMetricsUseCase struct {
 	mu            sync.Mutex
 	subs          map[string]map[string]subscription // clientID -> channel -> sub
 	listening     map[string]bool                    // clients with an OnClose listener
+	lastServed    map[string]time.Time               // last time each client was served
 	tickerRunning bool                               // a polling goroutine is live
 }
 
@@ -70,6 +83,7 @@ func newWatchMetricsUseCase(ms metrics.MetricsService, rt realtime.RealtimeServi
 		logger:          logging.Logger(),
 		subs:            make(map[string]map[string]subscription),
 		listening:       make(map[string]bool),
+		lastServed:      make(map[string]time.Time),
 	}
 }
 
@@ -102,6 +116,10 @@ func (uc *WatchMetricsUseCase) Execute(in WatchMetricsInput) (struct{}, error) {
 	uc.subs[in.ClientID][in.Channel] = sub
 	needListener := !uc.listening[in.ClientID]
 	uc.listening[in.ClientID] = true
+	doImmediate := time.Since(uc.lastServed[in.ClientID]) >= minImmediateInterval
+	if doImmediate {
+		uc.lastServed[in.ClientID] = time.Now()
+	}
 	uc.mu.Unlock()
 
 	if needListener {
@@ -118,6 +136,7 @@ func (uc *WatchMetricsUseCase) Execute(in WatchMetricsInput) (struct{}, error) {
 				uc.mu.Lock()
 				delete(uc.subs, clientID)
 				delete(uc.listening, clientID)
+				delete(uc.lastServed, clientID)
 				uc.mu.Unlock()
 				// Drop our listener so the manager's listener map does not
 				// accumulate a permanent entry per connection.
@@ -128,10 +147,16 @@ func (uc *WatchMetricsUseCase) Execute(in WatchMetricsInput) (struct{}, error) {
 
 	logger.Debug("Metrics subscription started")
 
-	// Initial payload off the WS read goroutine (Prometheus I/O can take
-	// seconds); the shared ticker then drives subsequent updates.
-	status := uc.metricsService.Status()
-	go uc.serveClient(in.ClientID, map[string]subscription{in.Channel: sub}, status, nil)
+	// Initial payload off the WS read goroutine (Prometheus Status() + I/O can
+	// take seconds); the shared ticker then drives subsequent updates. Skipped
+	// when this client was served recently, so a resubscribe burst coalesces.
+	if doImmediate {
+		clientID, channel := in.ClientID, in.Channel
+		go func() {
+			status := uc.metricsService.Status()
+			uc.serveClient(clientID, map[string]subscription{channel: sub}, status, nil)
+		}()
+	}
 	uc.ensureTicker()
 	return struct{}{}, nil
 }
@@ -202,6 +227,15 @@ func (uc *WatchMetricsUseCase) tick() bool {
 		}(clientID, chans)
 	}
 	wg.Wait()
+
+	now := time.Now()
+	uc.mu.Lock()
+	for clientID := range subs {
+		if _, live := uc.subs[clientID]; live {
+			uc.lastServed[clientID] = now
+		}
+	}
+	uc.mu.Unlock()
 	return true
 }
 
@@ -272,7 +306,7 @@ func (uc *WatchMetricsUseCase) serveClient(clientID string, chans map[string]sub
 	}
 
 	for _, sub := range chans {
-		if sub.channel != "detail" || sub.uid == "" {
+		if sub.channel != ChannelDetail || sub.uid == "" {
 			continue
 		}
 		var rm *metrics.ResourceMetrics

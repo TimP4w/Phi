@@ -56,6 +56,23 @@ export const ROUTE_KINDS = new Set<string>([
   RESOURCE_TYPE.HTTPROUTE,
 ]);
 
+/** HeroUI semantic color for a Longhorn volume robustness value. Mirrors the
+ * backend status mapping in infrastructure/kubernetes/longhorn.go. */
+export function robustnessColor(
+  robustness: string,
+): "success" | "warning" | "danger" | "default" {
+  switch (robustness) {
+    case "healthy":
+      return "success";
+    case "degraded":
+      return "warning";
+    case "faulted":
+      return "danger";
+    default:
+      return "default";
+  }
+}
+
 export enum FLUX_CONTROLLER {
   KUSTOMIZATION = "kustomize-controller",
   HELM = "helm-controller",

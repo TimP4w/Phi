@@ -4,7 +4,7 @@ import { Progress } from "@heroui/react";
 import WidgetCard from "./Widget";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { LonghornNode, LonghornVolume } from "../../../core/fluxTree/models/tree";
-import { formatBytes } from "../../shared/format";
+import { formatBytes, usageColor, usagePercent } from "../../shared/format";
 
 const LonghornVolumesWidget: React.FC = observer(() => {
   const fluxTreeStore = useInjection(FluxTreeStore);
@@ -36,7 +36,7 @@ const LonghornVolumesWidget: React.FC = observer(() => {
     storage.schedulable += n.metadata?.storageSchedulable ?? 0;
     storage.disabled += n.metadata?.storageDisabled ?? 0;
   }
-  const usedPct = storage.total > 0 ? Math.min(100, (storage.used / storage.total) * 100) : 0;
+  const usedPct = usagePercent(storage.used, storage.total);
 
   const healthStats: { label: string; value: number; color: string }[] = [
     { label: "Healthy", value: counts.healthy, color: "text-success" },
@@ -71,7 +71,7 @@ const LonghornVolumesWidget: React.FC = observer(() => {
             <Progress
               size="sm"
               value={usedPct}
-              color={usedPct > 90 ? "danger" : usedPct > 75 ? "warning" : "success"}
+              color={usageColor(usedPct)}
               label={`Used ${formatBytes(storage.used)} / ${formatBytes(storage.total)}`}
               showValueLabel
               classNames={{ label: "text-xs", value: "text-xs" }}

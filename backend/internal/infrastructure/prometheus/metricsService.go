@@ -2,6 +2,7 @@ package prometheus
 
 import (
 	"context"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -354,7 +355,9 @@ func (s *metricsService) GetNodeUsage(ctx context.Context) ([]metrics.NodeUsage,
 func usageOf(used, capacity float64) metrics.NodeResourceUsage {
 	u := metrics.NodeResourceUsage{Used: used, Capacity: capacity}
 	if capacity > 0 {
-		u.Percent = used / capacity * 100
+		// rate()/instant samples can momentarily exceed capacity; clamp so the
+		// UI progress bar never reports over 100%.
+		u.Percent = math.Min(used/capacity*100, 100)
 	}
 	return u
 }

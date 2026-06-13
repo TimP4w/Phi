@@ -63,9 +63,9 @@ const App: React.FC<AppProps> = observer(({ node }) => {
   const fluxTreeStore = useInjection(FluxTreeStore);
   const metricsStore = useInjection(MetricsStore);
 
-  const usage = metricsStore.currentUsage.get(node.uid);
-  const lastCpu = usage?.cpu[usage.cpu.length - 1]?.v;
-  const lastMem = usage?.memory[usage.memory.length - 1]?.v;
+  const latest = metricsStore.latestUsage(node.uid);
+  const lastCpu = latest?.cpu;
+  const lastMem = latest?.memory;
   const showUsage =
     metricsStore.prometheusActive &&
     (lastCpu !== undefined || lastMem !== undefined);
