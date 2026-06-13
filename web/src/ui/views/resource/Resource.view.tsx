@@ -25,7 +25,7 @@ import Header from "../../components/layout/Header";
 import RenderTreeNode from "../../components/resource-tree/ResourceTree";
 import { ResourceFilter } from "../../shared/resourceFilter";
 import ReconcileSuspendButtonGroup from "../../components/play-pause/ReconcileSuspendButtonGroup";
-import { Bell, Check, ChevronDown, Info, List, Network, PanelRightClose, PanelRightOpen, X } from "lucide-react";
+import { Bell, Check, ChevronDown, Info, List, Network, PanelRightClose, PanelRightOpen, Workflow, X } from "lucide-react";
 import StatusChip from "../../components/status-chip/StatusChip";
 import FluxChainWidget from "../../components/widgets/FluxChainWidget";
 import ConnectedGraph from "../../components/connected-graph/ConnectedGraph";
@@ -405,6 +405,15 @@ const ResourceView: React.FC = observer(() => {
                 startContent={<List className="w-3.5 h-3.5" />}
               >
                 Tree
+              </Button>
+              <div className="w-px h-5 bg-default-200 mx-0.5" />
+              <Button
+                size="sm"
+                variant="light"
+                onPress={() => resource && navigate(`/network/${resource.uid}`)}
+                startContent={<Workflow className="w-3.5 h-3.5" />}
+              >
+                Network
               </Button>
               <div className="w-px h-5 bg-default-200 mx-0.5" />
               <Button
