@@ -137,10 +137,11 @@ type Props = {
   onOpenChange: () => void;
   title: string;
   reportUids: string[];
+  initialSeverity?: string;
 };
 
 const TrivyFindingsModal: React.FC<Props> = observer(
-  ({ isOpen, onOpenChange, title, reportUids }) => {
+  ({ isOpen, onOpenChange, title, reportUids, initialSeverity }) => {
     const trivyService = useInjection<TrivyService>(TYPES.TrivyService);
     const fluxTreeStore = useInjection(FluxTreeStore);
     const navigate = useNavigate();
@@ -224,13 +225,16 @@ const TrivyFindingsModal: React.FC<Props> = observer(
       };
     }, [isOpen, uidsKey, trivyService, targetUidLookup]);
 
-    // Reset filters each time the modal opens.
+    // Reset filters each time the modal opens, seeding the severity filter from
+    // the count the user clicked.
     useEffect(() => {
       if (isOpen) {
-        setActiveSeverities(new Set());
+        setActiveSeverities(
+          initialSeverity ? new Set([initialSeverity.toUpperCase()]) : new Set(),
+        );
         setQuery("");
       }
-    }, [isOpen]);
+    }, [isOpen, initialSeverity]);
 
     const filteredRows = useMemo(() => {
       const q = query.trim().toLowerCase();
