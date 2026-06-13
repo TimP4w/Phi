@@ -3,6 +3,7 @@ import {
   Deployment,
   HelmRelease,
   Kustomization,
+  LonghornVolume,
   PersistentVolumeClaim,
   Pod,
   KubeResource,
@@ -11,6 +12,7 @@ import TooltipedDate from "../tooltiped-date/TooltipedDate";
 import { observer } from "mobx-react-lite";
 import { useInjection } from "inversify-react";
 import { EventsStore } from "../../../core/fluxTree/stores/events.store";
+import { formatBytes } from "../../shared/format";
 
 type InfoTabProps = {
   resource: KubeResource | null;
@@ -180,6 +182,57 @@ const renderKindFields = (resource: KubeResource) => {
             label="Access Modes"
             value={n.metadata?.accessModes?.join(", ")}
           />
+        </Section>
+      );
+    }
+    case "Volume": {
+      if (!(resource instanceof LonghornVolume)) return null;
+      const n = resource as LonghornVolume;
+      const size = n.metadata?.size ?? 0;
+      const used = n.metadata?.actualSize ?? 0;
+      const pct = size > 0 ? Math.min(100, (used / size) * 100) : 0;
+      const robustness = n.metadata?.robustness ?? "unknown";
+      const robustnessColor =
+        robustness === "healthy"
+          ? "success"
+          : robustness === "degraded"
+            ? "warning"
+            : robustness === "faulted"
+              ? "danger"
+              : "default";
+      return (
+        <Section title="Longhorn Volume">
+          <InfoRow
+            label="Robustness"
+            value={
+              <Chip size="sm" variant="flat" color={robustnessColor}>
+                {robustness}
+              </Chip>
+            }
+          />
+          <InfoRow label="State" value={n.metadata?.state} />
+          <InfoRow
+            label="Usage"
+            value={
+              <div className="flex flex-col items-end gap-1 w-40">
+                <span>
+                  {formatBytes(used)} / {formatBytes(size)} ({pct.toFixed(0)}%)
+                </span>
+                <div className="w-full h-1.5 rounded-full bg-default-100 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${
+                      pct >= 90 ? "bg-danger" : pct >= 75 ? "bg-warning" : "bg-success"
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            }
+          />
+          <InfoRow label="Replicas" value={n.metadata?.numberOfReplicas?.toString()} />
+          <InfoRow label="Attached Node" value={n.metadata?.nodeID} />
+          <InfoRow label="Frontend" value={n.metadata?.frontend} />
+          <InfoRow label="Access Mode" value={n.metadata?.accessMode} />
         </Section>
       );
     }

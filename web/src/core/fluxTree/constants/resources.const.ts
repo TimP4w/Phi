@@ -20,6 +20,7 @@ export enum RESOURCE_TYPE {
   PV = "PersistentVolume",
   PVC = "PersistentVolumeClaim",
   VOLUME = "Volume",
+  NODE = "Node",
   JOB = "Job",
   SECRET = "Secret",
   STATEFULSET = "StatefulSet",

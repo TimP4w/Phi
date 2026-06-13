@@ -128,6 +128,18 @@ export class KubeResource {
         return new HelmRepository(dto);
       case RESOURCE_TYPE.PVC:
         return new PersistentVolumeClaim(dto);
+      case RESOURCE_TYPE.VOLUME:
+        // "Volume" is a Longhorn CRD; other groups fall through to the base class.
+        if (dto.group === "longhorn.io") {
+          return new LonghornVolume(dto);
+        }
+        return new KubeResource(dto);
+      case RESOURCE_TYPE.NODE:
+        // "Node" is both a core kind and a Longhorn CRD; only the latter carries disk stats.
+        if (dto.group === "longhorn.io") {
+          return new LonghornNode(dto);
+        }
+        return new KubeResource(dto);
       case RESOURCE_TYPE.OCI_REPOSITORY:
         return new OCIRepository(dto);
       default:
@@ -307,9 +319,48 @@ export class PersistentVolumeClaim extends KubeResource {
   }
 }
 
+export class LonghornVolume extends KubeResource {
+  metadata: LonghornVolumeMetadata | null;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.metadata = dto.longhornVolumeMetadata ? dto.longhornVolumeMetadata : null;
+  }
+}
+
+export class LonghornNode extends KubeResource {
+  metadata: LonghornNodeMetadata | null;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.metadata = dto.longhornNodeMetadata ? dto.longhornNodeMetadata : null;
+  }
+}
+
 export type PodMetadata = {
   phase: string;
   image: string;
+};
+
+export type LonghornNodeMetadata = {
+  ready: boolean;
+  schedulable: boolean;
+  storageMaximum: number;
+  storageUsed: number;
+  storageReserved: number;
+  storageSchedulable: number;
+  storageDisabled: number;
+};
+
+export type LonghornVolumeMetadata = {
+  state: string;
+  robustness: string;
+  size: number;
+  actualSize: number;
+  numberOfReplicas: number;
+  nodeID: string;
+  frontend: string;
+  accessMode: string;
 };
 
 type HelmReleaseMetadata = {
