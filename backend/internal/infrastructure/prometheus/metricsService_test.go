@@ -44,12 +44,14 @@ func TestGetResourceMetricsHappyPath(t *testing.T) {
 		)}, nil).Times(6)
 
 	m := `namespace=~"ns",pod=~"web-1"`
-	// Spec instant queries: reqCPU, reqMem, limCPU, limMem, containerCount, limCountCPU, limCountMem
+	// Spec instant queries: totals + coverage counts for cpu/memory plus container count.
 	prom.On("Query", mock.Anything, QueryRequestsTotal(m, "cpu"), mock.Anything).Return(scalar(0.5), nil)
 	prom.On("Query", mock.Anything, QueryRequestsTotal(m, "memory"), mock.Anything).Return(scalar(256), nil)
 	prom.On("Query", mock.Anything, QueryLimitsTotal(m, "cpu"), mock.Anything).Return(scalar(2), nil)
 	prom.On("Query", mock.Anything, QueryLimitsTotal(m, "memory"), mock.Anything).Return(scalar(512), nil)
 	prom.On("Query", mock.Anything, QueryContainerCount(m), mock.Anything).Return(scalar(1), nil)
+	prom.On("Query", mock.Anything, QueryRequestsCount(m, "cpu"), mock.Anything).Return(scalar(1), nil)
+	prom.On("Query", mock.Anything, QueryRequestsCount(m, "memory"), mock.Anything).Return(scalar(1), nil)
 	prom.On("Query", mock.Anything, QueryLimitsCount(m, "cpu"), mock.Anything).Return(scalar(1), nil)
 	prom.On("Query", mock.Anything, QueryLimitsCount(m, "memory"), mock.Anything).Return(scalar(1), nil)
 

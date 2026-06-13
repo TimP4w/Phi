@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -93,7 +94,11 @@ func (c *Client) call(ctx context.Context, path string, form url.Values, query s
 		c.logger.WithError(err).WithField("query", query).Warn("Prometheus request failed")
 		return nil, fmt.Errorf("%w: %v", metrics.ErrUnavailable, err)
 	}
-	defer resp.Body.Close()
+	// Drain before close so the keep-alive connection can be reused.
+	defer func() {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 	if resp.StatusCode != http.StatusOK {
 		c.logger.WithField("query", query).WithField("status", resp.StatusCode).Warn("Prometheus returned non-200")
 		return nil, fmt.Errorf("%w: status %d", metrics.ErrUnavailable, resp.StatusCode)

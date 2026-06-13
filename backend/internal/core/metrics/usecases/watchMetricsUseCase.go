@@ -50,10 +50,10 @@ type WatchMetricsUseCase struct {
 	realtimeService realtime.RealtimeService
 	logger          *logging.PhiLogger
 
-	mu         sync.Mutex
-	subs       map[string]map[string]subscription // clientID -> channel -> sub
-	listening  map[string]bool                    // clients with an OnClose listener
-	tickerOnce sync.Once
+	mu            sync.Mutex
+	subs          map[string]map[string]subscription // clientID -> channel -> sub
+	listening     map[string]bool                    // clients with an OnClose listener
+	tickerRunning bool                               // a polling goroutine is live
 }
 
 func NewWatchMetricsUseCase(
@@ -119,6 +119,9 @@ func (uc *WatchMetricsUseCase) Execute(in WatchMetricsInput) (struct{}, error) {
 				delete(uc.subs, clientID)
 				delete(uc.listening, clientID)
 				uc.mu.Unlock()
+				// Drop our listener so the manager's listener map does not
+				// accumulate a permanent entry per connection.
+				uc.realtimeService.RemoveConnectionListener("metrics-" + clientID)
 			},
 		})
 	}
@@ -127,21 +130,33 @@ func (uc *WatchMetricsUseCase) Execute(in WatchMetricsInput) (struct{}, error) {
 
 	// Initial payload off the WS read goroutine (Prometheus I/O can take
 	// seconds); the shared ticker then drives subsequent updates.
-	go uc.serveClient(in.ClientID, map[string]subscription{in.Channel: sub}, nil)
+	status := uc.metricsService.Status()
+	go uc.serveClient(in.ClientID, map[string]subscription{in.Channel: sub}, status, nil)
 	uc.ensureTicker()
 	return struct{}{}, nil
 }
 
+// ensureTicker starts the polling goroutine if one is not already running. The
+// goroutine stops itself once there are no subscriptions left, and a later
+// subscribe restarts it — so an idle process holds no ticker.
 func (uc *WatchMetricsUseCase) ensureTicker() {
-	uc.tickerOnce.Do(func() {
-		go func() {
-			t := time.NewTicker(tickInterval)
-			defer t.Stop()
-			for range t.C {
-				uc.tick()
+	uc.mu.Lock()
+	if uc.tickerRunning {
+		uc.mu.Unlock()
+		return
+	}
+	uc.tickerRunning = true
+	uc.mu.Unlock()
+
+	go func() {
+		t := time.NewTicker(tickInterval)
+		defer t.Stop()
+		for range t.C {
+			if !uc.tick() {
+				return
 			}
-		}()
-	})
+		}
+	}()
 }
 
 // snapshot returns a copy of the registry (also used by tests).
@@ -159,21 +174,62 @@ func (uc *WatchMetricsUseCase) snapshot() map[string]map[string]subscription {
 	return out
 }
 
-func (uc *WatchMetricsUseCase) tick() {
+// tick serves every subscribed client once. It returns false when there are no
+// subscriptions left, signalling the polling goroutine to stop.
+func (uc *WatchMetricsUseCase) tick() bool {
+	uc.mu.Lock()
+	if len(uc.subs) == 0 {
+		uc.tickerRunning = false
+		uc.mu.Unlock()
+		return false
+	}
+	uc.mu.Unlock()
+
 	subs := uc.snapshot()
-	if len(subs) == 0 {
-		return
-	}
+	// Probe the integration once per tick rather than once per client.
+	status := uc.metricsService.Status()
 	// detailCache dedupes GetResourceMetrics across clients within one tick.
-	detailCache := map[string]*metrics.ResourceMetrics{}
+	detailCache := newDetailCache()
+
+	// Fan out per client: each serveClient does blocking Prometheus I/O, so a
+	// slow or numerous client set must not serialise everyone behind it.
+	var wg sync.WaitGroup
 	for clientID, chans := range subs {
-		uc.serveClient(clientID, chans, detailCache)
+		wg.Add(1)
+		go func(clientID string, chans map[string]subscription) {
+			defer wg.Done()
+			uc.serveClient(clientID, chans, status, detailCache)
+		}(clientID, chans)
 	}
+	wg.Wait()
+	return true
 }
 
-// serveClient pushes status + data for one client's subscriptions.
-func (uc *WatchMetricsUseCase) serveClient(clientID string, chans map[string]subscription, detailCache map[string]*metrics.ResourceMetrics) {
-	status := uc.metricsService.Status()
+// detailCache memoises GetResourceMetrics by UID within a tick. Safe for the
+// concurrent serveClient goroutines.
+type detailCache struct {
+	mu sync.Mutex
+	m  map[string]*metrics.ResourceMetrics
+}
+
+func newDetailCache() *detailCache { return &detailCache{m: map[string]*metrics.ResourceMetrics{}} }
+
+func (d *detailCache) get(uid string) (*metrics.ResourceMetrics, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	rm, ok := d.m[uid]
+	return rm, ok
+}
+
+func (d *detailCache) set(uid string, rm *metrics.ResourceMetrics) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.m[uid] = rm
+}
+
+// serveClient pushes status + data for one client's subscriptions. The status
+// is passed in so it is probed once per tick, not once per client.
+func (uc *WatchMetricsUseCase) serveClient(clientID string, chans map[string]subscription, status metrics.IntegrationStatus, cache *detailCache) {
 	uc.send(clientID, realtime.METRICS_STATUS, status)
 	if status.Status != metrics.IntegrationActive {
 		return
@@ -220,8 +276,8 @@ func (uc *WatchMetricsUseCase) serveClient(clientID string, chans map[string]sub
 			continue
 		}
 		var rm *metrics.ResourceMetrics
-		if detailCache != nil {
-			rm = detailCache[sub.uid]
+		if cache != nil {
+			rm, _ = cache.get(sub.uid)
 		}
 		if rm == nil {
 			fetched, err := uc.metricsService.GetResourceMetrics(ctx, sub.uid)
@@ -230,8 +286,8 @@ func (uc *WatchMetricsUseCase) serveClient(clientID string, chans map[string]sub
 				continue
 			}
 			rm = &fetched
-			if detailCache != nil {
-				detailCache[sub.uid] = rm
+			if cache != nil {
+				cache.set(sub.uid, rm)
 			}
 		}
 		uc.send(clientID, realtime.METRICS_RESOURCE, metricsResourcePayload{UID: sub.uid, Metrics: *rm})

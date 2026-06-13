@@ -7,6 +7,7 @@ import (
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -304,6 +305,202 @@ func TestToResource_PV_Status_Failed(t *testing.T) {
 
 	res := mapper.ToResource(*obj, "persistentvolumes")
 	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+// ── Longhorn Volume ───────────────────────────────────────────────────────────
+
+func newLonghornVolume(name string) *unstructured.Unstructured {
+	return newUnstructuredResource("Volume", "longhorn.io/v1beta2", name, "longhorn-system")
+}
+
+func TestToResource_LonghornVolume_Healthy(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("pvc-abc")
+	obj.Object["spec"] = map[string]interface{}{
+		"size":             "10737418240", // 10Gi, serialised as a string
+		"numberOfReplicas": int64(3),
+		"frontend":         "blockdev",
+		"accessMode":       "rwo",
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"state":         "attached",
+		"robustness":    "healthy",
+		"actualSize":    int64(5368709120), // 5Gi, serialised as a number
+		"currentNodeID": "node-1",
+	}
+
+	res := mapper.ToResource(*obj, "volumes")
+
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+	assert.Equal(t, "attached", res.LonghornVolumeMetadata.State)
+	assert.Equal(t, "healthy", res.LonghornVolumeMetadata.Robustness)
+	assert.Equal(t, int64(10737418240), res.LonghornVolumeMetadata.Size)
+	assert.Equal(t, int64(5368709120), res.LonghornVolumeMetadata.ActualSize)
+	assert.Equal(t, int64(3), res.LonghornVolumeMetadata.NumberOfReplicas)
+	assert.Equal(t, "node-1", res.LonghornVolumeMetadata.NodeID)
+	assert.Equal(t, "blockdev", res.LonghornVolumeMetadata.Frontend)
+	assert.Equal(t, "rwo", res.LonghornVolumeMetadata.AccessMode)
+	// Shares its name with the backing PersistentVolume.
+	assert.Len(t, res.ParentRefs, 1)
+	assert.Contains(t, res.ParentRefs[0], "pvc-abc")
+}
+
+func TestToResource_LonghornVolume_Degraded(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	obj.Object["spec"] = map[string]interface{}{"size": int64(1024)}
+	obj.Object["status"] = map[string]interface{}{"state": "attached", "robustness": "degraded"}
+
+	res := mapper.ToResource(*obj, "volumes")
+	assert.Equal(t, kube.StatusWarning, res.Status)
+	assert.Equal(t, int64(1024), res.LonghornVolumeMetadata.Size)
+}
+
+func TestToResource_LonghornVolume_Faulted(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	obj.Object["status"] = map[string]interface{}{"state": "detached", "robustness": "faulted"}
+
+	res := mapper.ToResource(*obj, "volumes")
+	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+func TestToResource_LonghornVolume_HealthyDetached(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	obj.Object["status"] = map[string]interface{}{"state": "detached", "robustness": "healthy"}
+
+	res := mapper.ToResource(*obj, "volumes")
+	// Robustness drives readiness: healthy is ready regardless of attachment.
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_LonghornVolume_DetachedUnknown(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	// Longhorn reports "unknown" robustness for an idle, detached volume.
+	obj.Object["status"] = map[string]interface{}{"state": "detached", "robustness": "unknown"}
+
+	res := mapper.ToResource(*obj, "volumes")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_LonghornVolume_Attaching(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	obj.Object["status"] = map[string]interface{}{"state": "attaching", "robustness": "unknown"}
+
+	res := mapper.ToResource(*obj, "volumes")
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+func TestToResource_LonghornVolume_Conditions(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	obj.Object["status"] = map[string]interface{}{
+		"state":      "attached",
+		"robustness": "healthy",
+		"conditions": []interface{}{
+			map[string]interface{}{
+				"type":    "Scheduled",
+				"status":  "True",
+				"reason":  "",
+				"message": "volume scheduled",
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "volumes")
+	assert.Len(t, res.Conditions, 1)
+	assert.Equal(t, "Scheduled", res.Conditions[0].Type)
+	assert.Equal(t, "True", res.Conditions[0].Status)
+}
+
+func TestToResource_LonghornVolume_Empty(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+
+	assert.NotPanics(t, func() {
+		res := mapper.ToResource(*obj, "volumes")
+		// No status yet (no robustness, no state) reads as a benign idle volume.
+		assert.Equal(t, kube.StatusSuccess, res.Status)
+		assert.Equal(t, int64(0), res.LonghornVolumeMetadata.Size)
+	})
+}
+
+// ── Longhorn Node ─────────────────────────────────────────────────────────────
+
+func TestToResource_LonghornNode_DiskAggregation(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Node", "longhorn.io/v1beta2", "node-1", "longhorn-system")
+	obj.Object["spec"] = map[string]interface{}{
+		"allowScheduling": true,
+		"disks": map[string]interface{}{
+			"disk-a": map[string]interface{}{
+				"storageReserved": int64(10),
+				"allowScheduling": true,
+			},
+			"disk-b": map[string]interface{}{
+				"storageReserved": int64(0),
+				"allowScheduling": false, // disabled disk
+			},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"diskStatus": map[string]interface{}{
+			"disk-a": map[string]interface{}{
+				"storageMaximum":   int64(100),
+				"storageAvailable": int64(70),
+				"storageScheduled": int64(40),
+			},
+			"disk-b": map[string]interface{}{
+				"storageMaximum":   int64(50),
+				"storageAvailable": int64(50),
+				"storageScheduled": int64(0),
+			},
+		},
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "Ready", "status": "True"},
+			map[string]interface{}{"type": "Schedulable", "status": "True"},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "nodes")
+	m := res.LonghornNodeMetadata
+
+	// Enabled disk-a partitions: reserved 10 + used 40 + schedulable 50 = 100 (its max).
+	assert.Equal(t, int64(150), m.StorageMaximum)    // 100 + 50
+	assert.Equal(t, int64(40), m.StorageUsed)        // disk-a storageScheduled
+	assert.Equal(t, int64(10), m.StorageReserved)    // only enabled disk-a
+	assert.Equal(t, int64(50), m.StorageSchedulable) // disk-a: 100 - 10 reserved - 40 scheduled
+	assert.Equal(t, int64(50), m.StorageDisabled)    // disk-b max
+	assert.True(t, m.Ready)
+	assert.True(t, m.Schedulable)
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_LonghornNode_NotReady(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Node", "longhorn.io/v1beta2", "node-2", "longhorn-system")
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "Ready", "status": "False"},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "nodes")
+	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+func TestToResource_CoreNode_Untouched(t *testing.T) {
+	mapper := NewKubeMapper()
+	// A core v1 Node must not be treated as a Longhorn node.
+	obj := newUnstructuredResource("Node", "v1", "worker-1", "")
+
+	assert.NotPanics(t, func() {
+		res := mapper.ToResource(*obj, "nodes")
+		assert.Equal(t, int64(0), res.LonghornNodeMetadata.StorageMaximum)
+	})
 }
 
 // ── Kustomization ─────────────────────────────────────────────────────────────
@@ -723,7 +920,6 @@ func TestToResource_StatefulSet_NilReplicas(t *testing.T) {
 		mapper.ToResource(*obj, "statefulsets")
 	})
 }
-
 
 func fluxReadyCondition(status, reason string) map[string]interface{} {
 	return map[string]interface{}{

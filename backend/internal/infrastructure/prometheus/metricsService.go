@@ -3,7 +3,10 @@ package prometheus
 import (
 	"context"
 	"sort"
+	"sync"
 	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/timp4w/phi/internal/core/logging"
@@ -23,13 +26,19 @@ type metricsService struct {
 }
 
 // NewMetricsService implements the core metrics.MetricsService by translating
-// resource-tree context into PromQL against the Prometheus client.
+// resource-tree context into PromQL against the Prometheus client. The
+// backend-agnostic aggregation (series summation, requests/limits coverage
+// rules) lives in core/metrics; this layer only owns the PromQL.
 func NewMetricsService(store kube.KubeStore, prom PrometheusService) metrics.MetricsService {
 	return &metricsService{store: store, prom: prom, logger: logging.Logger()}
 }
 
 func (s *metricsService) Status() metrics.IntegrationStatus {
 	return s.prom.Status()
+}
+
+func keyOf(labels map[string]string) metrics.PodKey {
+	return metrics.PodKey{Namespace: labels["namespace"], Name: labels["pod"]}
 }
 
 func (s *metricsService) GetResourceMetrics(ctx context.Context, uid string) (metrics.ResourceMetrics, error) {
@@ -51,81 +60,139 @@ func (s *metricsService) GetResourceMetrics(ctx context.Context, uid string) (me
 		"diskRead":  QueryDiskRead(matcher),
 		"diskWrite": QueryDiskWrite(matcher),
 	}
-	series := map[string]metrics.Series{}
-	for name, q := range queries {
-		res, err := s.prom.QueryRange(ctx, q, start, end, step)
-		if err != nil {
-			return metrics.ResourceMetrics{}, err
-		}
-		if len(res) > 0 {
-			series[name] = res[0].Samples
-		} else {
-			series[name] = metrics.Series{}
-		}
-	}
 
-	spec, err := s.fetchSpec(ctx, matcher)
-	if err != nil {
+	// All series queries and the spec lookup are independent, so run them
+	// concurrently rather than as a chain of sequential round-trips.
+	series := map[string]metrics.Series{}
+	var spec metrics.ResourceSpec
+	g, gctx := errgroup.WithContext(ctx)
+	var mu sync.Mutex
+	for name, q := range queries {
+		name, q := name, q
+		g.Go(func() error {
+			res, err := s.prom.QueryRange(gctx, q, start, end, step)
+			if err != nil {
+				return err
+			}
+			samples := metrics.Series{}
+			if len(res) > 0 {
+				samples = res[0].Samples
+			}
+			mu.Lock()
+			series[name] = samples
+			mu.Unlock()
+			return nil
+		})
+	}
+	g.Go(func() error {
+		sp, err := s.fetchSpec(gctx, matcher)
+		if err != nil {
+			return err
+		}
+		spec = sp
+		return nil
+	})
+	if err := g.Wait(); err != nil {
 		return metrics.ResourceMetrics{}, err
 	}
 
 	return metrics.ResourceMetrics{Range: "24h", Series: series, Spec: spec}, nil
 }
 
-// fetchSpec aggregates requests/limits over the matched pod set. Limits are
-// nil when any container lacks one (count(limits) < count(containers)).
+// scalarOf runs an instant query expected to return a single scalar series,
+// returning nil when the series (or sample) is absent.
+func (s *metricsService) scalarOf(ctx context.Context, query string, ts time.Time) (*float64, error) {
+	res, err := s.prom.Query(ctx, query, ts)
+	if err != nil {
+		return nil, err
+	}
+	if len(res) == 0 || len(res[0].Samples) == 0 {
+		return nil, nil
+	}
+	v := res[0].Samples[0].Value
+	return &v, nil
+}
+
+// fetchSpec aggregates requests/limits over the matched pod set using
+// server-side sum/count (the detail view needs totals, not a per-pod
+// breakdown). A value is reported only when its count covers every container.
 func (s *metricsService) fetchSpec(ctx context.Context, matcher string) (metrics.ResourceSpec, error) {
 	now := time.Now()
-	scalarOf := func(query string) (*float64, error) {
-		res, err := s.prom.Query(ctx, query, now)
-		if err != nil {
-			return nil, err
-		}
-		if len(res) == 0 || len(res[0].Samples) == 0 {
-			return nil, nil
-		}
-		v := res[0].Samples[0].Value
-		return &v, nil
+	var (
+		containerCount                       *float64
+		reqCPU, reqCntCPU, limCPU, limCntCPU *float64
+		reqMem, reqCntMem, limMem, limCntMem *float64
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	scalar := func(query string, dst **float64) {
+		g.Go(func() error {
+			v, err := s.scalarOf(gctx, query, now)
+			if err != nil {
+				return err
+			}
+			*dst = v
+			return nil
+		})
 	}
-
-	containerCount, err := scalarOf(QueryContainerCount(matcher))
-	if err != nil {
+	scalar(QueryContainerCount(matcher), &containerCount)
+	scalar(QueryRequestsTotal(matcher, "cpu"), &reqCPU)
+	scalar(QueryRequestsCount(matcher, "cpu"), &reqCntCPU)
+	scalar(QueryLimitsTotal(matcher, "cpu"), &limCPU)
+	scalar(QueryLimitsCount(matcher, "cpu"), &limCntCPU)
+	scalar(QueryRequestsTotal(matcher, "memory"), &reqMem)
+	scalar(QueryRequestsCount(matcher, "memory"), &reqCntMem)
+	scalar(QueryLimitsTotal(matcher, "memory"), &limMem)
+	scalar(QueryLimitsCount(matcher, "memory"), &limCntMem)
+	if err := g.Wait(); err != nil {
 		return metrics.ResourceSpec{}, err
 	}
 
-	spec := metrics.ResourceSpec{}
-	for _, res := range []struct {
-		name string
-		dst  *metrics.SpecValue
-	}{
-		{"cpu", &spec.CPU},
-		{"memory", &spec.Memory},
-	} {
-		reqSum, err := scalarOf(QueryRequestsTotal(matcher, res.name))
-		if err != nil {
-			return metrics.ResourceSpec{}, err
-		}
-		res.dst.Requests = reqSum
-
-		limSum, err := scalarOf(QueryLimitsTotal(matcher, res.name))
-		if err != nil {
-			return metrics.ResourceSpec{}, err
-		}
-		limCount, err := scalarOf(QueryLimitsCount(matcher, res.name))
-		if err != nil {
-			return metrics.ResourceSpec{}, err
-		}
-		if limSum != nil && limCount != nil && containerCount != nil && *limCount >= *containerCount {
-			res.dst.Limits = limSum
-		}
-	}
-	return spec, nil
+	return metrics.ResourceSpec{
+		CPU:    coveredSpec(reqCPU, reqCntCPU, limCPU, limCntCPU, containerCount),
+		Memory: coveredSpec(reqMem, reqCntMem, limMem, limCntMem, containerCount),
+	}, nil
 }
 
-type podKey struct{ namespace, name string }
+// coveredSpec reports a requests/limits total only when its count covers every
+// container, mirroring core's AggregateSpec for the per-pod path.
+func coveredSpec(reqSum, reqCount, limSum, limCount, containerCount *float64) metrics.SpecValue {
+	covers := func(count *float64) bool {
+		return count != nil && containerCount != nil && *count >= *containerCount
+	}
+	var sv metrics.SpecValue
+	if reqSum != nil && covers(reqCount) {
+		sv.Requests = reqSum
+	}
+	if limSum != nil && covers(limCount) {
+		sv.Limits = limSum
+	}
+	return sv
+}
 
-func keyOf(labels map[string]string) podKey {
-	return podKey{namespace: labels["namespace"], name: labels["pod"]}
+func (s *metricsService) rangeByPod(ctx context.Context, query string, start, end time.Time) (map[metrics.PodKey]metrics.Series, error) {
+	res, err := s.prom.QueryRange(ctx, query, start, end, sparklineStep)
+	if err != nil {
+		return nil, err
+	}
+	out := map[metrics.PodKey]metrics.Series{}
+	for _, r := range res {
+		out[keyOf(r.Labels)] = r.Samples
+	}
+	return out, nil
+}
+
+func (s *metricsService) instantByPod(ctx context.Context, query string, ts time.Time) (map[metrics.PodKey]float64, error) {
+	res, err := s.prom.Query(ctx, query, ts)
+	if err != nil {
+		return nil, err
+	}
+	out := map[metrics.PodKey]float64{}
+	for _, r := range res {
+		if len(r.Samples) > 0 {
+			out[keyOf(r.Labels)] = r.Samples[0].Value
+		}
+	}
+	return out, nil
 }
 
 func (s *metricsService) GetCurrentUsage(ctx context.Context, uids []string) (map[string]metrics.CurrentUsage, error) {
@@ -154,138 +221,69 @@ func (s *metricsService) GetCurrentUsage(ctx context.Context, uids []string) (ma
 	end := time.Now()
 	start := end.Add(-sparklineRange)
 
-	rangeByPod := func(query string) (map[podKey]metrics.Series, error) {
-		res, err := s.prom.QueryRange(ctx, query, start, end, sparklineStep)
-		if err != nil {
-			return nil, err
-		}
-		out := map[podKey]metrics.Series{}
-		for _, r := range res {
-			out[keyOf(r.Labels)] = r.Samples
-		}
-		return out, nil
-	}
-	instantByPod := func(query string) (map[podKey]float64, error) {
-		res, err := s.prom.Query(ctx, query, end)
-		if err != nil {
-			return nil, err
-		}
-		out := map[podKey]float64{}
-		for _, r := range res {
-			if len(r.Samples) > 0 {
-				out[keyOf(r.Labels)] = r.Samples[0].Value
+	var (
+		cpuByPod, memByPod                       map[metrics.PodKey]metrics.Series
+		reqCPU, reqMem, limCPU, limMem           map[metrics.PodKey]float64
+		containerCount, limCountCPU, limCountMem map[metrics.PodKey]float64
+		reqCountCPU, reqCountMem                 map[metrics.PodKey]float64
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	rng := func(query string, dst *map[metrics.PodKey]metrics.Series) {
+		g.Go(func() error {
+			m, err := s.rangeByPod(gctx, query, start, end)
+			if err != nil {
+				return err
 			}
-		}
-		return out, nil
+			*dst = m
+			return nil
+		})
 	}
-
-	cpuByPod, err := rangeByPod(QueryCPUUsageByPod(matcher))
-	if err != nil {
-		return nil, err
+	inst := func(query string, dst *map[metrics.PodKey]float64) {
+		g.Go(func() error {
+			m, err := s.instantByPod(gctx, query, end)
+			if err != nil {
+				return err
+			}
+			*dst = m
+			return nil
+		})
 	}
-	memByPod, err := rangeByPod(QueryMemoryUsageByPod(matcher))
-	if err != nil {
-		return nil, err
-	}
-	reqCPU, err := instantByPod(QueryRequestsByPod(matcher, "cpu"))
-	if err != nil {
-		return nil, err
-	}
-	reqMem, err := instantByPod(QueryRequestsByPod(matcher, "memory"))
-	if err != nil {
-		return nil, err
-	}
-	limCPU, err := instantByPod(QueryLimitsByPod(matcher, "cpu"))
-	if err != nil {
-		return nil, err
-	}
-	limMem, err := instantByPod(QueryLimitsByPod(matcher, "memory"))
-	if err != nil {
-		return nil, err
-	}
-	containerCount, err := instantByPod(QueryContainerCountByPod(matcher))
-	if err != nil {
-		return nil, err
-	}
-	limCountCPU, err := instantByPod(QueryLimitsCountByPod(matcher, "cpu"))
-	if err != nil {
-		return nil, err
-	}
-	limCountMem, err := instantByPod(QueryLimitsCountByPod(matcher, "memory"))
-	if err != nil {
+	rng(QueryCPUUsageByPod(matcher), &cpuByPod)
+	rng(QueryMemoryUsageByPod(matcher), &memByPod)
+	inst(QueryRequestsByPod(matcher, "cpu"), &reqCPU)
+	inst(QueryRequestsByPod(matcher, "memory"), &reqMem)
+	inst(QueryLimitsByPod(matcher, "cpu"), &limCPU)
+	inst(QueryLimitsByPod(matcher, "memory"), &limMem)
+	inst(QueryContainerCountByPod(matcher), &containerCount)
+	inst(QueryRequestsCountByPod(matcher, "cpu"), &reqCountCPU)
+	inst(QueryRequestsCountByPod(matcher, "memory"), &reqCountMem)
+	inst(QueryLimitsCountByPod(matcher, "cpu"), &limCountCPU)
+	inst(QueryLimitsCountByPod(matcher, "memory"), &limCountMem)
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
 	out := map[string]metrics.CurrentUsage{}
 	for uid, pods := range podsByUID {
-		keys := make([]podKey, 0, len(pods))
+		keys := make([]metrics.PodKey, 0, len(pods))
 		for _, p := range pods {
-			keys = append(keys, podKey{namespace: p.Namespace, name: p.Name})
+			keys = append(keys, metrics.PodKey{Namespace: p.Namespace, Name: p.Name})
 		}
 		out[uid] = metrics.CurrentUsage{
-			CPU:    sumSeries(cpuByPod, keys),
-			Memory: sumSeries(memByPod, keys),
+			CPU:    metrics.SumSeries(cpuByPod, keys),
+			Memory: metrics.SumSeries(memByPod, keys),
 			Spec: metrics.ResourceSpec{
-				CPU:    aggregateSpec(keys, reqCPU, limCPU, containerCount, limCountCPU),
-				Memory: aggregateSpec(keys, reqMem, limMem, containerCount, limCountMem),
+				CPU:    metrics.AggregateSpec(keys, reqCPU, limCPU, reqCountCPU, containerCount, limCountCPU),
+				Memory: metrics.AggregateSpec(keys, reqMem, limMem, reqCountMem, containerCount, limCountMem),
 			},
 		}
 	}
 	return out, nil
 }
 
-// sumSeries adds per-pod series pointwise, aligned by timestamp.
-func sumSeries(byPod map[podKey]metrics.Series, keys []podKey) metrics.Series {
-	acc := map[int64]float64{}
-	for _, k := range keys {
-		for _, s := range byPod[k] {
-			acc[s.Timestamp] += s.Value
-		}
-	}
-	ts := make([]int64, 0, len(acc))
-	for t := range acc {
-		ts = append(ts, t)
-	}
-	sort.Slice(ts, func(i, j int) bool { return ts[i] < ts[j] })
-	out := make(metrics.Series, 0, len(ts))
-	for _, t := range ts {
-		out = append(out, metrics.Sample{Timestamp: t, Value: acc[t]})
-	}
-	return out
-}
-
-// aggregateSpec sums requests/limits over pods; limits are nil unless every
-// pod has a limit on every container.
-func aggregateSpec(keys []podKey, req, lim, containers, limCount map[podKey]float64) metrics.SpecValue {
-	var sv metrics.SpecValue
-	reqSum, reqSeen := 0.0, false
-	limSum, limOK := 0.0, true
-	for _, k := range keys {
-		if v, ok := req[k]; ok {
-			reqSum += v
-			reqSeen = true
-		}
-		l, hasLim := lim[k]
-		c := containers[k]
-		lc := limCount[k]
-		if !hasLim || lc < c {
-			limOK = false
-		} else {
-			limSum += l
-		}
-	}
-	if reqSeen {
-		sv.Requests = &reqSum
-	}
-	if limOK && len(keys) > 0 {
-		sv.Limits = &limSum
-	}
-	return sv
-}
-
 func (s *metricsService) GetNodeUsage(ctx context.Context) ([]metrics.NodeUsage, error) {
 	now := time.Now()
-	byInstance := func(query string) (map[string]float64, error) {
+	byInstance := func(ctx context.Context, query string) (map[string]float64, error) {
 		res, err := s.prom.Query(ctx, query, now)
 		if err != nil {
 			return nil, err
@@ -299,28 +297,38 @@ func (s *metricsService) GetNodeUsage(ctx context.Context) ([]metrics.NodeUsage,
 		return out, nil
 	}
 
-	cpuUsed, err := byInstance(QueryNodeCPUUsed)
-	if err != nil {
-		return nil, err
+	var (
+		cpuUsed, cpuCap, memUsed, memTotal map[string]float64
+		unameRes                           []SeriesResult
+	)
+	g, gctx := errgroup.WithContext(ctx)
+	load := func(query string, dst *map[string]float64) {
+		g.Go(func() error {
+			m, err := byInstance(gctx, query)
+			if err != nil {
+				return err
+			}
+			*dst = m
+			return nil
+		})
 	}
-	cpuCap, err := byInstance(QueryNodeCPUCapacity)
-	if err != nil {
-		return nil, err
-	}
-	memUsed, err := byInstance(QueryNodeMemUsed)
-	if err != nil {
-		return nil, err
-	}
-	memTotal, err := byInstance(QueryNodeMemTotal)
-	if err != nil {
+	load(QueryNodeCPUUsed, &cpuUsed)
+	load(QueryNodeCPUCapacity, &cpuCap)
+	load(QueryNodeMemUsed, &memUsed)
+	load(QueryNodeMemTotal, &memTotal)
+	g.Go(func() error {
+		res, err := s.prom.Query(gctx, QueryNodeUname, now)
+		if err != nil {
+			return err
+		}
+		unameRes = res
+		return nil
+	})
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
 
 	names := map[string]string{}
-	unameRes, err := s.prom.Query(ctx, QueryNodeUname, now)
-	if err != nil {
-		return nil, err
-	}
 	for _, r := range unameRes {
 		if n := r.Labels["nodename"]; n != "" {
 			names[r.Labels["instance"]] = n

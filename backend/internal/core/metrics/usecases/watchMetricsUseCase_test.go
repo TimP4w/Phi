@@ -139,6 +139,9 @@ func TestOnCloseCleansUpClient(t *testing.T) {
 	rt.On("AddConnectionListener", mock.Anything).Run(func(args mock.Arguments) {
 		listener = args.Get(0).(realtime.Listener)
 	})
+	// OnClose must deregister the namespaced listener so the manager's map does
+	// not leak an entry per connection.
+	rt.On("RemoveConnectionListener", "metrics-c1").Return()
 
 	uc := newWatchMetricsUseCase(ms, rt)
 	uc.Execute(WatchMetricsInput{ClientID: "c1", Action: ActionStart, Channel: "tree", UIDs: []string{"u"}})
@@ -148,6 +151,7 @@ func TestOnCloseCleansUpClient(t *testing.T) {
 	// registered under a namespaced key.
 	listener.OnClose("c1")
 	assert.Empty(t, uc.snapshot())
+	rt.AssertCalled(t, "RemoveConnectionListener", "metrics-c1")
 }
 
 func contains(haystack []string, needle string) bool {

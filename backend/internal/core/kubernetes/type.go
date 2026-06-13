@@ -17,30 +17,32 @@ const (
 )
 
 type Resource struct {
-	Kind                  string                `json:"kind"`
-	Version               string                `json:"version"`
-	Namespace             string                `json:"namespace"`
-	Name                  string                `json:"name"`
-	Resource              string                `json:"resource"`
-	ParentIDs             []string              `json:"parentIDs"`
-	ParentRefs            []string              `json:"parentRefs"`
-	UID                   string                `json:"uid"`
-	Labels                map[string]string     `json:"labels"`
-	Annotations           map[string]string     `json:"annotations"`
-	Group                 string                `json:"group"`
-	Status                Status                `json:"status"`
-	Conditions            []Condition           `json:"conditions"`
-	CreatedAt             time.Time             `json:"createdAt"`
-	DeletedAt             time.Time             `json:"deletedAt"`
-	IsFluxManaged         bool                  `json:"isFluxManaged"`
-	FluxMetadata          FluxMetadata          `json:"fluxMetadata,omitempty"`
-	PodMetadata           PodMetadata           `json:"podMetadata,omitempty"`
-	DeploymentMetadata    DeploymentMetadata    `json:"deploymentMetadata,omitempty"`
-	HelmReleaseMetadata   HelmReleaseMetadata   `json:"helmReleaseMetadata,omitempty"`
-	KustomizationMetadata KustomizationMetadata `json:"kustomizationMetadata,omitempty"`
-	PVCMetadata           PVCMetadata           `json:"pvcMetadata,omitempty"`
-	GitRepositoryMetadata GitRepositoryMetadata `json:"gitRepositoryMetadata,omitempty"`
-	OCIRepositoryMetadata OCIRepositoryMetadata `json:"ociRepositoryMetadata,omitempty"`
+	Kind                   string                 `json:"kind"`
+	Version                string                 `json:"version"`
+	Namespace              string                 `json:"namespace"`
+	Name                   string                 `json:"name"`
+	Resource               string                 `json:"resource"`
+	ParentIDs              []string               `json:"parentIDs"`
+	ParentRefs             []string               `json:"parentRefs"`
+	UID                    string                 `json:"uid"`
+	Labels                 map[string]string      `json:"labels"`
+	Annotations            map[string]string      `json:"annotations"`
+	Group                  string                 `json:"group"`
+	Status                 Status                 `json:"status"`
+	Conditions             []Condition            `json:"conditions"`
+	CreatedAt              time.Time              `json:"createdAt"`
+	DeletedAt              time.Time              `json:"deletedAt"`
+	IsFluxManaged          bool                   `json:"isFluxManaged"`
+	FluxMetadata           FluxMetadata           `json:"fluxMetadata,omitempty"`
+	PodMetadata            PodMetadata            `json:"podMetadata,omitempty"`
+	DeploymentMetadata     DeploymentMetadata     `json:"deploymentMetadata,omitempty"`
+	HelmReleaseMetadata    HelmReleaseMetadata    `json:"helmReleaseMetadata,omitempty"`
+	KustomizationMetadata  KustomizationMetadata  `json:"kustomizationMetadata,omitempty"`
+	PVCMetadata            PVCMetadata            `json:"pvcMetadata,omitempty"`
+	LonghornVolumeMetadata LonghornVolumeMetadata `json:"longhornVolumeMetadata,omitempty"`
+	LonghornNodeMetadata   LonghornNodeMetadata   `json:"longhornNodeMetadata,omitempty"`
+	GitRepositoryMetadata  GitRepositoryMetadata  `json:"gitRepositoryMetadata,omitempty"`
+	OCIRepositoryMetadata  OCIRepositoryMetadata  `json:"ociRepositoryMetadata,omitempty"`
 }
 
 // Copy copies all fields from another Resource into the receiver
@@ -85,6 +87,8 @@ func (e *Resource) Copy(other Resource) {
 	e.HelmReleaseMetadata = other.HelmReleaseMetadata
 	e.KustomizationMetadata = other.KustomizationMetadata
 	e.PVCMetadata = other.PVCMetadata
+	e.LonghornVolumeMetadata = other.LonghornVolumeMetadata
+	e.LonghornNodeMetadata = other.LonghornNodeMetadata
 	e.GitRepositoryMetadata = other.GitRepositoryMetadata
 	e.OCIRepositoryMetadata = other.OCIRepositoryMetadata
 }
@@ -123,6 +127,8 @@ func (e *Resource) IsDeepEqual(other Resource) bool {
 		e.HelmReleaseMetadata != other.HelmReleaseMetadata ||
 		!kustomizationMetadataEqual(e.KustomizationMetadata, other.KustomizationMetadata) ||
 		!pvcMetadataEqual(e.PVCMetadata, other.PVCMetadata) ||
+		e.LonghornVolumeMetadata != other.LonghornVolumeMetadata ||
+		e.LonghornNodeMetadata != other.LonghornNodeMetadata ||
 		e.GitRepositoryMetadata != other.GitRepositoryMetadata ||
 		e.OCIRepositoryMetadata != other.OCIRepositoryMetadata {
 		return false
@@ -235,13 +241,13 @@ func pvcMetadataEqual(a, b PVCMetadata) bool {
 }
 
 var reconcilableKinds = map[string]struct{}{
-	"Kustomization":   {},
-	"HelmRelease":     {},
-	"HelmRepository":  {},
-	"HelmChart":       {},
-	"GitRepository":   {},
-	"OCIRepository":   {},
-	"Bucket":          {},
+	"Kustomization":  {},
+	"HelmRelease":    {},
+	"HelmRepository": {},
+	"HelmChart":      {},
+	"GitRepository":  {},
+	"OCIRepository":  {},
+	"Bucket":         {},
 }
 
 func (e *Resource) IsReconcilable() bool {
@@ -315,6 +321,39 @@ type PVCMetadata struct {
 	AccessModes  []string          `json:"accessModes,omitempty"`
 	Capacity     map[string]string `json:"capacity,omitempty"`
 	Phase        string            `json:"phase,omitempty"`
+}
+
+// LonghornNodeMetadata carries the aggregated disk capacity of a
+// Node.longhorn.io object, summed across all of the node's disks. Byte counts
+// mirror the Longhorn dashboard, where an enabled disk's capacity partitions
+// into Reserved + Used + Schedulable: Used is the space scheduled to replicas
+// (storageScheduled), Reserved the admin-reserved space, Schedulable the room
+// left for new replicas, and Disabled the capacity of disks closed to
+// scheduling. All fields are comparable so equality uses a plain struct
+// comparison.
+type LonghornNodeMetadata struct {
+	Ready              bool  `json:"ready"`
+	Schedulable        bool  `json:"schedulable"`
+	StorageMaximum     int64 `json:"storageMaximum,omitempty"`     // total
+	StorageUsed        int64 `json:"storageUsed,omitempty"`        // scheduled to replicas
+	StorageReserved    int64 `json:"storageReserved,omitempty"`    // admin reserved
+	StorageSchedulable int64 `json:"storageSchedulable,omitempty"` // max - reserved - scheduled
+	StorageDisabled    int64 `json:"storageDisabled,omitempty"`    // capacity of unschedulable disks
+}
+
+// LonghornVolumeMetadata carries the Longhorn-specific status of a
+// Volume.longhorn.io object. Size and ActualSize are byte counts: Size is the
+// provisioned (spec) capacity, ActualSize the space currently consumed on disk.
+// All fields are comparable so equality uses a plain struct comparison.
+type LonghornVolumeMetadata struct {
+	State            string `json:"state,omitempty"`            // attached / detached
+	Robustness       string `json:"robustness,omitempty"`       // healthy / degraded / faulted / unknown
+	Size             int64  `json:"size,omitempty"`             // provisioned bytes
+	ActualSize       int64  `json:"actualSize,omitempty"`       // bytes used on disk
+	NumberOfReplicas int64  `json:"numberOfReplicas,omitempty"` // desired replica count
+	NodeID           string `json:"nodeID,omitempty"`           // node the volume is attached to
+	Frontend         string `json:"frontend,omitempty"`         // blockdev / iscsi
+	AccessMode       string `json:"accessMode,omitempty"`       // rwo / rwx
 }
 
 type GitRepositoryMetadata struct {

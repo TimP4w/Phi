@@ -95,6 +95,10 @@ func QueryContainerCount(matcher string) string {
 	return fmt.Sprintf(`count(kube_pod_container_info{%s})`, matcher)
 }
 
+func QueryRequestsCount(matcher, resource string) string {
+	return fmt.Sprintf(`count(kube_pod_container_resource_requests{%s,resource="%s"})`, matcher, resource)
+}
+
 func QueryLimitsCount(matcher, resource string) string {
 	return fmt.Sprintf(`count(kube_pod_container_resource_limits{%s,resource="%s"})`, matcher, resource)
 }
@@ -109,6 +113,10 @@ func QueryLimitsByPod(matcher, resource string) string {
 
 func QueryContainerCountByPod(matcher string) string {
 	return fmt.Sprintf(`count by (namespace, pod) (kube_pod_container_info{%s})`, matcher)
+}
+
+func QueryRequestsCountByPod(matcher, resource string) string {
+	return fmt.Sprintf(`count by (namespace, pod) (kube_pod_container_resource_requests{%s,resource="%s"})`, matcher, resource)
 }
 
 func QueryLimitsCountByPod(matcher, resource string) string {
