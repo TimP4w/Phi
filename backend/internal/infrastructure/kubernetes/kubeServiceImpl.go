@@ -492,6 +492,23 @@ func (k *KubeServiceImpl) findKubeResource(el kube.Resource) (unstructured.Unstr
 	return *unstructuredObj, nil
 }
 
+// hasEndpointSlices reports whether the cluster serves a watchable
+// discovery.k8s.io EndpointSlice resource.
+func hasEndpointSlices(resList []*metav1.APIResourceList) bool {
+	for _, group := range resList {
+		gv, err := schema.ParseGroupVersion(group.GroupVersion)
+		if err != nil || gv.Group != "discovery.k8s.io" {
+			continue
+		}
+		for _, apiRes := range group.APIResources {
+			if apiRes.Name == "endpointslices" && utils.Contains(apiRes.Verbs, "list") && utils.Contains(apiRes.Verbs, "watch") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (k *KubeServiceImpl) DiscoverApis() ([]kube.ApiResource, error) {
 	logger := logging.Logger()
 	start := time.Now()
@@ -503,6 +520,11 @@ func (k *KubeServiceImpl) DiscoverApis() ([]kube.ApiResource, error) {
 	logger.WithField("duration_ms", time.Since(start).Milliseconds()).Debug("Queried API discovery")
 	logger.WithField("group_count", len(resList)).Debug("Found server-preferred API resource groups")
 
+	// core/v1 Endpoints is deprecated since v1.33 in favor of discovery.k8s.io
+	// EndpointSlice; watching it triggers API server deprecation warnings. Skip it
+	// when the cluster serves EndpointSlice, but keep it on older clusters.
+	skipCoreEndpoints := hasEndpointSlices(resList)
+
 	var apis []kube.ApiResource
 	for _, group := range resList {
 		gv, err := schema.ParseGroupVersion(group.GroupVersion)
@@ -513,6 +535,9 @@ func (k *KubeServiceImpl) DiscoverApis() ([]kube.ApiResource, error) {
 
 		for _, apiRes := range group.APIResources {
 			if !utils.Contains(apiRes.Verbs, "list") || !utils.Contains(apiRes.Verbs, "watch") { // Skip resources that cannot be listed or watched
+				continue
+			}
+			if skipCoreEndpoints && gv.Group == "" && apiRes.Name == "endpoints" {
 				continue
 			}
 			apis = append(apis, kube.ApiResource{

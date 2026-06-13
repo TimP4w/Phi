@@ -219,6 +219,58 @@ func TestKubeServiceImplWatchResources(t *testing.T) {
 
 }
 
+func endpointsDiscovery(withEndpointSlices bool) []*metav1.APIResourceList {
+	resList := []*metav1.APIResourceList{
+		{
+			GroupVersion: "v1",
+			APIResources: []metav1.APIResource{
+				{Name: "pods", SingularName: "pod", Kind: "Pod", Verbs: metav1.Verbs{"list", "watch"}},
+				{Name: "endpoints", SingularName: "endpoints", Kind: "Endpoints", Verbs: metav1.Verbs{"list", "watch"}},
+			},
+		},
+	}
+	if withEndpointSlices {
+		resList = append(resList, &metav1.APIResourceList{
+			GroupVersion: "discovery.k8s.io/v1",
+			APIResources: []metav1.APIResource{
+				{Name: "endpointslices", SingularName: "endpointslice", Kind: "EndpointSlice", Verbs: metav1.Verbs{"list", "watch"}},
+			},
+		})
+	}
+	return resList
+}
+
+func discoveredNames(apis []kubernetes.ApiResource) []string {
+	names := make([]string, 0, len(apis))
+	for _, api := range apis {
+		names = append(names, api.Name)
+	}
+	return names
+}
+
+func TestDiscoverApisSkipsDeprecatedEndpointsWhenEndpointSlicesServed(t *testing.T) {
+	svc := newTestKubeServiceImplWithApis(endpointsDiscovery(true))
+
+	apis, err := svc.DiscoverApis()
+
+	assert.NoError(t, err)
+	names := discoveredNames(apis)
+	assert.NotContains(t, names, "endpoints")
+	assert.Contains(t, names, "endpointslices")
+	assert.Contains(t, names, "pods")
+}
+
+func TestDiscoverApisKeepsEndpointsWithoutEndpointSlices(t *testing.T) {
+	svc := newTestKubeServiceImplWithApis(endpointsDiscovery(false))
+
+	apis, err := svc.DiscoverApis()
+
+	assert.NoError(t, err)
+	names := discoveredNames(apis)
+	assert.Contains(t, names, "endpoints")
+	assert.Contains(t, names, "pods")
+}
+
 func TestGetEventsErrorReturnsEmptyList(t *testing.T) {
 	svc := newTestKubeServiceImpl()
 	fakeClientset, ok := svc.clientSet.(*k8sfake.Clientset)
