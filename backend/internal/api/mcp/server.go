@@ -7,6 +7,7 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	kubernetesusecases "github.com/timp4w/phi/internal/core/kubernetes/usecases"
+	"github.com/timp4w/phi/internal/core/metrics"
 	shared "github.com/timp4w/phi/internal/core/shared"
 )
 
@@ -21,6 +22,7 @@ func NewMCPServer(
 	resume shared.UseCase[kubernetesusecases.ResumeUseCaseInput, struct{}],
 	getEvents shared.UseCase[kubernetesusecases.GetEventsInput, []kube.Event],
 	store kube.KubeStore,
+	metricsSvc metrics.MetricsService,
 ) *MCPServer {
 	tools := &mcpTools{
 		store:           store,
@@ -29,6 +31,7 @@ func NewMCPServer(
 		suspendUC:       suspend,
 		resumeUC:        resume,
 		getEventsUC:     getEvents,
+		metricsSvc:      metricsSvc,
 	}
 
 	s := mcpserver.NewMCPServer("phi", "1.0.0")
@@ -60,6 +63,15 @@ func NewMCPServer(
 		mcplib.WithString("namespace", mcplib.Description("Filter by namespace")),
 		mcplib.WithString("uid", mcplib.Description("Filter by resource UID")),
 	), tools.getEvents)
+
+	s.AddTool(mcplib.NewTool("get_resource_metrics",
+		mcplib.WithDescription("Get current CPU and memory usage (aggregated across the resource's pods) with requests, limits, and over-limit flags. Requires the Prometheus integration."),
+		mcplib.WithString("uid", mcplib.Required(), mcplib.Description("Resource UID")),
+	), tools.getResourceMetrics)
+
+	s.AddTool(mcplib.NewTool("get_node_usage",
+		mcplib.WithDescription("Get per-node cluster CPU and memory usage against capacity. Requires the Prometheus integration."),
+	), tools.getNodeUsage)
 
 	s.AddTool(mcplib.NewTool("reconcile_resource",
 		mcplib.WithDescription("Trigger reconciliation of a Flux resource"),

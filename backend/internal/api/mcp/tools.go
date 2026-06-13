@@ -6,10 +6,11 @@ import (
 	"strings"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
-	"github.com/xlab/treeprint"
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	kubernetesusecases "github.com/timp4w/phi/internal/core/kubernetes/usecases"
+	"github.com/timp4w/phi/internal/core/metrics"
 	shared "github.com/timp4w/phi/internal/core/shared"
+	"github.com/xlab/treeprint"
 )
 
 type mcpTools struct {
@@ -19,6 +20,7 @@ type mcpTools struct {
 	suspendUC       shared.UseCase[kubernetesusecases.SuspendUseCaseInput, struct{}]
 	resumeUC        shared.UseCase[kubernetesusecases.ResumeUseCaseInput, struct{}]
 	getEventsUC     shared.UseCase[kubernetesusecases.GetEventsInput, []kube.Event]
+	metricsSvc      metrics.MetricsService
 }
 
 // getStringArg reads a string tool argument by key from the arguments map.
@@ -139,7 +141,7 @@ func (t *mcpTools) addChildrenToTree(node treeprint.Tree, parent kube.Resource, 
 	}
 }
 
-func (t *mcpTools) diagnoseResource(_ context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
+func (t *mcpTools) diagnoseResource(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
 	uid := getStringArg(req.GetArguments(), "uid")
 	if uid == "" {
 		return nil, fmt.Errorf("uid is required")
@@ -192,6 +194,8 @@ func (t *mcpTools) diagnoseResource(_ context.Context, req mcplib.CallToolReques
 			}
 		}
 	}
+
+	t.appendUsageDiagnostics(ctx, &sb, uid)
 
 	return mcplib.NewToolResultText(sb.String()), nil
 }
