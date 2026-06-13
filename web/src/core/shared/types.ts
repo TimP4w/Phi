@@ -4,6 +4,7 @@ const TYPES = {
   Http: Symbol.for("Http"),
   TreeService: Symbol.for("TreeService"),
   ResourceService: Symbol.for("ResourceService"),
+  TrivyService: Symbol.for("TrivyService"),
   // Use cases
   ReconcileUseCase: Symbol.for("ReconcileUseCase"),
   SuspendUseCase: Symbol.for("SuspendUseCase"),

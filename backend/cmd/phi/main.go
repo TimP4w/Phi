@@ -46,6 +46,7 @@ type UseCases struct {
 	Suspend           shared.UseCase[kubernetesusecases.SuspendUseCaseInput, struct{}]
 	Resume            shared.UseCase[kubernetesusecases.ResumeUseCaseInput, struct{}]
 	GetEvents         shared.UseCase[kubernetesusecases.GetEventsInput, []kubernetes.Event]
+	GetTrivyFindings  shared.UseCase[kubernetesusecases.GetTrivyFindingsInput, kubernetesusecases.TrivyFindings]
 	WatchMetrics      shared.UseCase[metricsusecases.WatchMetricsInput, struct{}]
 }
 
@@ -84,6 +85,7 @@ func main() {
 			kubernetesusecases.NewSuspendUseCase,
 			kubernetesusecases.NewResumeUseCase,
 			kubernetesusecases.NewGetEventsUseCase,
+			kubernetesusecases.NewGetTrivyFindingsUseCase,
 			kubernetesusecases.NewWatchResourcesUseCase,
 			kubernetesusecases.NewWatchEventsUseCase,
 			metricsusecases.NewWatchMetricsUseCase,
@@ -169,6 +171,7 @@ func registerAPIRoutes(r *chi.Mux, uc UseCases, realtimeService realtime.Realtim
 		uc.Suspend,
 		uc.Resume,
 		uc.GetEvents,
+		uc.GetTrivyFindings,
 	)
 	realtimeController := controllers.NewRealtimeController(uc.UpgradeConnection)
 

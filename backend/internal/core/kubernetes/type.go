@@ -52,6 +52,7 @@ type Resource struct {
 	CertificateMetadata    CertificateMetadata    `json:"certificateMetadata,omitempty"`
 	NetworkPolicyMetadata  NetworkPolicyMetadata  `json:"networkPolicyMetadata,omitempty"`
 	ProxyMetadata          ProxyMetadata          `json:"proxyMetadata,omitempty"`
+	TrivyMetadata          TrivyMetadata          `json:"trivyMetadata,omitempty"`
 }
 
 // Copy copies all fields from another Resource into the receiver
@@ -108,6 +109,7 @@ func (e *Resource) Copy(other Resource) {
 	e.CertificateMetadata = other.CertificateMetadata.clone()
 	e.NetworkPolicyMetadata = other.NetworkPolicyMetadata.clone()
 	e.ProxyMetadata = other.ProxyMetadata.clone()
+	e.TrivyMetadata = other.TrivyMetadata
 }
 
 func (e *Resource) GetRef() string {
@@ -155,7 +157,8 @@ func (e *Resource) IsDeepEqual(other Resource) bool {
 		!gatewayMetadataEqual(e.GatewayMetadata, other.GatewayMetadata) ||
 		!certificateMetadataEqual(e.CertificateMetadata, other.CertificateMetadata) ||
 		!networkPolicyMetadataEqual(e.NetworkPolicyMetadata, other.NetworkPolicyMetadata) ||
-		!proxyMetadataEqual(e.ProxyMetadata, other.ProxyMetadata) {
+		!proxyMetadataEqual(e.ProxyMetadata, other.ProxyMetadata) ||
+		e.TrivyMetadata != other.TrivyMetadata {
 		return false
 	}
 
@@ -689,6 +692,25 @@ type LonghornVolumeMetadata struct {
 	NodeID           string `json:"nodeID,omitempty"`           // node the volume is attached to
 	Frontend         string `json:"frontend,omitempty"`         // blockdev / iscsi
 	AccessMode       string `json:"accessMode,omitempty"`       // rwo / rwx
+}
+
+// TrivyMetadata carries the summary of a single Trivy Operator report
+// (aquasecurity.github.io). Only the small severity counts and the target
+// workload reference are kept here — the full vulnerability/check arrays stay in
+// the report object and are fetched on demand via the Trivy findings endpoint.
+// ReportType is one of: vulnerability, configAudit, exposedSecret,
+// rbacAssessment. For non-vulnerability reports the counts come from the same
+// critical/high/medium/low summary the operator emits.
+type TrivyMetadata struct {
+	ReportType      string `json:"reportType,omitempty"`
+	Critical        int    `json:"critical,omitempty"`
+	High            int    `json:"high,omitempty"`
+	Medium          int    `json:"medium,omitempty"`
+	Low             int    `json:"low,omitempty"`
+	Unknown         int    `json:"unknown,omitempty"`
+	TargetKind      string `json:"targetKind,omitempty"`
+	TargetName      string `json:"targetName,omitempty"`
+	TargetNamespace string `json:"targetNamespace,omitempty"`
 }
 
 type GitRepositoryMetadata struct {

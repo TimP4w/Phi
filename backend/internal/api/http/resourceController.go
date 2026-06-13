@@ -13,11 +13,12 @@ import (
 )
 
 type ResourceController struct {
-	getResourceYAMLUseCase shared.UseCase[kubernetesusecases.GetResourceYAMLInput, []byte]
-	reconcileUseCase       shared.UseCase[kubernetesusecases.ReconcileInput, struct{}]
-	suspendUseCase         shared.UseCase[kubernetesusecases.SuspendUseCaseInput, struct{}]
-	resumeUseCase          shared.UseCase[kubernetesusecases.ResumeUseCaseInput, struct{}]
-	getEventsUseCase       shared.UseCase[kubernetesusecases.GetEventsInput, []kube.Event]
+	getResourceYAMLUseCase  shared.UseCase[kubernetesusecases.GetResourceYAMLInput, []byte]
+	reconcileUseCase        shared.UseCase[kubernetesusecases.ReconcileInput, struct{}]
+	suspendUseCase          shared.UseCase[kubernetesusecases.SuspendUseCaseInput, struct{}]
+	resumeUseCase           shared.UseCase[kubernetesusecases.ResumeUseCaseInput, struct{}]
+	getEventsUseCase        shared.UseCase[kubernetesusecases.GetEventsInput, []kube.Event]
+	getTrivyFindingsUseCase shared.UseCase[kubernetesusecases.GetTrivyFindingsInput, kubernetesusecases.TrivyFindings]
 }
 
 func NewResourceController(
@@ -26,13 +27,15 @@ func NewResourceController(
 	suspendUseCase shared.UseCase[kubernetesusecases.SuspendUseCaseInput, struct{}],
 	resumeUseCase shared.UseCase[kubernetesusecases.ResumeUseCaseInput, struct{}],
 	getEventsUseCase shared.UseCase[kubernetesusecases.GetEventsInput, []kube.Event],
+	getTrivyFindingsUseCase shared.UseCase[kubernetesusecases.GetTrivyFindingsInput, kubernetesusecases.TrivyFindings],
 ) *ResourceController {
 	controller := ResourceController{
-		getResourceYAMLUseCase: getResourceYAMLUseCase,
-		reconcileUseCase:       reconcileUseCase,
-		suspendUseCase:         suspendUseCase,
-		resumeUseCase:          resumeUseCase,
-		getEventsUseCase:       getEventsUseCase,
+		getResourceYAMLUseCase:  getResourceYAMLUseCase,
+		reconcileUseCase:        reconcileUseCase,
+		suspendUseCase:          suspendUseCase,
+		resumeUseCase:           resumeUseCase,
+		getEventsUseCase:        getEventsUseCase,
+		getTrivyFindingsUseCase: getTrivyFindingsUseCase,
 	}
 
 	return &controller
@@ -44,6 +47,7 @@ func (rc *ResourceController) RegisterRoutes(r chi.Router) {
 	r.Patch("/api/resource/{id}/suspend", rc.PatchSuspend)
 	r.Patch("/api/resource/{id}/resume", rc.PatchResume)
 	r.Get("/api/events", rc.GetEvents)
+	r.Get("/api/trivy/findings/{id}", rc.GetTrivyFindings)
 }
 
 // DescribeResource godoc
@@ -172,6 +176,42 @@ func (rc *ResourceController) PatchResume(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status": "success"}`))
+}
+
+// GetTrivyFindings godoc
+// @Summary Get the parsed findings of a Trivy report
+// @Tags trivy
+// @Produce json
+// @Param id path string true "Report UID"
+// @Success 200 {object} kubernetesusecases.TrivyFindings
+// @Failure 400 {string} string "UID is required"
+// @Failure 404 {string} string "Report not found"
+// @Failure 500 {string} string "Internal server error"
+// @Router /api/trivy/findings/{id} [get]
+func (rc *ResourceController) GetTrivyFindings(w http.ResponseWriter, r *http.Request) {
+	reportUid := chi.URLParam(r, "id")
+	if reportUid == "" {
+		http.Error(w, "Report UID is required", http.StatusBadRequest)
+		return
+	}
+
+	findings, err := rc.getTrivyFindingsUseCase.Execute(kubernetesusecases.GetTrivyFindingsInput{ResourceUid: reportUid})
+	if err != nil {
+		if errors.Is(err, kube.ErrNotFound) {
+			http.Error(w, "Report not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, fmt.Sprintf("Error getting Trivy findings: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	jsonFindings, err := json.Marshal(findings)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Could not marshal findings: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(jsonFindings)
 }
 
 // GetEvents godoc

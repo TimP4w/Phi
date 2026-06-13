@@ -39,6 +39,22 @@ export type TreeNodeDto = {
   certificateMetadata?: CertificateMetadataDto;
   networkPolicyMetadata?: NetworkPolicyMetadataDto;
   proxyMetadata?: ProxyMetadataDto;
+  trivyMetadata?: TrivyMetadataDto;
+};
+
+// TrivyMetadataDto is the per-report summary streamed on Trivy Operator report
+// resources. The full findings arrays are fetched on demand via the Trivy
+// findings endpoint, not carried here.
+export type TrivyMetadataDto = {
+  reportType?: "vulnerability" | "configAudit" | "exposedSecret" | "rbacAssessment";
+  critical?: number;
+  high?: number;
+  medium?: number;
+  low?: number;
+  unknown?: number;
+  targetKind?: string;
+  targetName?: string;
+  targetNamespace?: string;
 };
 
 export type ServiceMetadataDto = {

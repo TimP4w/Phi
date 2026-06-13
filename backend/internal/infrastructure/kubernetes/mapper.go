@@ -133,6 +133,10 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		// Proxy workloads (e.g. Traefik) are often DaemonSets; the provider
 		// no-ops for non-proxy workloads.
 		traefikProxyData(&el, obj)
+	case "VulnerabilityReport", "ConfigAuditReport", "ExposedSecretReport", "RbacAssessmentReport":
+		if el.Group == trivyGroup {
+			mapTrivyReport(&el, obj, trivyReportTypes[el.Kind])
+		}
 	default:
 	}
 

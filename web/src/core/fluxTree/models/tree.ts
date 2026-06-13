@@ -9,6 +9,7 @@ import {
   CertificateMetadataDto,
   NetworkPolicyMetadataDto,
   ProxyMetadataDto,
+  TrivyMetadataDto,
 } from "./dtos/treeDto";
 import { FLUX_NAMESPACE, RESOURCE_TYPE } from "../constants/resources.const";
 
@@ -84,6 +85,9 @@ export class KubeResource {
   certificateMetadata?: CertificateMetadataDto;
   networkPolicyMetadata?: NetworkPolicyMetadataDto;
   proxyMetadata?: ProxyMetadataDto;
+  // Present only on Trivy Operator report resources; consumed as a findings
+  // overlay rather than rendered as a tree node.
+  trivyMetadata?: TrivyMetadataDto;
 
   constructor();
   constructor(dto: TreeNodeDto);
@@ -121,6 +125,7 @@ export class KubeResource {
       this.certificateMetadata = dto.certificateMetadata;
       this.networkPolicyMetadata = dto.networkPolicyMetadata;
       this.proxyMetadata = dto.proxyMetadata;
+      this.trivyMetadata = dto.trivyMetadata;
     } else {
       this.uid = "";
       this.name = "";

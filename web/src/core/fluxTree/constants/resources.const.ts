@@ -45,8 +45,22 @@ export enum RESOURCE_TYPE {
 
   CLUSTER_ROLE = "ClusterRole",
   CLUSTER_ROLE_BINDING = "ClusterRoleBinding",
-  CRD = "CustomResourceDefinition"
+  CRD = "CustomResourceDefinition",
+
+  VULNERABILITY_REPORT = "VulnerabilityReport",
+  CONFIG_AUDIT_REPORT = "ConfigAuditReport",
+  EXPOSED_SECRET_REPORT = "ExposedSecretReport",
+  RBAC_ASSESSMENT_REPORT = "RbacAssessmentReport"
 }
+
+// Trivy Operator report kinds. They are consumed as a findings overlay and are
+// excluded from the resource graph (see buildTree).
+export const TRIVY_REPORT_KINDS = new Set<string>([
+  RESOURCE_TYPE.VULNERABILITY_REPORT,
+  RESOURCE_TYPE.CONFIG_AUDIT_REPORT,
+  RESOURCE_TYPE.EXPOSED_SECRET_REPORT,
+  RESOURCE_TYPE.RBAC_ASSESSMENT_REPORT,
+]);
 
 // Resource kinds that carry RouteMetadata and act as HTTP routing entry points
 // in the network topology (Ingress, Traefik IngressRoute, Gateway API HTTPRoute).

@@ -12,6 +12,7 @@
   "dependencies": {
     "@heroui/react": "~2.7.5",
     "@icons-pack/react-simple-icons": "13.8.0",
+    "@tanstack/react-virtual": "^3.14.2",
     "@xyflow/react": "^12.11.0",
     "ansi-to-html": "^0.7.2",
     "date-fns": "^3.6.0",

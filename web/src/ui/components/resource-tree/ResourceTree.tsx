@@ -6,9 +6,24 @@ import AppLogo from "../resource-icon/ResourceIcon";
 import { useNavigate } from "react-router-dom";
 import { ROUTES } from "../../routes/routes.enum";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
-import { ChevronRight, ExternalLink } from "lucide-react";
+import { ChevronRight, ExternalLink, ShieldAlert } from "lucide-react";
 import StatusChip from "../status-chip/StatusChip";
 import { ResourceFilter, subtreeHasMatch } from "../../shared/resourceFilter";
+import { useInjection } from "inversify-react";
+import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
+import {
+  totalCves,
+  totalOther,
+  summaryWorstSeverity,
+  severityColor,
+} from "../../../core/trivy/trivy";
+
+const severityTextClass: Record<string, string> = {
+  danger: "text-danger",
+  warning: "text-warning",
+  success: "text-success",
+  default: "text-default-400",
+};
 
 const dotClass = (status: ResourceStatus): string => {
   switch (status) {
@@ -42,6 +57,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
         resource.kind === RESOURCE_TYPE.HELM_RELEASE);
     const [isExpanded, setIsExpanded] = useState(!isCollapsedByDefault);
     const navigate = useNavigate();
+    const fluxTreeStore = useInjection(FluxTreeStore);
 
     if (!resource) {
       return (
@@ -73,6 +89,11 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
         : undefined;
 
     const dimmed = hasActiveFilter && !nodeMatchesFilter(resource, filter!);
+
+    // Trivy findings scoped to this exact node (the workload the report targets).
+    const findings = fluxTreeStore.trivyIndex.get(resource.uid);
+    const worst = findings ? summaryWorstSeverity(findings) : null;
+    const findingsColor = severityColor(worst);
 
     return (
       <div>
@@ -131,6 +152,26 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
               </p>
             )}
           </div>
+
+          {/* Trivy findings */}
+          {findings && (
+            <Tooltip
+              content={
+                `${totalCves(findings)} CVEs` +
+                (totalOther(findings) > 0
+                  ? `, ${totalOther(findings)} other findings`
+                  : "")
+              }
+              className="dark"
+            >
+              <span
+                className={`flex items-center gap-0.5 flex-shrink-0 text-xs ${severityTextClass[findingsColor]}`}
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                {totalCves(findings) > 0 && totalCves(findings)}
+              </span>
+            </Tooltip>
+          )}
 
           {/* Status */}
           <div className="flex-shrink-0">

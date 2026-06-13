@@ -22,6 +22,8 @@ import { WatchMetricsUseCase } from "../../../core/metrics/usecases/watchMetrics
 import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatchMetrics.usecase";
 import NodeUsageWidget from "../../components/widgets/NodeUsageWidget";
 import LonghornVolumesWidget from "../../components/widgets/LonghornVolumesWidget";
+import TrivyFindingsWidget from "../../components/widgets/TrivyFindingsWidget";
+import { clusterSummary } from "../../../core/trivy/trivy";
 import EventsPanel, { EventFilter } from "../../components/events/EventsPanel";
 
 const kindsFilter = [
@@ -285,6 +287,9 @@ const AppsView: React.FC = observer(() => {
               <ResourceCountWidget resource={fluxTreeStore.root} />
               <NodeUsageWidget />
               <LonghornVolumesWidget />
+              <TrivyFindingsWidget
+                summary={clusterSummary(fluxTreeStore.resources.values())}
+              />
             </div>
 
             {/* Section header */}

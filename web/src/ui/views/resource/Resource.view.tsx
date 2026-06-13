@@ -41,6 +41,8 @@ import ResourceStatusWidget from "../../components/widgets/ResourceStatusWidget"
 import ResourceCountWidget from "../../components/widgets/ResourcesCountWidget";
 import ResourceUsageWidget from "../../components/widgets/ResourceUsageWidget";
 import KustomizationDependsOnWidget from "../../components/widgets/KustomizationDependsOnWidget";
+import TrivyFindingsWidget from "../../components/widgets/TrivyFindingsWidget";
+import { subtreeSummary, emptyTrivySummary } from "../../../core/trivy/trivy";
 import EventsPanel, { EventFilter } from "../../components/events/EventsPanel";
 import { EventsStore } from "../../../core/fluxTree/stores/events.store";
 import { TYPES } from "../../../core/shared/types";
@@ -605,6 +607,13 @@ const ResourceView: React.FC = observer(() => {
               {/* Scrollable widgets */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {resource && <ResourceUsageWidget uid={resource.uid} />}
+                <TrivyFindingsWidget
+                  summary={
+                    resource
+                      ? subtreeSummary(resource, fluxTreeStore.trivyIndex)
+                      : emptyTrivySummary()
+                  }
+                />
                 {showKustomizationSourceWidget && (
                   <KustomizationSourceWidget resource={resource as Kustomization} />
                 )}

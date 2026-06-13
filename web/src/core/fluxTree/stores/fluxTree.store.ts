@@ -15,7 +15,11 @@ import {
   KubeResource,
   Kustomization,
 } from "../models/tree";
-import { RESOURCE_TYPE, FLUX_NAMESPACE } from "../constants/resources.const";
+import { RESOURCE_TYPE, FLUX_NAMESPACE, TRIVY_REPORT_KINDS } from "../constants/resources.const";
+import {
+  indexFindingsByTarget,
+  TrivySummary,
+} from "../../trivy/trivy";
 import { TreeNodeDto } from "../models/dtos/treeDto";
 
 const APPLICATION_KINDS = new Set([
@@ -39,6 +43,9 @@ function buildTree(resources: Map<string, KubeResource>): Tree {
   const childrenOf = new Map<string, KubeResource[]>();
 
   resources.forEach((resource) => {
+    // Trivy report CRDs are a findings overlay, not graph nodes — keep them in
+    // the resource map (for the findings index) but never attach them as children.
+    if (TRIVY_REPORT_KINDS.has(resource.kind)) return;
     const parentId = resource.parentIDs[0];
     // Skip self-references and back-edges that would create cycles
     if (parentId && parentId !== resource.uid && resources.has(parentId)) {
@@ -83,6 +90,7 @@ class FluxTreeStore {
       applications: computed,
       repositories: computed,
       resourceCount: computed,
+      trivyIndex: computed,
       upsertResource: action,
       removeResource: action,
       syncResources: action,
@@ -101,6 +109,12 @@ class FluxTreeStore {
 
   get resourceCount(): number {
     return this.resources.size;
+  }
+
+  // Trivy findings indexed by the UID of the workload each report targets.
+  // Computed once per resource change and shared by every findings widget.
+  get trivyIndex(): Map<string, TrivySummary> {
+    return indexFindingsByTarget(this.resources.values());
   }
 
   // --- flat map mutators ---

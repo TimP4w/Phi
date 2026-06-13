@@ -9,6 +9,8 @@ import { TreeService } from '../fluxTree/services/tree.service';
 import { TreeServiceImpl } from '../fluxTree/services/impl/tree.service.impl';
 import { ResourceService } from '../resource/services/resource.service';
 import { ResourceServiceImpl } from "../resource/services/impl/resource.service.impl";
+import { TrivyService } from "../trivy/services/trivy.service";
+import { TrivyServiceImpl } from "../trivy/services/impl/trivy.service.impl";
 import { EventsStore } from "../fluxTree/stores/events.store";
 import { ReconcileUseCase } from "../resource/usecases/reconcile.usecase";
 import { SuspendUseCase } from "../resource/usecases/suspend.usecase";
@@ -33,6 +35,7 @@ container.bind(MetricsStore).toSelf().inSingletonScope();
 /* Core */
 container.bind<TreeService>(TYPES.TreeService).to(TreeServiceImpl).inSingletonScope();
 container.bind<ResourceService>(TYPES.ResourceService).to(ResourceServiceImpl).inSingletonScope();
+container.bind<TrivyService>(TYPES.TrivyService).to(TrivyServiceImpl).inSingletonScope();
 
 /* Infra */
 container.bind<WebSocketService>(TYPES.WebSocket).to(WebSocketServiceImpl).inSingletonScope();
