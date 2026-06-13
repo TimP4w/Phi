@@ -3,6 +3,8 @@ package kubernetesusecases
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
+	"time"
 
 	"github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/timp4w/phi/internal/core/logging"
@@ -24,10 +26,34 @@ type TrivyFindings struct {
 	Items      []map[string]any         `json:"items"`
 }
 
+const (
+	// trivyFindingsTTL bounds how long a parsed report is reused. Trivy rescans
+	// are infrequent, and a changed report also invalidates the entry via its
+	// summary signature, so this is only a backstop for content that changed
+	// without the counts changing.
+	trivyFindingsTTL = 10 * time.Minute
+	// maxConcurrentTrivyFetches caps how many reports are fetched from the API
+	// server at once. A cluster can hold hundreds of reports; opening a
+	// cluster-wide modal must not fan out an unbounded number of live GETs and
+	// overwhelm the backend (and the API server) — the rest queue behind these.
+	maxConcurrentTrivyFetches = 4
+)
+
+type cachedTrivyFindings struct {
+	meta     kubernetes.TrivyMetadata
+	findings TrivyFindings
+	at       time.Time
+}
+
 type GetTrivyFindingsUseCase struct {
 	kubeService kubernetes.KubeService
 	kubeStore   kubernetes.KubeStore
 	logger      logging.PhiLogger
+
+	sem chan struct{}
+
+	mu    sync.Mutex
+	cache map[string]cachedTrivyFindings
 }
 
 func NewGetTrivyFindingsUseCase(KubeService kubernetes.KubeService, KubeStore kubernetes.KubeStore) shared.UseCase[GetTrivyFindingsInput, TrivyFindings] {
@@ -35,6 +61,8 @@ func NewGetTrivyFindingsUseCase(KubeService kubernetes.KubeService, KubeStore ku
 		kubeService: KubeService,
 		kubeStore:   KubeStore,
 		logger:      *logging.Logger(),
+		sem:         make(chan struct{}, maxConcurrentTrivyFetches),
+		cache:       make(map[string]cachedTrivyFindings),
 	}
 }
 
@@ -58,7 +86,54 @@ func (uc *GetTrivyFindingsUseCase) Execute(in GetTrivyFindingsInput) (TrivyFindi
 		return TrivyFindings{}, fmt.Errorf("resource is not a Trivy report: %w", kubernetes.ErrNotFound)
 	}
 
-	yamlData, err := uc.kubeService.GetResourceYAML(*resource)
+	// Serve from cache when the report is unchanged (same summary signature) and
+	// the entry is still fresh. This makes reopening a modal essentially free and
+	// keeps repeated opens off the API server entirely.
+	if cached, ok := uc.cachedFindings(in.ResourceUid, resource.TrivyMetadata); ok {
+		return cached, nil
+	}
+
+	// Bound concurrent live fetches so a burst of opens cannot flood the backend.
+	uc.sem <- struct{}{}
+	defer func() { <-uc.sem }()
+
+	// Another request may have populated the cache while we waited on the
+	// semaphore — re-check before doing the work.
+	if cached, ok := uc.cachedFindings(in.ResourceUid, resource.TrivyMetadata); ok {
+		return cached, nil
+	}
+
+	findings, err := uc.fetchFindings(*resource, logger)
+	if err != nil {
+		return TrivyFindings{}, err
+	}
+
+	uc.mu.Lock()
+	uc.cache[in.ResourceUid] = cachedTrivyFindings{
+		meta:     resource.TrivyMetadata,
+		findings: findings,
+		at:       time.Now(),
+	}
+	uc.mu.Unlock()
+
+	return findings, nil
+}
+
+// cachedFindings returns a cached payload when one exists for the report, its
+// summary still matches (so the report has not been rescanned) and it has not
+// expired.
+func (uc *GetTrivyFindingsUseCase) cachedFindings(uid string, meta kubernetes.TrivyMetadata) (TrivyFindings, bool) {
+	uc.mu.Lock()
+	defer uc.mu.Unlock()
+	entry, ok := uc.cache[uid]
+	if !ok || entry.meta != meta || time.Since(entry.at) > trivyFindingsTTL {
+		return TrivyFindings{}, false
+	}
+	return entry.findings, true
+}
+
+func (uc *GetTrivyFindingsUseCase) fetchFindings(resource kubernetes.Resource, logger *logging.PhiLogger) (TrivyFindings, error) {
+	yamlData, err := uc.kubeService.GetResourceYAML(resource)
 	if err != nil {
 		return TrivyFindings{}, err
 	}

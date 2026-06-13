@@ -46,6 +46,45 @@ func TestGetTrivyFindingsUseCase_ParsesVulnerabilities(t *testing.T) {
 	assert.Equal(t, "CVE-2024-0001", out.Items[0]["vulnerabilityID"])
 }
 
+func TestGetTrivyFindingsUseCase_CachesUnchangedReport(t *testing.T) {
+	store := mocks.NewKubeStore(t)
+	kubeSvc := mocks.NewKubeService(t)
+
+	res := &kube.Resource{UID: "report-uid", TrivyMetadata: kube.TrivyMetadata{ReportType: "vulnerability", Critical: 1}}
+	store.On("GetResourceByUID", "report-uid").Return(res)
+	// Once: a second fetch would fail the test — the cache must serve the repeat.
+	kubeSvc.On("GetResourceYAML", *res).Return([]byte(vulnReportYAML), nil).Once()
+
+	uc := NewGetTrivyFindingsUseCase(kubeSvc, store)
+	first, err := uc.Execute(GetTrivyFindingsInput{ResourceUid: "report-uid"})
+	require.NoError(t, err)
+	second, err := uc.Execute(GetTrivyFindingsInput{ResourceUid: "report-uid"})
+	require.NoError(t, err)
+	assert.Equal(t, first, second)
+	kubeSvc.AssertNumberOfCalls(t, "GetResourceYAML", 1)
+}
+
+func TestGetTrivyFindingsUseCase_RefetchesWhenReportChanges(t *testing.T) {
+	store := mocks.NewKubeStore(t)
+	kubeSvc := mocks.NewKubeService(t)
+
+	// The summary signature changes between calls (a rescan), so the cache entry
+	// is invalidated and the report is fetched again.
+	v1 := &kube.Resource{UID: "report-uid", TrivyMetadata: kube.TrivyMetadata{ReportType: "vulnerability", Critical: 1}}
+	v2 := &kube.Resource{UID: "report-uid", TrivyMetadata: kube.TrivyMetadata{ReportType: "vulnerability", Critical: 2}}
+	store.On("GetResourceByUID", "report-uid").Return(v1).Once()
+	store.On("GetResourceByUID", "report-uid").Return(v2).Once()
+	kubeSvc.On("GetResourceYAML", *v1).Return([]byte(vulnReportYAML), nil).Once()
+	kubeSvc.On("GetResourceYAML", *v2).Return([]byte(vulnReportYAML), nil).Once()
+
+	uc := NewGetTrivyFindingsUseCase(kubeSvc, store)
+	_, err := uc.Execute(GetTrivyFindingsInput{ResourceUid: "report-uid"})
+	require.NoError(t, err)
+	_, err = uc.Execute(GetTrivyFindingsInput{ResourceUid: "report-uid"})
+	require.NoError(t, err)
+	kubeSvc.AssertNumberOfCalls(t, "GetResourceYAML", 2)
+}
+
 func TestGetTrivyFindingsUseCase_NotFound(t *testing.T) {
 	store := mocks.NewKubeStore(t)
 	kubeSvc := mocks.NewKubeService(t)

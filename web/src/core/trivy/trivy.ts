@@ -86,19 +86,18 @@ export function summaryWorstSeverity(s: TrivySummary): TrivySeverity | null {
   });
 }
 
-// Severity → HeroUI semantic color. Per the agreed scale: critical/high are red,
-// medium is yellow, low is green; unknown/none falls back to default.
+// Severity → HeroUI semantic color. critical/high are red, medium is yellow;
+// low and unknown stay grey (default) — a shield only "lights up" once there is
+// at least a medium finding.
 export function severityColor(
   sev: TrivySeverity | null,
-): "danger" | "warning" | "success" | "default" {
+): "danger" | "warning" | "default" {
   switch (sev) {
     case "critical":
     case "high":
       return "danger";
     case "medium":
       return "warning";
-    case "low":
-      return "success";
     default:
       return "default";
   }

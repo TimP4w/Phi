@@ -61,21 +61,16 @@ function str(item: Record<string, unknown>, key: string): string {
   return typeof v === "string" ? v : "";
 }
 
-// Advisory link for a finding. Prefer the link Trivy curates for the specific
-// vulnerability (valid even when Aqua's AVD has no page yet, e.g. brand-new
-// CVEs); only build a canonical URL from the id as a fallback.
+// Advisory link for a finding. For a recognised id we build the Aqua AVD page
+// directly (the format the user wants); only fall back to the link Trivy
+// embeds for ids we don't recognise.
 function findingLink(
   item: Record<string, unknown>,
   id: string,
 ): string | undefined {
-  const primary = str(item, "primaryLink");
-  if (primary) return primary;
-  const links = item["links"];
-  if (Array.isArray(links) && typeof links[0] === "string") return links[0];
-
   const cve = /^CVE-(\d{4})-/i.exec(id);
   if (cve) {
-    // e.g. CVE-2014-6277 -> https://avd.aquasec.com/nvd/2014/cve-2014-6277/
+    // e.g. CVE-2005-2347 -> https://avd.aquasec.com/nvd/2005/cve-2005-2347/
     return `https://avd.aquasec.com/nvd/${cve[1]}/${id.toLowerCase()}/`;
   }
   if (/^GHSA-/i.test(id)) {
@@ -84,6 +79,10 @@ function findingLink(
   if (/^(KSV|KCV|AVD)/i.test(id)) {
     return `https://avd.aquasec.com/misconfig/${id.toLowerCase()}`;
   }
+  const primary = str(item, "primaryLink");
+  if (primary) return primary;
+  const links = item["links"];
+  if (Array.isArray(links) && typeof links[0] === "string") return links[0];
   return undefined;
 }
 
@@ -175,27 +174,42 @@ const TrivyFindingsModal: React.FC<Props> = observer(
       const uids = uidsKey.split(",");
       let cancelled = false;
       setLoading(true);
-      Promise.all(
-        uids.map((uid) => trivyService.getFindings(uid).catch(() => null)),
-      ).then((results) => {
-        if (cancelled) return;
+
+      // Fetch reports through a small worker pool. Each request makes the backend
+      // do a live apiserver lookup, so firing all of them at once (a cluster can
+      // have hundreds of reports) floods and crashes the backend. The pool also
+      // stops early once the modal closes.
+      (async () => {
         const collected: Row[] = [];
         let seq = 0;
-        for (const findings of results) {
-          if (!findings) continue;
-          const t = findings.target;
-          const targetUid = targetUidLookup.get(
-            `${t.targetKind ?? ""}/${t.targetNamespace ?? ""}/${t.targetName ?? ""}`,
-          );
-          findings.items.forEach((item, i) => {
-            const row = toRow(findings, item, i, targetUid);
-            // Globally unique key across all reports — the per-report index is
-            // not unique, and duplicate keys make React/the virtualizer reuse
-            // DOM nodes and render stale rows on top after filtering.
-            row.key = `r${seq++}`;
-            collected.push(row);
-          });
-        }
+        let next = 0;
+
+        const worker = async () => {
+          while (!cancelled && next < uids.length) {
+            const uid = uids[next++];
+            const findings = await trivyService.getFindings(uid).catch(() => null);
+            if (!findings) continue;
+            const t = findings.target;
+            const targetUid = targetUidLookup.get(
+              `${t.targetKind ?? ""}/${t.targetNamespace ?? ""}/${t.targetName ?? ""}`,
+            );
+            findings.items.forEach((item, i) => {
+              const row = toRow(findings, item, i, targetUid);
+              // Globally unique key across all reports — the per-report index is
+              // not unique, and duplicate keys make React/the virtualizer reuse
+              // DOM nodes and render stale rows on top after filtering.
+              row.key = `r${seq++}`;
+              collected.push(row);
+            });
+          }
+        };
+
+        const POOL_SIZE = 5;
+        await Promise.all(
+          Array.from({ length: Math.min(POOL_SIZE, uids.length) }, worker),
+        );
+        if (cancelled) return;
+
         collected.sort(
           (a, b) =>
             (SEVERITY_ORDER[a.severity?.toUpperCase()] ?? 9) -
@@ -203,7 +217,8 @@ const TrivyFindingsModal: React.FC<Props> = observer(
         );
         setRows(collected);
         setLoading(false);
-      });
+      })();
+
       return () => {
         cancelled = true;
       };

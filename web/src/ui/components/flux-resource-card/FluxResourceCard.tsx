@@ -29,33 +29,54 @@ import {
   SeverityCounts,
   subtreeSummary,
   hasFindings,
-  criticalHigh,
-  lowerSeverities,
-  worstSeverity,
-  severityColor,
 } from "../../../core/trivy/trivy";
 
-const SEVERITY_TEXT: Record<string, string> = {
+const SEVERITY_TEXT = {
   danger: "text-danger",
   warning: "text-warning",
   success: "text-success",
   default: "text-default-400",
 };
 
-// Compact shield: big = critical + high, small = the lower severities; colored
-// by the worst severity present.
+// Compact shield, tiered by the worst severity present:
+//   critical/high → red, big = critical+high, +rest = everything lower
+//   medium only   → yellow, big = medium, +rest = low
+//   low only      → grey, big = low, no +rest
+//   nothing       → green, no number (clean)
 const ShieldStat: React.FC<{
   icon: typeof ShieldAlert;
   counts: SeverityCounts;
   tooltip: string;
 }> = ({ icon: Icon, counts, tooltip }) => {
-  const colorClass = SEVERITY_TEXT[severityColor(worstSeverity(counts))];
-  const rest = lowerSeverities(counts);
+  const { critical, high, medium, low, unknown } = counts;
+  const lowish = low + unknown;
+
+  let colorClass: string;
+  let big: number | null;
+  let rest: number;
+  if (critical + high > 0) {
+    colorClass = SEVERITY_TEXT.danger;
+    big = critical + high;
+    rest = medium + lowish;
+  } else if (medium > 0) {
+    colorClass = SEVERITY_TEXT.warning;
+    big = medium;
+    rest = lowish;
+  } else if (lowish > 0) {
+    colorClass = SEVERITY_TEXT.default;
+    big = lowish;
+    rest = 0;
+  } else {
+    colorClass = SEVERITY_TEXT.success;
+    big = null; // clean — just a green shield
+    rest = 0;
+  }
+
   return (
     <Tooltip content={tooltip} className="dark">
       <span className={`flex items-center gap-1 ${colorClass}`}>
         <Icon className="w-3.5 h-3.5" />
-        <span className="font-medium">{criticalHigh(counts)}</span>
+        {big !== null && <span className="font-medium">{big}</span>}
         {rest > 0 && (
           <span className="text-[10px] text-default-400">+{rest}</span>
         )}
@@ -133,20 +154,6 @@ const App: React.FC<AppProps> = observer(({ node }) => {
 
   const findings = subtreeSummary(node, fluxTreeStore.trivyIndex);
   const showFindings = hasFindings(findings);
-  const hasCveFindings =
-    findings.cve.critical +
-      findings.cve.high +
-      findings.cve.medium +
-      findings.cve.low +
-      findings.cve.unknown >
-    0;
-  const hasOtherFindings =
-    findings.other.critical +
-      findings.other.high +
-      findings.other.medium +
-      findings.other.low +
-      findings.other.unknown >
-    0;
 
   return (
     <div
@@ -262,20 +269,16 @@ const App: React.FC<AppProps> = observer(({ node }) => {
           <div className="flex justify-between items-center gap-2">
             <span className="text-default-400">Security</span>
             <span className="flex items-center gap-3">
-              {hasCveFindings && (
-                <ShieldStat
-                  icon={ShieldAlert}
-                  counts={findings.cve}
-                  tooltip="Vulnerabilities — critical + high (+ lower)"
-                />
-              )}
-              {hasOtherFindings && (
-                <ShieldStat
-                  icon={Shield}
-                  counts={findings.other}
-                  tooltip="Other findings — critical + high (+ lower)"
-                />
-              )}
+              <ShieldStat
+                icon={ShieldAlert}
+                counts={findings.cve}
+                tooltip="Vulnerabilities"
+              />
+              <ShieldStat
+                icon={Shield}
+                counts={findings.other}
+                tooltip="Misconfigurations"
+              />
             </span>
           </div>
         )}

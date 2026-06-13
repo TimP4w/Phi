@@ -23,7 +23,7 @@ const severityStats = (
   { label: "Critical", value: c.critical, color: "text-danger" },
   { label: "High", value: c.high, color: "text-danger-400" },
   { label: "Medium", value: c.medium, color: "text-warning" },
-  { label: "Low", value: c.low, color: "text-success" },
+  { label: "Low", value: c.low, color: "text-default-400" },
 ];
 
 /**
@@ -76,7 +76,7 @@ const TrivyFindingsWidget: React.FC<Props> = observer(
             section("Vulnerabilities", summary.cve, cveModal.onOpen, true)}
 
           {otherCount > 0 &&
-            section("Other findings", summary.other, otherModal.onOpen, false)}
+            section("Misconfigurations", summary.other, otherModal.onOpen, false)}
 
           {/* Attribution — make the data source explicit, muted & bottom-right. */}
           <div className="flex items-center justify-end gap-1 mt-auto text-[11px] text-default-400">
@@ -94,7 +94,7 @@ const TrivyFindingsWidget: React.FC<Props> = observer(
         <TrivyFindingsModal
           isOpen={otherModal.isOpen}
           onOpenChange={otherModal.onOpenChange}
-          title="Other findings"
+          title="Misconfigurations"
           reportUids={summary.otherReportUids}
         />
       </WidgetCard>
