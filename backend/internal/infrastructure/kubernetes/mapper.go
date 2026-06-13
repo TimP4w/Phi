@@ -14,6 +14,7 @@ import (
 	sourcev1beta2 "github.com/fluxcd/source-controller/api/v1beta2"
 	appsV1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -93,6 +94,7 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		mapPodData(&el, obj)
 	case "Deployment":
 		mapDeploymentData(&el, obj)
+		traefikProxyData(&el, obj)
 	case "PersistentVolumeClaim":
 		mapPVCData(&el, obj)
 	case "PersistentVolume":
@@ -105,10 +107,36 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		if el.Group == "longhorn.io" {
 			mapLonghornNode(&el, obj)
 		}
+	case "Service":
+		mapServiceData(&el, obj)
 	case "Ingress":
 		mapIngressData(&el, obj)
+	case "EndpointSlice":
+		mapEndpointSliceData(&el, obj)
+	case "NetworkPolicy":
+		mapNetworkPolicyData(&el, obj)
+	case "Certificate":
+		if el.Group == "cert-manager.io" {
+			mapCertificateData(&el, obj)
+		}
+	case "Gateway":
+		if el.Group == "gateway.networking.k8s.io" {
+			mapGatewayData(&el, obj)
+		}
+	case "HTTPRoute", "TCPRoute", "GRPCRoute", "TLSRoute", "UDPRoute":
+		if el.Group == "gateway.networking.k8s.io" {
+			mapGatewayRouteData(&el, obj)
+		}
+	case "IngressRoute":
+		if strings.HasPrefix(el.Group, "traefik.") {
+			mapTraefikIngressRouteData(&el, obj)
+		}
 	case "StatefulSet":
 		mapStatefulSetData(&el, obj)
+	case "DaemonSet":
+		// Proxy workloads (Traefik, …) are often DaemonSets; the provider parses
+		// their entrypoint config and no-ops for non-proxy workloads.
+		traefikProxyData(&el, obj)
 	default:
 	}
 
@@ -736,6 +764,60 @@ func mapHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 }
 
+func mapServiceData(el *kube.Resource, obj unstructured.Unstructured) {
+	svc := &v1.Service{}
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), svc)
+	if err != nil {
+		logging.Logger().WithError(err).Error("Error converting unstructured to Service")
+		return
+	}
+
+	meta := kube.ServiceMetadata{
+		Type:       string(svc.Spec.Type),
+		ClusterIPs: append([]string(nil), svc.Spec.ClusterIPs...),
+		Selector:   svc.Spec.Selector,
+	}
+
+	for _, port := range svc.Spec.Ports {
+		meta.Ports = append(meta.Ports, kube.ServicePort{
+			Name:       port.Name,
+			Protocol:   string(port.Protocol),
+			Port:       port.Port,
+			TargetPort: port.TargetPort.String(),
+			NodePort:   port.NodePort,
+		})
+	}
+
+	// ExternalIPs reflect the address an LB controller (e.g. MetalLB) assigned,
+	// plus any statically configured spec.externalIPs.
+	seenIP := map[string]bool{}
+	addIP := func(ip string) {
+		if ip == "" || seenIP[ip] {
+			return
+		}
+		seenIP[ip] = true
+		meta.ExternalIPs = append(meta.ExternalIPs, ip)
+	}
+	for _, ing := range svc.Status.LoadBalancer.Ingress {
+		if ing.IP != "" {
+			addIP(ing.IP)
+		} else {
+			addIP(ing.Hostname)
+		}
+	}
+	for _, ip := range svc.Spec.ExternalIPs {
+		addIP(ip)
+	}
+
+	el.ServiceMetadata = meta
+
+	if svc.Spec.Type == v1.ServiceTypeLoadBalancer && len(meta.ExternalIPs) == 0 {
+		el.Status = kube.StatusPending
+	} else {
+		el.Status = kube.StatusSuccess
+	}
+}
+
 func mapIngressData(el *kube.Resource, obj unstructured.Unstructured) {
 	ing := &networkingv1.Ingress{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), ing)
@@ -755,6 +837,308 @@ func mapIngressData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	el.Status = mapIngressStatus(ing)
+
+	route := kube.RouteMetadata{}
+	if ing.Spec.IngressClassName != nil {
+		route.Class = *ing.Spec.IngressClassName
+	}
+
+	for _, lb := range ing.Status.LoadBalancer.Ingress {
+		if lb.IP != "" {
+			route.Addresses = append(route.Addresses, lb.IP)
+		} else if lb.Hostname != "" {
+			route.Addresses = append(route.Addresses, lb.Hostname)
+		}
+	}
+
+	// A tls block means the route terminates TLS even when it names no secret
+	// (the proxy then supplies a default/wildcard certificate).
+	if len(ing.Spec.TLS) > 0 {
+		route.TLSEnabled = true
+	}
+	for _, tls := range ing.Spec.TLS {
+		if tls.SecretName != "" {
+			route.TLSSecretRefs = append(route.TLSSecretRefs, ing.Namespace+"/"+tls.SecretName)
+		}
+	}
+
+	// Controller-specific annotations (Traefik, …) are read by their providers.
+	// These no-op when the annotations are absent, so non-Traefik Ingresses are
+	// unaffected.
+	route.EntryPoints = append(route.EntryPoints, traefikIngressEntrypoints(ing.Annotations)...)
+	route.MiddlewareRefs = append(route.MiddlewareRefs, traefikIngressMiddlewares(ing.Annotations)...)
+
+	addBackend := func(svc *networkingv1.IngressServiceBackend) {
+		if svc == nil {
+			return
+		}
+		route.BackendRefs = append(route.BackendRefs, kube.BackendRef{
+			Kind:      "Service",
+			Name:      svc.Name,
+			Namespace: ing.Namespace,
+			Port:      svc.Port.Number,
+		})
+	}
+
+	if ing.Spec.DefaultBackend != nil {
+		addBackend(ing.Spec.DefaultBackend.Service)
+	}
+	for _, rule := range ing.Spec.Rules {
+		if rule.Host != "" {
+			route.Hostnames = append(route.Hostnames, rule.Host)
+		}
+		if rule.HTTP == nil {
+			continue
+		}
+		for _, path := range rule.HTTP.Paths {
+			addBackend(path.Backend.Service)
+		}
+	}
+
+	el.RouteMetadata = route
+}
+
+// Traefik-specific mapping lives in traefik.go (an additive provider). Other
+// ingress controllers can add their own providers without touching this file.
+
+func mapNetworkPolicyData(el *kube.Resource, obj unstructured.Unstructured) {
+	np := &networkingv1.NetworkPolicy{}
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), np)
+	if err != nil {
+		logging.Logger().WithError(err).Error("Error converting unstructured to NetworkPolicy")
+		return
+	}
+
+	meta := kube.NetworkPolicyMetadata{
+		IngressRules: len(np.Spec.Ingress),
+		EgressRules:  len(np.Spec.Egress),
+	}
+	if np.Spec.PodSelector.MatchLabels != nil {
+		meta.PodSelector = np.Spec.PodSelector.MatchLabels
+	}
+	for _, pt := range np.Spec.PolicyTypes {
+		meta.PolicyTypes = append(meta.PolicyTypes, string(pt))
+	}
+
+	el.NetworkPolicyMetadata = meta
+}
+
+func mapEndpointSliceData(el *kube.Resource, obj unstructured.Unstructured) {
+	es := &discoveryv1.EndpointSlice{}
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), es)
+	if err != nil {
+		logging.Logger().WithError(err).Error("Error converting unstructured to EndpointSlice")
+		return
+	}
+
+	meta := kube.EndpointSliceMetadata{
+		ServiceName: es.Labels[discoveryv1.LabelServiceName],
+	}
+
+	for _, ep := range es.Endpoints {
+		target := kube.EndpointTarget{
+			Ready: ep.Conditions.Ready != nil && *ep.Conditions.Ready,
+		}
+		if ep.TargetRef != nil {
+			target.TargetKind = ep.TargetRef.Kind
+			target.TargetName = ep.TargetRef.Name
+			target.TargetUID = string(ep.TargetRef.UID)
+		}
+		meta.Endpoints = append(meta.Endpoints, target)
+	}
+
+	el.EndpointSliceMetadata = meta
+}
+
+func nestedString(m map[string]any, key string) string {
+	s, _ := m[key].(string)
+	return s
+}
+
+func nestedInt32(m map[string]any, key string) int32 {
+	if v, ok := m[key].(int64); ok {
+		return int32(v)
+	}
+	return 0
+}
+
+func nestedMap(m map[string]any, key string) map[string]any {
+	if v, ok := m[key].(map[string]any); ok {
+		return v
+	}
+	return map[string]any{}
+}
+
+func mapCertificateData(el *kube.Resource, obj unstructured.Unstructured) {
+	meta := kube.CertificateMetadata{}
+	meta.SecretName, _, _ = unstructured.NestedString(obj.Object, "spec", "secretName")
+	meta.Issuer, _, _ = unstructured.NestedString(obj.Object, "spec", "issuerRef", "name")
+	meta.NotAfter, _, _ = unstructured.NestedString(obj.Object, "status", "notAfter")
+	if dns, found, _ := unstructured.NestedStringSlice(obj.Object, "spec", "dnsNames"); found {
+		meta.DNSNames = dns
+	}
+
+	var readyReason string
+	if conds, found, _ := unstructured.NestedSlice(obj.Object, "status", "conditions"); found {
+		for _, c := range conds {
+			cm, ok := c.(map[string]any)
+			if !ok {
+				continue
+			}
+			if nestedString(cm, "type") == "Ready" {
+				meta.Ready = nestedString(cm, "status") == "True"
+				readyReason = nestedString(cm, "reason")
+			}
+		}
+	}
+
+	el.CertificateMetadata = meta
+	switch {
+	case meta.Ready:
+		el.Status = kube.StatusSuccess
+	case readyReason == "Failed":
+		el.Status = kube.StatusFailed
+	default:
+		// Not ready and not permanently failed: still issuing.
+		el.Status = kube.StatusPending
+	}
+}
+
+func mapGatewayData(el *kube.Resource, obj unstructured.Unstructured) {
+	meta := kube.GatewayMetadata{}
+
+	if class, found, _ := unstructured.NestedString(obj.Object, "spec", "gatewayClassName"); found {
+		meta.GatewayClassName = class
+	}
+
+	if listeners, found, _ := unstructured.NestedSlice(obj.Object, "spec", "listeners"); found {
+		for _, l := range listeners {
+			lm, ok := l.(map[string]any)
+			if !ok {
+				continue
+			}
+			meta.Listeners = append(meta.Listeners, kube.GatewayListener{
+				Name:     nestedString(lm, "name"),
+				Protocol: nestedString(lm, "protocol"),
+				Hostname: nestedString(lm, "hostname"),
+				Port:     nestedInt32(lm, "port"),
+			})
+			certRefs, ok := nestedMap(lm, "tls")["certificateRefs"].([]any)
+			if !ok {
+				continue
+			}
+			for _, cr := range certRefs {
+				crm, ok := cr.(map[string]any)
+				if !ok {
+					continue
+				}
+				name := nestedString(crm, "name")
+				if name == "" {
+					continue
+				}
+				ns := el.Namespace
+				if n := nestedString(crm, "namespace"); n != "" {
+					ns = n
+				}
+				meta.TLSSecretRefs = append(meta.TLSSecretRefs, ns+"/"+name)
+			}
+		}
+	}
+
+	if addresses, found, _ := unstructured.NestedSlice(obj.Object, "status", "addresses"); found {
+		for _, a := range addresses {
+			am, ok := a.(map[string]any)
+			if !ok {
+				continue
+			}
+			if v := nestedString(am, "value"); v != "" {
+				meta.Addresses = append(meta.Addresses, v)
+			}
+		}
+	}
+
+	el.GatewayMetadata = meta
+	if len(meta.Addresses) == 0 {
+		el.Status = kube.StatusPending
+	} else {
+		el.Status = kube.StatusSuccess
+	}
+}
+
+func mapGatewayRouteData(el *kube.Resource, obj unstructured.Unstructured) {
+	route := kube.RouteMetadata{}
+
+	if hostnames, found, _ := unstructured.NestedStringSlice(obj.Object, "spec", "hostnames"); found {
+		route.Hostnames = hostnames
+	}
+
+	if parentRefs, found, _ := unstructured.NestedSlice(obj.Object, "spec", "parentRefs"); found {
+		for _, p := range parentRefs {
+			pm, ok := p.(map[string]any)
+			if !ok {
+				continue
+			}
+			name := nestedString(pm, "name")
+			if name == "" {
+				continue
+			}
+			ns := el.Namespace
+			if n := nestedString(pm, "namespace"); n != "" {
+				ns = n
+			}
+			kind := nestedString(pm, "kind")
+			if kind == "" {
+				kind = "Gateway"
+			}
+			route.ParentRefs = append(route.ParentRefs, kube.RouteParentRef{
+				Group:       nestedString(pm, "group"),
+				Kind:        kind,
+				Name:        name,
+				Namespace:   ns,
+				SectionName: nestedString(pm, "sectionName"),
+			})
+		}
+	}
+
+	if rules, found, _ := unstructured.NestedSlice(obj.Object, "spec", "rules"); found {
+		for _, r := range rules {
+			rm, ok := r.(map[string]any)
+			if !ok {
+				continue
+			}
+			backendRefs, ok := rm["backendRefs"].([]any)
+			if !ok {
+				continue
+			}
+			for _, b := range backendRefs {
+				bm, ok := b.(map[string]any)
+				if !ok {
+					continue
+				}
+				name := nestedString(bm, "name")
+				if name == "" {
+					continue
+				}
+				ns := el.Namespace
+				if n := nestedString(bm, "namespace"); n != "" {
+					ns = n
+				}
+				kind := nestedString(bm, "kind")
+				if kind == "" {
+					kind = "Service"
+				}
+				route.BackendRefs = append(route.BackendRefs, kube.BackendRef{
+					Group:     nestedString(bm, "group"),
+					Kind:      kind,
+					Name:      name,
+					Namespace: ns,
+					Port:      nestedInt32(bm, "port"),
+				})
+			}
+		}
+	}
+
+	el.RouteMetadata = route
 }
 
 func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
