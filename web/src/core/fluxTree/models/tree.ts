@@ -155,6 +155,8 @@ export class KubeResource {
         return new HelmRepository(dto);
       case RESOURCE_TYPE.PVC:
         return new PersistentVolumeClaim(dto);
+      case RESOURCE_TYPE.PV:
+        return new PersistentVolume(dto);
       case RESOURCE_TYPE.VOLUME:
         // "Volume" is a Longhorn CRD; other groups fall through to the base class.
         if (dto.group === "longhorn.io") {
@@ -346,6 +348,37 @@ export class PersistentVolumeClaim extends KubeResource {
   }
 }
 
+export class PersistentVolume extends KubeResource {
+  metadata: PersistentVolumeMetadata | null;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.metadata = dto.pvMetadata ? dto.pvMetadata : null;
+  }
+}
+
+// sumRequestedStorage totals spec.resources.requests.storage (bytes) across
+// every PersistentVolumeClaim in the subtree rooted at node — how much storage
+// the branch (e.g. a Kustomization) asks for. Always derivable from the tree,
+// independent of the Prometheus integration. pvcCount lets callers caveat a
+// measured-usage figure that covers only some of the claims.
+export function sumRequestedStorage(node: KubeResource): {
+  requested: number;
+  pvcCount: number;
+} {
+  let requested = 0;
+  let pvcCount = 0;
+  const visit = (n: KubeResource) => {
+    if (n instanceof PersistentVolumeClaim) {
+      pvcCount++;
+      requested += n.metadata?.requested ?? 0;
+    }
+    n.children.forEach(visit);
+  };
+  visit(node);
+  return { requested, pvcCount };
+}
+
 export class LonghornVolume extends KubeResource {
   metadata: LonghornVolumeMetadata | null;
 
@@ -422,6 +455,19 @@ type PersistentVolumeClaimMetadata = {
   accessModes: string[];
   capacity: Map<string, string>;
   phase: string;
+  requested?: number;
+};
+
+export type PersistentVolumeMetadata = {
+  capacity?: number;
+  storageClass?: string;
+  driver?: string;
+  accessModes?: string[];
+  reclaimPolicy?: string;
+  volumeMode?: string;
+  phase?: string;
+  nfsServer?: string;
+  nfsShare?: string;
 };
 
 type DeploymentMetadata = {

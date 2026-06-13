@@ -406,6 +406,10 @@ func mapPVCData(el *kube.Resource, obj unstructured.Unstructured) {
 		el.PVCMetadata.Capacity[string(key)] = value.String()
 	}
 
+	if req, ok := pvc.Spec.Resources.Requests[v1.ResourceStorage]; ok {
+		el.PVCMetadata.Requested = req.Value()
+	}
+
 	mapPVCStatus := func(pvc *v1.PersistentVolumeClaim) kube.Status {
 		if pvc.DeletionTimestamp != nil {
 			return kube.StatusPending
@@ -450,6 +454,29 @@ func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	el.Status = mapPVStatus(pv)
+
+	meta := kube.PVMetadata{
+		StorageClass:  pv.Spec.StorageClassName,
+		ReclaimPolicy: string(pv.Spec.PersistentVolumeReclaimPolicy),
+		Phase:         string(pv.Status.Phase),
+	}
+	if storage, ok := pv.Spec.Capacity[v1.ResourceStorage]; ok {
+		meta.Capacity = storage.Value()
+	}
+	if pv.Spec.VolumeMode != nil {
+		meta.VolumeMode = string(*pv.Spec.VolumeMode)
+	}
+	for _, accessMode := range pv.Spec.AccessModes {
+		meta.AccessModes = append(meta.AccessModes, string(accessMode))
+	}
+	if pv.Spec.CSI != nil {
+		meta.Driver = pv.Spec.CSI.Driver
+	}
+	el.PVMetadata = meta
+
+	// Driver-specific attributes (NFS, …) are read by their providers; no-ops
+	// for drivers they don't recognise.
+	mapCSIDriverData(&el.PVMetadata, pv)
 
 	if pv.Spec.ClaimRef != nil {
 		el.ParentRefs = append(el.ParentRefs, makeRef(

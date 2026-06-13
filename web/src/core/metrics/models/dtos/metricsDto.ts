@@ -34,6 +34,17 @@ export interface MetricsResourceMessageDto {
   metrics: ResourceMetricsDto;
 }
 
+export interface StorageUsageDto {
+  requested: number;
+  used: number;
+  pvcCount: number;
+  measured: number;
+}
+
+export interface MetricsStorageMessageDto {
+  usages: Record<string, StorageUsageDto>;
+}
+
 export interface NodeResourceUsageDto {
   used: number;
   capacity: number;

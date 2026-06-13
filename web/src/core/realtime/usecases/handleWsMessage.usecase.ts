@@ -12,6 +12,7 @@ import { addToast } from "@heroui/react";
 import { MetricsStore } from "../../metrics/stores/metrics.store";
 import {
   MetricsCurrentMessageDto,
+  MetricsStorageMessageDto,
   MetricsResourceMessageDto,
   MetricsStatusDto,
   NodeUsageDto,
@@ -85,6 +86,9 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
         break;
       case REALTIME_CONST.METRICS_CURRENT:
         this.metricsStore.applyCurrent((message.message as MetricsCurrentMessageDto)?.usages ?? {});
+        break;
+      case REALTIME_CONST.METRICS_STORAGE:
+        this.metricsStore.applyStorage((message.message as MetricsStorageMessageDto)?.usages ?? {});
         break;
       case REALTIME_CONST.METRICS_RESOURCE: {
         const payload = message.message as MetricsResourceMessageDto;

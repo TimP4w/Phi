@@ -3,7 +3,7 @@ import { useInjection } from "inversify-react";
 import WidgetCard from "./Widget";
 import Sparkline from "../metrics/Sparkline";
 import { MetricsStore } from "../../../core/metrics/stores/metrics.store";
-import { formatBytes, formatCores } from "../../shared/format";
+import { formatBytes, formatCores, usageColor, usagePercent } from "../../shared/format";
 
 type ResourceUsageWidgetProps = {
   uid: string;
@@ -16,10 +16,12 @@ const ResourceUsageWidget: React.FC<ResourceUsageWidgetProps> = observer(
     const metricsStore = useInjection(MetricsStore);
     if (!metricsStore.prometheusActive) return null;
     const usage = metricsStore.currentUsage.get(uid);
-    if (!usage || (usage.cpu.length === 0 && usage.memory.length === 0)) return null;
+    const storage = metricsStore.storageUsage.get(uid);
+    const hasCompute = !!usage && (usage.cpu.length > 0 || usage.memory.length > 0);
+    const hasStorage = !!storage && storage.pvcCount > 0;
+    if (!hasCompute && !hasStorage) return null;
 
-    const { cpu: lastCpu, memory: lastMem, cpuLimit, memoryLimit: memLimit } =
-      metricsStore.latestUsage(uid)!;
+    const latest = hasCompute ? metricsStore.latestUsage(uid)! : undefined;
 
     const row = (
       label: string,
@@ -40,23 +42,55 @@ const ResourceUsageWidget: React.FC<ResourceUsageWidgetProps> = observer(
       </div>
     );
 
+    const storageRow = () => {
+      if (!hasStorage) return null;
+      const { requested, used, pvcCount, measured } = storage;
+      const hasUsed = measured > 0;
+      const pct = hasUsed && requested > 0 ? usagePercent(used, requested) : 0;
+      return (
+        <div className="flex flex-col gap-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 text-xs min-w-0">
+            <span className="text-default-400 truncate">
+              Storage
+              <span className="text-default-300"> · {pvcCount} PVC{pvcCount === 1 ? "" : "s"}</span>
+            </span>
+            <span className="font-mono text-default-300 shrink-0">
+              {hasUsed ? `${formatBytes(used)} / ${formatBytes(requested)} (${pct.toFixed(0)}%)` : formatBytes(requested)}
+            </span>
+          </div>
+          <div className="w-full h-1.5 rounded-full bg-default-100 overflow-hidden">
+            <div
+              className={`h-full rounded-full bg-${usageColor(pct)}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          {hasUsed && measured < pvcCount && (
+            <span className="text-[10px] text-default-300 text-right">
+              measured {measured}/{pvcCount}
+            </span>
+          )}
+        </div>
+      );
+    };
+
     return (
       <WidgetCard title="Resource Usage" subtitle="aggregate across pods">
-        <div className="flex flex-col gap-3">
-          {row(
+        <div className="flex flex-col gap-3 min-w-0">
+          {hasCompute && row(
             "CPU",
-            lastCpu !== undefined ? formatCores(lastCpu) : "—",
-            cpuLimit != null ? formatCores(cpuLimit) : null,
-            usage.cpu.map((s) => s.v),
+            latest!.cpu !== undefined ? formatCores(latest!.cpu) : "—",
+            latest!.cpuLimit != null ? formatCores(latest!.cpuLimit) : null,
+            usage!.cpu.map((s) => s.v),
             "stroke-primary",
           )}
-          {row(
+          {hasCompute && row(
             "Memory",
-            lastMem !== undefined ? formatBytes(lastMem) : "—",
-            memLimit != null ? formatBytes(memLimit) : null,
-            usage.memory.map((s) => s.v),
+            latest!.memory !== undefined ? formatBytes(latest!.memory) : "—",
+            latest!.memoryLimit != null ? formatBytes(latest!.memoryLimit) : null,
+            usage!.memory.map((s) => s.v),
             "stroke-success",
           )}
+          {storageRow()}
         </div>
       </WidgetCard>
     );

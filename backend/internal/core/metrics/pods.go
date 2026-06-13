@@ -47,3 +47,40 @@ func CollectPods(store kube.KubeStore, uid string) ([]kube.Resource, error) {
 	}
 	return pods, nil
 }
+
+// CollectPVCs resolves a resource UID to the set of PersistentVolumeClaims it
+// covers: every PVC reachable through ParentIDs child links (BFS, cycle-safe).
+// Unlike CollectPods it returns a (possibly empty) slice rather than an error
+// when none are found — a resource with no claims simply contributes no storage.
+func CollectPVCs(store kube.KubeStore, uid string) []kube.Resource {
+	root := store.GetResourceByUID(uid)
+	if root == nil {
+		return nil
+	}
+
+	children := map[string][]*kube.Resource{}
+	for _, r := range store.GetResources() {
+		for _, pid := range r.ParentIDs {
+			children[pid] = append(children[pid], r)
+		}
+	}
+
+	var pvcs []kube.Resource
+	visited := map[string]bool{uid: true}
+	queue := []string{uid}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		for _, c := range children[cur] {
+			if visited[c.UID] {
+				continue
+			}
+			visited[c.UID] = true
+			if c.Kind == "PersistentVolumeClaim" {
+				pvcs = append(pvcs, *c)
+			}
+			queue = append(queue, c.UID)
+		}
+	}
+	return pvcs
+}

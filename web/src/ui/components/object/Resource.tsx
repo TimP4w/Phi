@@ -12,7 +12,9 @@ import {
   Deployment,
   Pod,
   PersistentVolumeClaim,
+  PersistentVolume,
 } from "../../../core/fluxTree/models/tree";
+import { formatBytes } from "../../shared/format";
 import AppLogo from "../resource-icon/ResourceIcon";
 import StatusChip from "../status-chip/StatusChip";
 import { Handle, NodeProps, Position, Node } from "@xyflow/react";
@@ -83,6 +85,15 @@ function getExtraInfo(node: KubeResource): string | null {
       ? (ACCESS_MODE_SHORT[node.metadata.accessModes[0]] ?? node.metadata.accessModes[0])
       : "";
     return [phase, sc, capacity, mode].filter(Boolean).join(" · ") || null;
+  }
+
+  if (node instanceof PersistentVolume) {
+    const phase = node.metadata?.phase ?? "";
+    const capacity = node.metadata?.capacity ? formatBytes(node.metadata.capacity) : "";
+    const driver = node.metadata?.nfsServer
+      ? "nfs"
+      : (node.metadata?.driver ?? "");
+    return [phase, capacity, driver].filter(Boolean).join(" · ") || null;
   }
 
   return null;

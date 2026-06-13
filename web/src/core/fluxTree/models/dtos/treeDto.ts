@@ -24,6 +24,7 @@ export type TreeNodeDto = {
   helmReleaseMetadata?: HelmReleaseMetadataDto;
   kustomizationMetadata?: KustomizationMetadataDto;
   pvcMetadata?: PersistentVolumeClaimMetadataDto;
+  pvMetadata?: PersistentVolumeMetadataDto;
   longhornVolumeMetadata?: LonghornVolumeMetadataDto;
   longhornNodeMetadata?: LonghornNodeMetadataDto;
   gitRepositoryMetadata?: GitRepositoryMetadataDto;
@@ -174,6 +175,19 @@ type PersistentVolumeClaimMetadataDto = {
   accessModes: string[];
   capacity: Map<string, string>;
   phase: string;
+  requested?: number;
+};
+
+type PersistentVolumeMetadataDto = {
+  capacity?: number;
+  storageClass?: string;
+  driver?: string;
+  accessModes?: string[];
+  reclaimPolicy?: string;
+  volumeMode?: string;
+  phase?: string;
+  nfsServer?: string;
+  nfsShare?: string;
 };
 
 type LonghornVolumeMetadataDto = {

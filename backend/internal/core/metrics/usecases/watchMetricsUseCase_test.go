@@ -64,6 +64,8 @@ func TestSubscribeSendsInitialData(t *testing.T) {
 	ms.On("Status").Return(activeStatus())
 	ms.On("GetCurrentUsage", mock.Anything, []string{"u1"}).
 		Return(map[string]metrics.CurrentUsage{"u1": {}}, nil)
+	ms.On("GetStorageUsage", mock.Anything, mock.Anything).
+		Return(map[string]metrics.StorageUsage{}, nil).Maybe()
 
 	rec := &recorder{}
 	rt.On("SendMessage", mock.Anything, "client1").Run(rec.record).Return(nil)
@@ -97,6 +99,7 @@ func TestStopRemovesSubscription(t *testing.T) {
 	uc, ms, rt := newUC(t)
 	ms.On("Status").Return(activeStatus()).Maybe()
 	ms.On("GetCurrentUsage", mock.Anything, mock.Anything).Return(map[string]metrics.CurrentUsage{}, nil).Maybe()
+	ms.On("GetStorageUsage", mock.Anything, mock.Anything).Return(map[string]metrics.StorageUsage{}, nil).Maybe()
 	rt.On("SendMessage", mock.Anything, "client1").Return(nil).Maybe()
 
 	uc.Execute(WatchMetricsInput{ClientID: "client1", Action: ActionStart, Channel: "tree", UIDs: []string{"u1"}})
@@ -109,6 +112,7 @@ func TestTickFansOutPerChannel(t *testing.T) {
 	uc, ms, rt := newUC(t)
 	ms.On("Status").Return(activeStatus())
 	ms.On("GetCurrentUsage", mock.Anything, mock.Anything).Return(map[string]metrics.CurrentUsage{}, nil)
+	ms.On("GetStorageUsage", mock.Anything, mock.Anything).Return(map[string]metrics.StorageUsage{}, nil).Maybe()
 	ms.On("GetNodeUsage", mock.Anything).Return([]metrics.NodeUsage{{Node: "n1"}}, nil)
 	ms.On("GetResourceMetrics", mock.Anything, "det1").Return(metrics.ResourceMetrics{Range: "24h"}, nil)
 
@@ -133,6 +137,7 @@ func TestOnCloseCleansUpClient(t *testing.T) {
 	rt := mocks.NewRealtimeService(t)
 	ms.On("Status").Return(activeStatus()).Maybe()
 	ms.On("GetCurrentUsage", mock.Anything, mock.Anything).Return(map[string]metrics.CurrentUsage{}, nil).Maybe()
+	ms.On("GetStorageUsage", mock.Anything, mock.Anything).Return(map[string]metrics.StorageUsage{}, nil).Maybe()
 	rt.On("SendMessage", mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	var listener realtime.Listener

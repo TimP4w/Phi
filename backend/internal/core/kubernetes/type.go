@@ -40,6 +40,7 @@ type Resource struct {
 	HelmReleaseMetadata    HelmReleaseMetadata    `json:"helmReleaseMetadata,omitempty"`
 	KustomizationMetadata  KustomizationMetadata  `json:"kustomizationMetadata,omitempty"`
 	PVCMetadata            PVCMetadata            `json:"pvcMetadata,omitempty"`
+	PVMetadata             PVMetadata             `json:"pvMetadata,omitempty"`
 	LonghornVolumeMetadata LonghornVolumeMetadata `json:"longhornVolumeMetadata,omitempty"`
 	LonghornNodeMetadata   LonghornNodeMetadata   `json:"longhornNodeMetadata,omitempty"`
 	GitRepositoryMetadata  GitRepositoryMetadata  `json:"gitRepositoryMetadata,omitempty"`
@@ -95,6 +96,7 @@ func (e *Resource) Copy(other Resource) {
 	e.HelmReleaseMetadata = other.HelmReleaseMetadata
 	e.KustomizationMetadata = other.KustomizationMetadata
 	e.PVCMetadata = other.PVCMetadata
+	e.PVMetadata = other.PVMetadata.clone()
 	e.LonghornVolumeMetadata = other.LonghornVolumeMetadata
 	e.LonghornNodeMetadata = other.LonghornNodeMetadata
 	e.GitRepositoryMetadata = other.GitRepositoryMetadata
@@ -142,6 +144,7 @@ func (e *Resource) IsDeepEqual(other Resource) bool {
 		e.HelmReleaseMetadata != other.HelmReleaseMetadata ||
 		!kustomizationMetadataEqual(e.KustomizationMetadata, other.KustomizationMetadata) ||
 		!pvcMetadataEqual(e.PVCMetadata, other.PVCMetadata) ||
+		!pvMetadataEqual(e.PVMetadata, other.PVMetadata) ||
 		e.LonghornVolumeMetadata != other.LonghornVolumeMetadata ||
 		e.LonghornNodeMetadata != other.LonghornNodeMetadata ||
 		e.GitRepositoryMetadata != other.GitRepositoryMetadata ||
@@ -504,11 +507,26 @@ func certificateMetadataEqual(a, b CertificateMetadata) bool {
 		slices.Equal(a.DNSNames, b.DNSNames)
 }
 
+func pvMetadataEqual(a, b PVMetadata) bool {
+	if a.Capacity != b.Capacity ||
+		a.StorageClass != b.StorageClass ||
+		a.Driver != b.Driver ||
+		a.ReclaimPolicy != b.ReclaimPolicy ||
+		a.VolumeMode != b.VolumeMode ||
+		a.Phase != b.Phase ||
+		a.NFSServer != b.NFSServer ||
+		a.NFSShare != b.NFSShare {
+		return false
+	}
+	return slices.Equal(a.AccessModes, b.AccessModes)
+}
+
 func pvcMetadataEqual(a, b PVCMetadata) bool {
 	if a.StorageClass != b.StorageClass ||
 		a.VolumeName != b.VolumeName ||
 		a.VolumeMode != b.VolumeMode ||
-		a.Phase != b.Phase {
+		a.Phase != b.Phase ||
+		a.Requested != b.Requested {
 		return false
 	}
 	if len(a.AccessModes) != len(b.AccessModes) {
@@ -611,6 +629,33 @@ type PVCMetadata struct {
 	AccessModes  []string          `json:"accessModes,omitempty"`
 	Capacity     map[string]string `json:"capacity,omitempty"`
 	Phase        string            `json:"phase,omitempty"`
+	// Requested is spec.resources.requests.storage in bytes — the size the claim
+	// asked for, as opposed to status.capacity (the size actually provisioned).
+	Requested int64 `json:"requested,omitempty"`
+}
+
+// PVMetadata carries the provisioning-relevant fields of a core/v1
+// PersistentVolume. Capacity is spec.capacity.storage in bytes (mirroring the
+// Longhorn byte counts) so the frontend can sum it without parsing quantities.
+// Driver is spec.csi.driver; NFSServer/NFSShare are populated by the csi
+// provider only for nfs.csi.k8s.io volumes. AccessModes makes the struct
+// non-comparable, so equality uses pvMetadataEqual.
+type PVMetadata struct {
+	Capacity      int64    `json:"capacity,omitempty"`      // spec.capacity.storage, bytes
+	StorageClass  string   `json:"storageClass,omitempty"`  // spec.storageClassName
+	Driver        string   `json:"driver,omitempty"`        // spec.csi.driver
+	AccessModes   []string `json:"accessModes,omitempty"`   // spec.accessModes
+	ReclaimPolicy string   `json:"reclaimPolicy,omitempty"` // spec.persistentVolumeReclaimPolicy
+	VolumeMode    string   `json:"volumeMode,omitempty"`    // spec.volumeMode
+	Phase         string   `json:"phase,omitempty"`         // status.phase
+	NFSServer     string   `json:"nfsServer,omitempty"`     // nfs.csi.k8s.io volumeAttributes.server
+	NFSShare      string   `json:"nfsShare,omitempty"`      // nfs.csi.k8s.io volumeAttributes.share
+}
+
+func (p PVMetadata) clone() PVMetadata {
+	out := p
+	out.AccessModes = append([]string(nil), p.AccessModes...)
+	return out
 }
 
 // LonghornNodeMetadata carries the aggregated disk capacity of a

@@ -77,3 +77,35 @@ func TestCollectPodsNoPodsReturnsErrNoPods(t *testing.T) {
 	assert.ErrorIs(t, err, metrics.ErrNoPods)
 	assert.Empty(t, pods)
 }
+
+func TestCollectPVCsWalksDescendants(t *testing.T) {
+	// ks -> deploy -> pvc1 ; ks -> sts -> pvc2 ; unrelated pvc3
+	ks := res("ks", "Kustomization")
+	all := map[string]*kube.Resource{
+		"ks":   ks,
+		"dep":  res("dep", "Deployment", "ks"),
+		"pvc1": res("pvc1", "PersistentVolumeClaim", "dep"),
+		"sts":  res("sts", "StatefulSet", "ks"),
+		"pvc2": res("pvc2", "PersistentVolumeClaim", "sts"),
+		"pvc3": res("pvc3", "PersistentVolumeClaim", "other"),
+	}
+	pvcs := metrics.CollectPVCs(storeWith(t, all, ks), "ks")
+	uids := []string{}
+	for _, p := range pvcs {
+		uids = append(uids, p.UID)
+	}
+	assert.ElementsMatch(t, []string{"pvc1", "pvc2"}, uids)
+}
+
+func TestCollectPVCsNoneReturnsEmpty(t *testing.T) {
+	dep := res("dep", "Deployment")
+	all := map[string]*kube.Resource{"dep": dep}
+	pvcs := metrics.CollectPVCs(storeWith(t, all, dep), "dep")
+	assert.Empty(t, pvcs)
+}
+
+func TestCollectPVCsUnknownUID(t *testing.T) {
+	s := mocks.NewKubeStore(t)
+	s.On("GetResourceByUID", "nope").Return((*kube.Resource)(nil))
+	assert.Nil(t, metrics.CollectPVCs(s, "nope"))
+}

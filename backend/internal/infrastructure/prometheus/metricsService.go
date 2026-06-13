@@ -282,6 +282,66 @@ func (s *metricsService) GetCurrentUsage(ctx context.Context, uids []string) (ma
 	return out, nil
 }
 
+// pvcKey identifies a PersistentVolumeClaim by namespace and name, matching the
+// labels kubelet_volume_stats series carry.
+type pvcKey struct {
+	namespace string
+	name      string
+}
+
+// GetStorageUsage rolls up requested (from PVC specs in the store) and measured
+// used bytes (from the kubelet) per resource UID. Requested is always populated;
+// Used/Measured come from Prometheus and are zero when no claim reported a
+// sample. A UID with no descendant PVCs is omitted from the result.
+func (s *metricsService) GetStorageUsage(ctx context.Context, uids []string) (map[string]metrics.StorageUsage, error) {
+	pvcsByUID := map[string][]kube.Resource{}
+	union := map[pvcKey]kube.Resource{}
+	for _, uid := range uids {
+		pvcs := metrics.CollectPVCs(s.store, uid)
+		if len(pvcs) == 0 {
+			continue
+		}
+		pvcsByUID[uid] = pvcs
+		for _, p := range pvcs {
+			union[pvcKey{p.Namespace, p.Name}] = p
+		}
+	}
+	if len(pvcsByUID) == 0 {
+		return map[string]metrics.StorageUsage{}, nil
+	}
+
+	all := make([]kube.Resource, 0, len(union))
+	for _, p := range union {
+		all = append(all, p)
+	}
+
+	res, err := s.prom.Query(ctx, QueryVolumeUsedByPVC(BuildPVCMatcher(all)), time.Now())
+	if err != nil {
+		return nil, err
+	}
+	usedByPVC := map[pvcKey]float64{}
+	for _, r := range res {
+		if len(r.Samples) == 0 {
+			continue
+		}
+		usedByPVC[pvcKey{r.Labels["namespace"], r.Labels["persistentvolumeclaim"]}] = r.Samples[0].Value
+	}
+
+	out := make(map[string]metrics.StorageUsage, len(pvcsByUID))
+	for uid, pvcs := range pvcsByUID {
+		su := metrics.StorageUsage{PVCCount: len(pvcs)}
+		for _, p := range pvcs {
+			su.Requested += p.PVCMetadata.Requested
+			if used, ok := usedByPVC[pvcKey{p.Namespace, p.Name}]; ok {
+				su.Used += int64(used)
+				su.Measured++
+			}
+		}
+		out[uid] = su
+	}
+	return out, nil
+}
+
 func (s *metricsService) GetNodeUsage(ctx context.Context) ([]metrics.NodeUsage, error) {
 	now := time.Now()
 	byInstance := func(ctx context.Context, query string) (map[string]float64, error) {

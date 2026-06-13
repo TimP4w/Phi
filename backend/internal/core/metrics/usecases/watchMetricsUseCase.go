@@ -52,6 +52,10 @@ type metricsCurrentPayload struct {
 	Usages map[string]metrics.CurrentUsage `json:"usages"`
 }
 
+type metricsStoragePayload struct {
+	Usages map[string]metrics.StorageUsage `json:"usages"`
+}
+
 type metricsResourcePayload struct {
 	UID     string                  `json:"uid"`
 	Metrics metrics.ResourceMetrics `json:"metrics"`
@@ -293,6 +297,13 @@ func (uc *WatchMetricsUseCase) serveClient(clientID string, chans map[string]sub
 			uc.logger.WithError(err).Warn("Failed to fetch current usage")
 		} else {
 			uc.send(clientID, realtime.METRICS_CURRENT, metricsCurrentPayload{Usages: usages})
+		}
+
+		storage, err := uc.metricsService.GetStorageUsage(ctx, uids)
+		if err != nil {
+			uc.logger.WithError(err).Warn("Failed to fetch storage usage")
+		} else if len(storage) > 0 {
+			uc.send(clientID, realtime.METRICS_STORAGE, metricsStoragePayload{Usages: storage})
 		}
 	}
 

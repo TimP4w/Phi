@@ -138,6 +138,65 @@ func (_c *MetricsService_GetCurrentUsage_Call) RunAndReturn(run func(context.Con
 	return _c
 }
 
+// GetStorageUsage provides a mock function with given fields: ctx, uids
+func (_m *MetricsService) GetStorageUsage(ctx context.Context, uids []string) (map[string]metrics.StorageUsage, error) {
+	ret := _m.Called(ctx, uids)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetStorageUsage")
+	}
+
+	var r0 map[string]metrics.StorageUsage
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, []string) (map[string]metrics.StorageUsage, error)); ok {
+		return rf(ctx, uids)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, []string) map[string]metrics.StorageUsage); ok {
+		r0 = rf(ctx, uids)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]metrics.StorageUsage)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, []string) error); ok {
+		r1 = rf(ctx, uids)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MetricsService_GetStorageUsage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetStorageUsage'
+type MetricsService_GetStorageUsage_Call struct {
+	*mock.Call
+}
+
+// GetStorageUsage is a helper method to define mock.On call
+//   - ctx context.Context
+//   - uids []string
+func (_e *MetricsService_Expecter) GetStorageUsage(ctx interface{}, uids interface{}) *MetricsService_GetStorageUsage_Call {
+	return &MetricsService_GetStorageUsage_Call{Call: _e.mock.On("GetStorageUsage", ctx, uids)}
+}
+
+func (_c *MetricsService_GetStorageUsage_Call) Run(run func(ctx context.Context, uids []string)) *MetricsService_GetStorageUsage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].([]string))
+	})
+	return _c
+}
+
+func (_c *MetricsService_GetStorageUsage_Call) Return(_a0 map[string]metrics.StorageUsage, _a1 error) *MetricsService_GetStorageUsage_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MetricsService_GetStorageUsage_Call) RunAndReturn(run func(context.Context, []string) (map[string]metrics.StorageUsage, error)) *MetricsService_GetStorageUsage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetNodeUsage provides a mock function with given fields: ctx
 func (_m *MetricsService) GetNodeUsage(ctx context.Context) ([]metrics.NodeUsage, error) {
 	ret := _m.Called(ctx)

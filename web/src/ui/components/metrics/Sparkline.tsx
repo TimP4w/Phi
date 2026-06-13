@@ -18,9 +18,23 @@ function Sparkline({ values, width = 56, height = 16, className = "stroke-primar
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
+  // viewBox + width:100% lets the sparkline scale to its container (the sidebar
+  // widget is narrower than the intrinsic width), so it never forces horizontal
+  // overflow. non-scaling-stroke keeps the line crisp despite the scaling.
   return (
-    <svg width={width} height={height} className="flex-shrink-0">
-      <polyline points={points} fill="none" strokeWidth="1.5" className={className} />
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      height={height}
+      preserveAspectRatio="none"
+      className="block w-full"
+    >
+      <polyline
+        points={points}
+        fill="none"
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+        className={className}
+      />
     </svg>
   );
 }

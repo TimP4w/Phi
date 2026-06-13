@@ -4,14 +4,17 @@ import {
   HelmRelease,
   Kustomization,
   LonghornVolume,
+  PersistentVolume,
   PersistentVolumeClaim,
   Pod,
   KubeResource,
+  sumRequestedStorage,
 } from "../../../core/fluxTree/models/tree";
 import TooltipedDate from "../tooltiped-date/TooltipedDate";
 import { observer } from "mobx-react-lite";
 import { useInjection } from "inversify-react";
 import { EventsStore } from "../../../core/fluxTree/stores/events.store";
+import { MetricsStore } from "../../../core/metrics/stores/metrics.store";
 import { formatBytes, usageColor, usagePercent } from "../../shared/format";
 import { robustnessColor } from "../../../core/fluxTree/constants/resources.const";
 
@@ -173,9 +176,14 @@ const renderKindFields = (resource: KubeResource) => {
     }
     case "PersistentVolumeClaim": {
       const n = resource as PersistentVolumeClaim;
+      const requested = n.metadata?.requested ?? 0;
       return (
         <Section title="Persistent Volume Claim">
           <InfoRow label="Phase" value={n.metadata?.phase?.toString()} />
+          <InfoRow
+            label="Requested"
+            value={requested > 0 ? formatBytes(requested) : undefined}
+          />
           <InfoRow label="Storage Class" value={n.metadata?.storageClass} />
           <InfoRow label="Volume Name" value={n.metadata?.volumeName} />
           <InfoRow label="Volume Mode" value={n.metadata?.volumeMode} />
@@ -183,6 +191,30 @@ const renderKindFields = (resource: KubeResource) => {
             label="Access Modes"
             value={n.metadata?.accessModes?.join(", ")}
           />
+        </Section>
+      );
+    }
+    case "PersistentVolume": {
+      if (!(resource instanceof PersistentVolume)) return null;
+      const n = resource as PersistentVolume;
+      const capacity = n.metadata?.capacity ?? 0;
+      return (
+        <Section title="Persistent Volume">
+          <InfoRow label="Phase" value={n.metadata?.phase} />
+          <InfoRow
+            label="Capacity"
+            value={capacity > 0 ? formatBytes(capacity) : undefined}
+          />
+          <InfoRow label="Storage Class" value={n.metadata?.storageClass} />
+          <InfoRow label="Driver" value={n.metadata?.driver} />
+          <InfoRow label="Reclaim Policy" value={n.metadata?.reclaimPolicy} />
+          <InfoRow label="Volume Mode" value={n.metadata?.volumeMode} />
+          <InfoRow
+            label="Access Modes"
+            value={n.metadata?.accessModes?.join(", ")}
+          />
+          <InfoRow label="NFS Server" value={n.metadata?.nfsServer} />
+          <InfoRow label="NFS Share" value={n.metadata?.nfsShare} />
         </Section>
       );
     }
@@ -231,6 +263,61 @@ const renderKindFields = (resource: KubeResource) => {
       return null;
   }
 };
+
+// StorageRollup totals the storage requested by every PVC in a resource's
+// subtree (e.g. a Kustomization) and pairs it with measured usage from
+// Prometheus when available. Hidden for resources that own no PVCs.
+const StorageRollup = observer(({ resource }: { resource: KubeResource }) => {
+  const metricsStore = useInjection(MetricsStore);
+  const { requested, pvcCount } = sumRequestedStorage(resource);
+  if (pvcCount === 0) return null;
+
+  const usage = metricsStore.storageUsage.get(resource.uid);
+  const used = usage?.used;
+  const measured = usage?.measured ?? 0;
+  const pct = used != null && requested > 0 ? usagePercent(used, requested) : 0;
+
+  return (
+    <Section title="Storage">
+      <InfoRow
+        label="Requested"
+        value={`${formatBytes(requested)} (${pvcCount} PVC${pvcCount === 1 ? "" : "s"})`}
+      />
+      {used != null ? (
+        <InfoRow
+          label="Used"
+          value={
+            <div className="flex flex-col items-end gap-1 w-40">
+              <span>
+                {formatBytes(used)} / {formatBytes(requested)} ({pct.toFixed(0)}%)
+              </span>
+              <div className="w-full h-1.5 rounded-full bg-default-100 overflow-hidden">
+                <div
+                  className={`h-full rounded-full bg-${usageColor(pct)}`}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              {measured < pvcCount && (
+                <span className="text-default-300">
+                  measured {measured}/{pvcCount}
+                </span>
+              )}
+            </div>
+          }
+        />
+      ) : (
+        <InfoRow
+          label="Used"
+          value={
+            <span className="text-default-300">
+              {metricsStore.prometheusActive ? "—" : "Prometheus off"}
+            </span>
+          }
+        />
+      )}
+    </Section>
+  );
+});
 
 export const InfoTab = observer(({ resource }: InfoTabProps) => {
   const eventsStore = useInjection(EventsStore);
@@ -296,6 +383,8 @@ export const InfoTab = observer(({ resource }: InfoTabProps) => {
       )}
 
       {renderKindFields(resource)}
+
+      <StorageRollup resource={resource} />
     </div>
   );
 });

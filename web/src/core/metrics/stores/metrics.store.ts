@@ -4,6 +4,7 @@ import {
   MetricsStatusDto,
   NodeUsageDto,
   ResourceMetricsDto,
+  StorageUsageDto,
 } from "../models/dtos/metricsDto";
 
 /** The most recent CPU/memory sample for a resource plus its configured limits. */
@@ -17,6 +18,7 @@ export interface LatestUsage {
 class MetricsStore {
   prometheusActive = false;
   currentUsage: ObservableMap<string, CurrentUsageDto> = observable.map();
+  storageUsage: ObservableMap<string, StorageUsageDto> = observable.map();
   resourceMetrics: ObservableMap<string, ResourceMetricsDto> = observable.map();
   nodeUsage: NodeUsageDto[] = [];
 
@@ -26,6 +28,7 @@ class MetricsStore {
       nodeUsage: observable.ref,
       applyStatus: action,
       applyCurrent: action,
+      applyStorage: action,
       applyResource: action,
       applyNodes: action,
     });
@@ -42,6 +45,12 @@ class MetricsStore {
         cpu: usage.cpu ?? [],
         memory: usage.memory ?? [],
       });
+    }
+  }
+
+  applyStorage(usages: Record<string, StorageUsageDto>): void {
+    for (const [uid, usage] of Object.entries(usages)) {
+      this.storageUsage.set(uid, usage);
     }
   }
 

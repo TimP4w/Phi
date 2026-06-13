@@ -17,7 +17,7 @@ import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { MetricsStore } from "../../../core/metrics/stores/metrics.store";
 import { formatBytes, formatCores } from "../../shared/format";
 import StatusChip from "../status-chip/StatusChip";
-import { Cpu, MemoryStick, Pause } from "lucide-react";
+import { Cpu, HardDrive, MemoryStick, Pause } from "lucide-react";
 import {
   CONDITION_TYPE,
   ERROR_TYPES,
@@ -69,6 +69,10 @@ const App: React.FC<AppProps> = observer(({ node }) => {
   const showUsage =
     metricsStore.prometheusActive &&
     (lastCpu !== undefined || lastMem !== undefined);
+
+  const storage = metricsStore.storageUsage.get(node.uid);
+  const showStorage =
+    metricsStore.prometheusActive && !!storage && storage.pvcCount > 0;
 
   const sourceRef =
     node instanceof Kustomization || node instanceof HelmRelease
@@ -178,6 +182,17 @@ const App: React.FC<AppProps> = observer(({ node }) => {
                 <MemoryStick className="w-3 h-3 text-default-400" />
                 {lastMem !== undefined ? formatBytes(lastMem) : "—"}
               </span>
+            </span>
+          </div>
+        )}
+        {showStorage && (
+          <div className="flex justify-between items-center gap-2">
+            <span className="text-default-400">Storage</span>
+            <span className="flex items-center gap-1 font-mono text-default-300">
+              <HardDrive className="w-3 h-3 text-default-400" />
+              {storage.measured > 0
+                ? `${formatBytes(storage.used)} / ${formatBytes(storage.requested)}`
+                : formatBytes(storage.requested)}
             </span>
           </div>
         )}

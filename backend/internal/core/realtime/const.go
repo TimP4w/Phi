@@ -16,6 +16,7 @@ const (
 	METRICS_NODES       string = "METRICS_NODES"
 	METRICS_RESOURCE    string = "METRICS_RESOURCE"
 	METRICS_STATUS      string = "METRICS_STATUS"
+	METRICS_STORAGE     string = "METRICS_STORAGE"
 )
 
 const (

@@ -29,6 +29,21 @@ func TestBuildPodMatcherEscapesRegexMeta(t *testing.T) {
 	assert.Equal(t, `namespace=~"default",pod=~"web\\.v1\\+x"`, m)
 }
 
+func TestBuildPVCMatcher(t *testing.T) {
+	pvc := func(ns, name string) kube.Resource {
+		return kube.Resource{Kind: "PersistentVolumeClaim", Namespace: ns, Name: name}
+	}
+	m := BuildPVCMatcher([]kube.Resource{pvc("zoo", "data-b"), pvc("app", "data-a")})
+	assert.Equal(t, `namespace=~"app|zoo",persistentvolumeclaim=~"data-a|data-b"`, m)
+}
+
+func TestQueryVolumeUsedByPVC(t *testing.T) {
+	q := QueryVolumeUsedByPVC(`namespace=~"ns",persistentvolumeclaim=~"data-1"`)
+	assert.Equal(t,
+		`max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes{namespace=~"ns",persistentvolumeclaim=~"data-1"})`,
+		q)
+}
+
 func TestQueryCPUUsage(t *testing.T) {
 	q := QueryCPUUsage(`namespace=~"default",pod=~"a"`)
 	assert.Equal(t,

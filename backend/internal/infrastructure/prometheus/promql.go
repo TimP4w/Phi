@@ -40,6 +40,27 @@ func BuildPodMatcher(pods []kube.Resource) string {
 	return fmt.Sprintf(`namespace=~"%s",pod=~"%s"`, joinSorted(nsSet), joinSorted(podSet))
 }
 
+// BuildPVCMatcher builds a PromQL label matcher selecting the given PVCs by
+// namespace and claim name, mirroring BuildPodMatcher's dedup/sort/escape rules.
+func BuildPVCMatcher(pvcs []kube.Resource) string {
+	nsSet := map[string]struct{}{}
+	pvcSet := map[string]struct{}{}
+	for _, p := range pvcs {
+		nsSet[promqlQuoteMeta(p.Namespace)] = struct{}{}
+		pvcSet[promqlQuoteMeta(p.Name)] = struct{}{}
+	}
+	return fmt.Sprintf(`namespace=~"%s",persistentvolumeclaim=~"%s"`, joinSorted(nsSet), joinSorted(pvcSet))
+}
+
+// QueryVolumeUsedByPVC returns measured filesystem usage per claim. The kubelet
+// emits kubelet_volume_stats_used_bytes for any mounted PVC whose CSI driver
+// implements NodeGetVolumeStats (Longhorn, nfs.csi.k8s.io, …), so this is
+// backend-agnostic. max by (...) collapses the per-node duplicate series a
+// multi-node scrape can produce for the same claim.
+func QueryVolumeUsedByPVC(matcher string) string {
+	return fmt.Sprintf(`max by (namespace, persistentvolumeclaim) (kubelet_volume_stats_used_bytes{%s})`, matcher)
+}
+
 func joinSorted(set map[string]struct{}) string {
 	items := make([]string, 0, len(set))
 	for s := range set {

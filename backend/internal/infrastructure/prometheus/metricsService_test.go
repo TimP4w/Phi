@@ -67,6 +67,55 @@ func TestGetResourceMetricsHappyPath(t *testing.T) {
 	assert.Equal(t, 512.0, *rm.Spec.Memory.Limits)
 }
 
+func TestGetStorageUsage(t *testing.T) {
+	// ks -> pvc1 (10Gi requested, measured) + pvc2 (5Gi requested, unmeasured)
+	ks := &kube.Resource{UID: "ks", Kind: "Kustomization", Name: "ks", Namespace: "ns"}
+	pvc1 := &kube.Resource{
+		UID: "pvc1", Kind: "PersistentVolumeClaim", Name: "data-1", Namespace: "ns",
+		ParentIDs: []string{"ks"}, PVCMetadata: kube.PVCMetadata{Requested: 10},
+	}
+	pvc2 := &kube.Resource{
+		UID: "pvc2", Kind: "PersistentVolumeClaim", Name: "data-2", Namespace: "ns",
+		ParentIDs: []string{"ks"}, PVCMetadata: kube.PVCMetadata{Requested: 5},
+	}
+	store := mocks.NewKubeStore(t)
+	store.On("GetResourceByUID", "ks").Return(ks).Maybe()
+	store.On("GetResources").Return(map[string]*kube.Resource{
+		"ks": ks, "pvc1": pvc1, "pvc2": pvc2,
+	}).Maybe()
+
+	prom := NewMockPrometheusService(t)
+	// Only data-1 reports a usage sample; data-2 is unmounted.
+	prom.On("Query", mock.Anything, mock.Anything, mock.Anything).Return([]SeriesResult{
+		seriesResult(map[string]string{"namespace": "ns", "persistentvolumeclaim": "data-1"},
+			metrics.Sample{Timestamp: 1, Value: 7}),
+	}, nil)
+
+	svc := NewMetricsService(store, prom)
+	out, err := svc.GetStorageUsage(context.Background(), []string{"ks"})
+
+	assert.NoError(t, err)
+	su := out["ks"]
+	assert.Equal(t, int64(15), su.Requested)
+	assert.Equal(t, int64(7), su.Used)
+	assert.Equal(t, 2, su.PVCCount)
+	assert.Equal(t, 1, su.Measured)
+}
+
+func TestGetStorageUsageNoPVCs(t *testing.T) {
+	dep := &kube.Resource{UID: "dep", Kind: "Deployment", Name: "dep", Namespace: "ns"}
+	store := mocks.NewKubeStore(t)
+	store.On("GetResourceByUID", "dep").Return(dep).Maybe()
+	store.On("GetResources").Return(map[string]*kube.Resource{"dep": dep}).Maybe()
+	prom := NewMockPrometheusService(t)
+
+	svc := NewMetricsService(store, prom)
+	out, err := svc.GetStorageUsage(context.Background(), []string{"dep"})
+
+	assert.NoError(t, err)
+	assert.Empty(t, out)
+}
+
 func TestGetResourceMetricsLimitNullWhenContainerUnbounded(t *testing.T) {
 	store := storeWithPod(t)
 	prom := NewMockPrometheusService(t)

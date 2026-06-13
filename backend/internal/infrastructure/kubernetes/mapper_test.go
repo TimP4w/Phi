@@ -307,6 +307,70 @@ func TestToResource_PV_Status_Failed(t *testing.T) {
 	assert.Equal(t, kube.StatusFailed, res.Status)
 }
 
+func TestToResource_PVC_Requested(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("PersistentVolumeClaim", "v1", "my-pvc", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"resources": map[string]interface{}{
+			"requests": map[string]interface{}{"storage": "10Gi"},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{"phase": "Bound"}
+
+	res := mapper.ToResource(*obj, "persistentvolumeclaims")
+
+	assert.Equal(t, int64(10*1024*1024*1024), res.PVCMetadata.Requested)
+}
+
+func TestToResource_PV_Metadata(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("PersistentVolume", "v1", "pv-123", "")
+	obj.Object["spec"] = map[string]interface{}{
+		"capacity":                      map[string]interface{}{"storage": "20Gi"},
+		"storageClassName":              "fast",
+		"persistentVolumeReclaimPolicy": "Retain",
+		"volumeMode":                    "Filesystem",
+		"accessModes":                   []interface{}{"ReadWriteOnce"},
+		"csi": map[string]interface{}{
+			"driver": "driver.longhorn.io",
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{"phase": "Bound"}
+
+	res := mapper.ToResource(*obj, "persistentvolumes")
+
+	assert.Equal(t, int64(20*1024*1024*1024), res.PVMetadata.Capacity)
+	assert.Equal(t, "fast", res.PVMetadata.StorageClass)
+	assert.Equal(t, "Retain", res.PVMetadata.ReclaimPolicy)
+	assert.Equal(t, "Filesystem", res.PVMetadata.VolumeMode)
+	assert.Equal(t, "Bound", res.PVMetadata.Phase)
+	assert.Equal(t, []string{"ReadWriteOnce"}, res.PVMetadata.AccessModes)
+	assert.Equal(t, "driver.longhorn.io", res.PVMetadata.Driver)
+	assert.Empty(t, res.PVMetadata.NFSServer)
+}
+
+func TestToResource_PV_NFSCSI(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("PersistentVolume", "v1", "pv-nfs", "")
+	obj.Object["spec"] = map[string]interface{}{
+		"capacity": map[string]interface{}{"storage": "100Gi"},
+		"csi": map[string]interface{}{
+			"driver": "nfs.csi.k8s.io",
+			"volumeAttributes": map[string]interface{}{
+				"server": "10.0.0.5",
+				"share":  "/export/media",
+			},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{"phase": "Bound"}
+
+	res := mapper.ToResource(*obj, "persistentvolumes")
+
+	assert.Equal(t, "nfs.csi.k8s.io", res.PVMetadata.Driver)
+	assert.Equal(t, "10.0.0.5", res.PVMetadata.NFSServer)
+	assert.Equal(t, "/export/media", res.PVMetadata.NFSShare)
+}
+
 // ── Longhorn Volume ───────────────────────────────────────────────────────────
 
 func newLonghornVolume(name string) *unstructured.Unstructured {

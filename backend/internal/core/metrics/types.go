@@ -62,6 +62,19 @@ type NodeUsage struct {
 	Memory NodeResourceUsage `json:"memory"`
 }
 
+// StorageUsage is the per-resource storage rollup (METRICS_STORAGE). Requested
+// is the sum of descendant PVC requests (bytes, always known from the resource
+// tree); Used is the sum of measured filesystem usage from the kubelet
+// (kubelet_volume_stats_used_bytes). PVCCount is how many PVCs the resource
+// covers and Measured how many of them reported a usage sample — when Measured
+// is below PVCCount the Used figure is partial (e.g. unmounted claims).
+type StorageUsage struct {
+	Requested int64 `json:"requested"`
+	Used      int64 `json:"used"`
+	PVCCount  int   `json:"pvcCount"`
+	Measured  int   `json:"measured"`
+}
+
 type IntegrationState string
 
 const (
@@ -81,6 +94,7 @@ type IntegrationStatus struct {
 type MetricsService interface {
 	GetResourceMetrics(ctx context.Context, uid string) (ResourceMetrics, error)
 	GetCurrentUsage(ctx context.Context, uids []string) (map[string]CurrentUsage, error)
+	GetStorageUsage(ctx context.Context, uids []string) (map[string]StorageUsage, error)
 	GetNodeUsage(ctx context.Context) ([]NodeUsage, error)
 	Status() IntegrationStatus
 }
