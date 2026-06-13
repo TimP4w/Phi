@@ -2,3 +2,5 @@ dist
 .direnv
 .env
 backend/internal/api/http/frontend
+superpowers
+web/tsconfig.app.tsbuildinfo
