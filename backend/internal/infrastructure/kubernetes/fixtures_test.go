@@ -6,6 +6,7 @@ import (
 
 	"github.com/timp4w/phi/internal/core/kubernetes"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	fakeDiscovery "k8s.io/client-go/discovery/fake"
 	fakeDynamic "k8s.io/client-go/dynamic/fake"
@@ -56,6 +57,20 @@ func describePodYAML(name, namespace string) string {
 
 type mockDiscoveryClient struct {
 	*fakeDiscovery.FakeDiscovery
+	preferredResources []*metav1.APIResourceList
+}
+
+func (m *mockDiscoveryClient) ServerPreferredResources() ([]*metav1.APIResourceList, error) {
+	return m.preferredResources, nil
+}
+
+func newTestKubeServiceImplWithApis(resList []*metav1.APIResourceList) *KubeServiceImpl {
+	svc := newTestKubeServiceImpl()
+	svc.discoveryClient = &mockDiscoveryClient{
+		FakeDiscovery:      &fakeDiscovery.FakeDiscovery{},
+		preferredResources: resList,
+	}
+	return svc
 }
 
 func newTestKubeServiceImpl(objects ...runtime.Object) *KubeServiceImpl {

@@ -24,11 +24,127 @@ export type TreeNodeDto = {
   helmReleaseMetadata?: HelmReleaseMetadataDto;
   kustomizationMetadata?: KustomizationMetadataDto;
   pvcMetadata?: PersistentVolumeClaimMetadataDto;
+  pvMetadata?: PersistentVolumeMetadataDto;
+  longhornVolumeMetadata?: LonghornVolumeMetadataDto;
+  longhornNodeMetadata?: LonghornNodeMetadataDto;
   gitRepositoryMetadata?: GitRepositoryMetadataDto;
   helmChartMetadata?: HelmChartMetadataDto;
   helmRepositoryMetadata?: HelmRepositoryMetadataDto;
   ociRepositoryMetadata?: OCIRepositoryMetadataDto;
   fluxMetadata?: FluxMetadataDto;
+  serviceMetadata?: ServiceMetadataDto;
+  routeMetadata?: RouteMetadataDto;
+  endpointSliceMetadata?: EndpointSliceMetadataDto;
+  gatewayMetadata?: GatewayMetadataDto;
+  certificateMetadata?: CertificateMetadataDto;
+  networkPolicyMetadata?: NetworkPolicyMetadataDto;
+  proxyMetadata?: ProxyMetadataDto;
+  trivyMetadata?: TrivyMetadataDto;
+};
+
+// TrivyMetadataDto is the per-report summary streamed on Trivy Operator report
+// resources. The full findings arrays are fetched on demand via the Trivy
+// findings endpoint, not carried here.
+export type TrivyMetadataDto = {
+  reportType?: "vulnerability" | "configAudit" | "exposedSecret" | "rbacAssessment";
+  critical?: number;
+  high?: number;
+  medium?: number;
+  low?: number;
+  unknown?: number;
+  targetKind?: string;
+  targetName?: string;
+  targetNamespace?: string;
+};
+
+export type ServiceMetadataDto = {
+  type?: string;
+  clusterIPs?: string[];
+  externalIPs?: string[];
+  selector?: Record<string, string>;
+  ports?: ServicePortDto[];
+};
+
+export type ServicePortDto = {
+  name?: string;
+  protocol?: string;
+  port: number;
+  targetPort?: string;
+  nodePort?: number;
+};
+
+export type BackendRefDto = {
+  group?: string;
+  kind?: string;
+  name: string;
+  namespace?: string;
+  port?: number;
+};
+
+export type RouteParentRefDto = {
+  group?: string;
+  kind?: string;
+  name: string;
+  namespace?: string;
+  sectionName?: string;
+};
+
+export type RouteMetadataDto = {
+  class?: string;
+  hostnames?: string[];
+  backendRefs?: BackendRefDto[];
+  routeParentRefs?: RouteParentRefDto[];
+  addresses?: string[];
+  tlsSecretRefs?: string[];
+  middlewareRefs?: string[];
+  entryPoints?: string[];
+  tlsEnabled?: boolean;
+};
+
+export type CertificateMetadataDto = {
+  secretName?: string;
+  ready?: boolean;
+  notAfter?: string;
+  issuer?: string;
+  dnsNames?: string[];
+};
+
+export type NetworkPolicyMetadataDto = {
+  podSelector?: Record<string, string>;
+  policyTypes?: string[];
+  ingressRules?: number;
+  egressRules?: number;
+};
+
+export type ProxyMetadataDto = {
+  // Entrypoint/listener name -> middleware refs applied to all traffic on it.
+  entrypointMiddlewares?: Record<string, string[]>;
+};
+
+export type EndpointTargetDto = {
+  targetKind?: string;
+  targetName?: string;
+  targetUID?: string;
+  ready: boolean;
+};
+
+export type EndpointSliceMetadataDto = {
+  serviceName?: string;
+  endpoints?: EndpointTargetDto[];
+};
+
+export type GatewayListenerDto = {
+  name?: string;
+  protocol?: string;
+  hostname?: string;
+  port?: number;
+};
+
+export type GatewayMetadataDto = {
+  gatewayClassName?: string;
+  addresses?: string[];
+  listeners?: GatewayListenerDto[];
+  tlsSecretRefs?: string[];
 };
 
 export type ConditionDto = {
@@ -75,6 +191,40 @@ type PersistentVolumeClaimMetadataDto = {
   accessModes: string[];
   capacity: Map<string, string>;
   phase: string;
+  requested?: number;
+};
+
+type PersistentVolumeMetadataDto = {
+  capacity?: number;
+  storageClass?: string;
+  driver?: string;
+  accessModes?: string[];
+  reclaimPolicy?: string;
+  volumeMode?: string;
+  phase?: string;
+  nfsServer?: string;
+  nfsShare?: string;
+};
+
+type LonghornVolumeMetadataDto = {
+  state: string;
+  robustness: string;
+  size: number;
+  actualSize: number;
+  numberOfReplicas: number;
+  nodeID: string;
+  frontend: string;
+  accessMode: string;
+};
+
+type LonghornNodeMetadataDto = {
+  ready: boolean;
+  schedulable: boolean;
+  storageMaximum: number;
+  storageUsed: number;
+  storageReserved: number;
+  storageSchedulable: number;
+  storageDisabled: number;
 };
 
 type DeploymentMetadataDto = {

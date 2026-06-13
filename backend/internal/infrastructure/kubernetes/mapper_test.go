@@ -7,6 +7,7 @@ import (
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -306,6 +307,266 @@ func TestToResource_PV_Status_Failed(t *testing.T) {
 	assert.Equal(t, kube.StatusFailed, res.Status)
 }
 
+func TestToResource_PVC_Requested(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("PersistentVolumeClaim", "v1", "my-pvc", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"resources": map[string]interface{}{
+			"requests": map[string]interface{}{"storage": "10Gi"},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{"phase": "Bound"}
+
+	res := mapper.ToResource(*obj, "persistentvolumeclaims")
+
+	assert.Equal(t, int64(10*1024*1024*1024), res.PVCMetadata.Requested)
+}
+
+func TestToResource_PV_Metadata(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("PersistentVolume", "v1", "pv-123", "")
+	obj.Object["spec"] = map[string]interface{}{
+		"capacity":                      map[string]interface{}{"storage": "20Gi"},
+		"storageClassName":              "fast",
+		"persistentVolumeReclaimPolicy": "Retain",
+		"volumeMode":                    "Filesystem",
+		"accessModes":                   []interface{}{"ReadWriteOnce"},
+		"csi": map[string]interface{}{
+			"driver": "driver.longhorn.io",
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{"phase": "Bound"}
+
+	res := mapper.ToResource(*obj, "persistentvolumes")
+
+	assert.Equal(t, int64(20*1024*1024*1024), res.PVMetadata.Capacity)
+	assert.Equal(t, "fast", res.PVMetadata.StorageClass)
+	assert.Equal(t, "Retain", res.PVMetadata.ReclaimPolicy)
+	assert.Equal(t, "Filesystem", res.PVMetadata.VolumeMode)
+	assert.Equal(t, "Bound", res.PVMetadata.Phase)
+	assert.Equal(t, []string{"ReadWriteOnce"}, res.PVMetadata.AccessModes)
+	assert.Equal(t, "driver.longhorn.io", res.PVMetadata.Driver)
+	assert.Empty(t, res.PVMetadata.NFSServer)
+}
+
+func TestToResource_PV_NFSCSI(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("PersistentVolume", "v1", "pv-nfs", "")
+	obj.Object["spec"] = map[string]interface{}{
+		"capacity": map[string]interface{}{"storage": "100Gi"},
+		"csi": map[string]interface{}{
+			"driver": "nfs.csi.k8s.io",
+			"volumeAttributes": map[string]interface{}{
+				"server": "10.0.0.5",
+				"share":  "/export/media",
+			},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{"phase": "Bound"}
+
+	res := mapper.ToResource(*obj, "persistentvolumes")
+
+	assert.Equal(t, "nfs.csi.k8s.io", res.PVMetadata.Driver)
+	assert.Equal(t, "10.0.0.5", res.PVMetadata.NFSServer)
+	assert.Equal(t, "/export/media", res.PVMetadata.NFSShare)
+}
+
+// ── Longhorn Volume ───────────────────────────────────────────────────────────
+
+func newLonghornVolume(name string) *unstructured.Unstructured {
+	return newUnstructuredResource("Volume", "longhorn.io/v1beta2", name, "longhorn-system")
+}
+
+func TestToResource_LonghornVolume_Healthy(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("pvc-abc")
+	obj.Object["spec"] = map[string]interface{}{
+		"size":             "10737418240", // 10Gi, serialised as a string
+		"numberOfReplicas": int64(3),
+		"frontend":         "blockdev",
+		"accessMode":       "rwo",
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"state":         "attached",
+		"robustness":    "healthy",
+		"actualSize":    int64(5368709120), // 5Gi, serialised as a number
+		"currentNodeID": "node-1",
+	}
+
+	res := mapper.ToResource(*obj, "volumes")
+
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+	assert.Equal(t, "attached", res.LonghornVolumeMetadata.State)
+	assert.Equal(t, "healthy", res.LonghornVolumeMetadata.Robustness)
+	assert.Equal(t, int64(10737418240), res.LonghornVolumeMetadata.Size)
+	assert.Equal(t, int64(5368709120), res.LonghornVolumeMetadata.ActualSize)
+	assert.Equal(t, int64(3), res.LonghornVolumeMetadata.NumberOfReplicas)
+	assert.Equal(t, "node-1", res.LonghornVolumeMetadata.NodeID)
+	assert.Equal(t, "blockdev", res.LonghornVolumeMetadata.Frontend)
+	assert.Equal(t, "rwo", res.LonghornVolumeMetadata.AccessMode)
+	// Shares its name with the backing PersistentVolume.
+	assert.Len(t, res.ParentRefs, 1)
+	assert.Contains(t, res.ParentRefs[0], "pvc-abc")
+}
+
+func TestToResource_LonghornVolume_Degraded(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	obj.Object["spec"] = map[string]interface{}{"size": int64(1024)}
+	obj.Object["status"] = map[string]interface{}{"state": "attached", "robustness": "degraded"}
+
+	res := mapper.ToResource(*obj, "volumes")
+	assert.Equal(t, kube.StatusWarning, res.Status)
+	assert.Equal(t, int64(1024), res.LonghornVolumeMetadata.Size)
+}
+
+func TestToResource_LonghornVolume_Faulted(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	obj.Object["status"] = map[string]interface{}{"state": "detached", "robustness": "faulted"}
+
+	res := mapper.ToResource(*obj, "volumes")
+	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+func TestToResource_LonghornVolume_HealthyDetached(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	obj.Object["status"] = map[string]interface{}{"state": "detached", "robustness": "healthy"}
+
+	res := mapper.ToResource(*obj, "volumes")
+	// Robustness drives readiness: healthy is ready regardless of attachment.
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_LonghornVolume_DetachedUnknown(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	// Longhorn reports "unknown" robustness for an idle, detached volume.
+	obj.Object["status"] = map[string]interface{}{"state": "detached", "robustness": "unknown"}
+
+	res := mapper.ToResource(*obj, "volumes")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_LonghornVolume_Attaching(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	obj.Object["status"] = map[string]interface{}{"state": "attaching", "robustness": "unknown"}
+
+	res := mapper.ToResource(*obj, "volumes")
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+func TestToResource_LonghornVolume_Conditions(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+	obj.Object["status"] = map[string]interface{}{
+		"state":      "attached",
+		"robustness": "healthy",
+		"conditions": []interface{}{
+			map[string]interface{}{
+				"type":    "Scheduled",
+				"status":  "True",
+				"reason":  "",
+				"message": "volume scheduled",
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "volumes")
+	assert.Len(t, res.Conditions, 1)
+	assert.Equal(t, "Scheduled", res.Conditions[0].Type)
+	assert.Equal(t, "True", res.Conditions[0].Status)
+}
+
+func TestToResource_LonghornVolume_Empty(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newLonghornVolume("v")
+
+	assert.NotPanics(t, func() {
+		res := mapper.ToResource(*obj, "volumes")
+		// No status yet (no robustness, no state) reads as a benign idle volume.
+		assert.Equal(t, kube.StatusSuccess, res.Status)
+		assert.Equal(t, int64(0), res.LonghornVolumeMetadata.Size)
+	})
+}
+
+// ── Longhorn Node ─────────────────────────────────────────────────────────────
+
+func TestToResource_LonghornNode_DiskAggregation(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Node", "longhorn.io/v1beta2", "node-1", "longhorn-system")
+	obj.Object["spec"] = map[string]interface{}{
+		"allowScheduling": true,
+		"disks": map[string]interface{}{
+			"disk-a": map[string]interface{}{
+				"storageReserved": int64(10),
+				"allowScheduling": true,
+			},
+			"disk-b": map[string]interface{}{
+				"storageReserved": int64(0),
+				"allowScheduling": false, // disabled disk
+			},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"diskStatus": map[string]interface{}{
+			"disk-a": map[string]interface{}{
+				"storageMaximum":   int64(100),
+				"storageAvailable": int64(70),
+				"storageScheduled": int64(40),
+			},
+			"disk-b": map[string]interface{}{
+				"storageMaximum":   int64(50),
+				"storageAvailable": int64(50),
+				"storageScheduled": int64(0),
+			},
+		},
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "Ready", "status": "True"},
+			map[string]interface{}{"type": "Schedulable", "status": "True"},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "nodes")
+	m := res.LonghornNodeMetadata
+
+	// Enabled disk-a partitions: reserved 10 + used 40 + schedulable 50 = 100 (its max).
+	assert.Equal(t, int64(150), m.StorageMaximum)    // 100 + 50
+	assert.Equal(t, int64(40), m.StorageUsed)        // disk-a storageScheduled
+	assert.Equal(t, int64(10), m.StorageReserved)    // only enabled disk-a
+	assert.Equal(t, int64(50), m.StorageSchedulable) // disk-a: 100 - 10 reserved - 40 scheduled
+	assert.Equal(t, int64(50), m.StorageDisabled)    // disk-b max
+	assert.True(t, m.Ready)
+	assert.True(t, m.Schedulable)
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_LonghornNode_NotReady(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Node", "longhorn.io/v1beta2", "node-2", "longhorn-system")
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "Ready", "status": "False"},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "nodes")
+	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+func TestToResource_CoreNode_Untouched(t *testing.T) {
+	mapper := NewKubeMapper()
+	// A core v1 Node must not be treated as a Longhorn node.
+	obj := newUnstructuredResource("Node", "v1", "worker-1", "")
+
+	assert.NotPanics(t, func() {
+		res := mapper.ToResource(*obj, "nodes")
+		assert.Equal(t, int64(0), res.LonghornNodeMetadata.StorageMaximum)
+	})
+}
+
 // ── Kustomization ─────────────────────────────────────────────────────────────
 
 func TestToResource_Kustomization(t *testing.T) {
@@ -528,6 +789,496 @@ func TestToResource_Ingress_WithLB(t *testing.T) {
 	assert.Equal(t, kube.StatusSuccess, res.Status)
 }
 
+// ── Service ───────────────────────────────────────────────────────────────────
+
+func TestToResource_Service_LoadBalancer(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Service", "v1", "web", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"type":       "LoadBalancer",
+		"clusterIPs": []interface{}{"10.96.0.10"},
+		"selector":   map[string]interface{}{"app": "web"},
+		"ports": []interface{}{
+			map[string]interface{}{
+				"name":       "http",
+				"protocol":   "TCP",
+				"port":       int64(80),
+				"targetPort": int64(8080),
+				"nodePort":   int64(30080),
+			},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"loadBalancer": map[string]interface{}{
+			"ingress": []interface{}{
+				map[string]interface{}{"ip": "192.168.1.50"},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "services")
+
+	assert.Equal(t, "LoadBalancer", res.ServiceMetadata.Type)
+	assert.Equal(t, []string{"10.96.0.10"}, res.ServiceMetadata.ClusterIPs)
+	assert.Equal(t, []string{"192.168.1.50"}, res.ServiceMetadata.ExternalIPs)
+	assert.Equal(t, map[string]string{"app": "web"}, res.ServiceMetadata.Selector)
+	assert.Len(t, res.ServiceMetadata.Ports, 1)
+	assert.Equal(t, "http", res.ServiceMetadata.Ports[0].Name)
+	assert.Equal(t, int32(80), res.ServiceMetadata.Ports[0].Port)
+	assert.Equal(t, "8080", res.ServiceMetadata.Ports[0].TargetPort)
+	assert.Equal(t, int32(30080), res.ServiceMetadata.Ports[0].NodePort)
+}
+
+func TestToResource_Service_ClusterIP_NoExternalIP(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Service", "v1", "internal", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"type":     "ClusterIP",
+		"selector": map[string]interface{}{"app": "internal"},
+	}
+
+	assert.NotPanics(t, func() {
+		res := mapper.ToResource(*obj, "services")
+		assert.Equal(t, "ClusterIP", res.ServiceMetadata.Type)
+		assert.Empty(t, res.ServiceMetadata.ExternalIPs)
+	})
+}
+
+func TestToResource_Service_NamedTargetPort_Hostname(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Service", "v1", "web", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"type": "LoadBalancer",
+		"ports": []interface{}{
+			map[string]interface{}{"port": int64(443), "targetPort": "https"},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"loadBalancer": map[string]interface{}{
+			"ingress": []interface{}{
+				map[string]interface{}{"hostname": "lb.example.com"},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "services")
+	assert.Equal(t, "https", res.ServiceMetadata.Ports[0].TargetPort)
+	assert.Equal(t, []string{"lb.example.com"}, res.ServiceMetadata.ExternalIPs)
+}
+
+func TestToResource_Ingress_RouteMetadata(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Ingress", "networking.k8s.io/v1", "my-ing", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"ingressClassName": "traefik",
+		"rules": []interface{}{
+			map[string]interface{}{
+				"host": "app.example.com",
+				"http": map[string]interface{}{
+					"paths": []interface{}{
+						map[string]interface{}{
+							"path": "/",
+							"backend": map[string]interface{}{
+								"service": map[string]interface{}{
+									"name": "web",
+									"port": map[string]interface{}{"number": int64(80)},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "ingresses")
+
+	assert.Equal(t, "traefik", res.RouteMetadata.Class)
+	assert.Equal(t, []string{"app.example.com"}, res.RouteMetadata.Hostnames)
+	assert.Len(t, res.RouteMetadata.BackendRefs, 1)
+	assert.Equal(t, "web", res.RouteMetadata.BackendRefs[0].Name)
+	assert.Equal(t, "default", res.RouteMetadata.BackendRefs[0].Namespace)
+	assert.Equal(t, "Service", res.RouteMetadata.BackendRefs[0].Kind)
+	assert.Equal(t, int32(80), res.RouteMetadata.BackendRefs[0].Port)
+}
+
+func TestToResource_Ingress_Addresses(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Ingress", "networking.k8s.io/v1", "my-ing", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"ingressClassName": "traefik",
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"loadBalancer": map[string]interface{}{
+			"ingress": []interface{}{
+				map[string]interface{}{"ip": "192.168.1.50"},
+				map[string]interface{}{"hostname": "lb.example.com"},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "ingresses")
+	assert.Equal(t, []string{"192.168.1.50", "lb.example.com"}, res.RouteMetadata.Addresses)
+}
+
+func TestToResource_Ingress_TLSEnabled_NoSecret(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Ingress", "networking.k8s.io/v1", "my-ing", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"tls": []interface{}{
+			map[string]interface{}{"hosts": []interface{}{"app.example.com"}},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "ingresses")
+	assert.True(t, res.RouteMetadata.TLSEnabled)
+	assert.Empty(t, res.RouteMetadata.TLSSecretRefs)
+}
+
+func TestToResource_Certificate_DNSNames(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Certificate", "cert-manager.io/v1", "wildcard", "network")
+	obj.Object["spec"] = map[string]interface{}{
+		"secretName": "wildcard-tls",
+		"dnsNames":   []interface{}{"*.example.com", "example.com"},
+	}
+
+	res := mapper.ToResource(*obj, "certificates")
+	assert.Equal(t, []string{"*.example.com", "example.com"}, res.CertificateMetadata.DNSNames)
+}
+
+func TestToResource_Ingress_DefaultBackend(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Ingress", "networking.k8s.io/v1", "my-ing", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"defaultBackend": map[string]interface{}{
+			"service": map[string]interface{}{
+				"name": "fallback",
+				"port": map[string]interface{}{"number": int64(8080)},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "ingresses")
+	assert.Len(t, res.RouteMetadata.BackendRefs, 1)
+	assert.Equal(t, "fallback", res.RouteMetadata.BackendRefs[0].Name)
+	assert.Empty(t, res.RouteMetadata.Hostnames)
+}
+
+func TestToResource_Ingress_EntryPoints(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Ingress", "networking.k8s.io/v1", "my-ing", "default")
+	obj.Object["metadata"].(map[string]interface{})["annotations"] = map[string]interface{}{
+		"traefik.ingress.kubernetes.io/router.entrypoints": "websecure-ext, websecure",
+	}
+	obj.Object["spec"] = map[string]interface{}{}
+
+	res := mapper.ToResource(*obj, "ingresses")
+	assert.Equal(t, []string{"websecure-ext", "websecure"}, res.RouteMetadata.EntryPoints)
+}
+
+func TestToResource_TraefikIngressRoute_EntryPoints(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("IngressRoute", "traefik.io/v1alpha1", "r", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"entryPoints": []interface{}{"web", "websecure"},
+		"routes":      []interface{}{},
+	}
+
+	res := mapper.ToResource(*obj, "ingressroutes")
+	assert.Equal(t, []string{"web", "websecure"}, res.RouteMetadata.EntryPoints)
+}
+
+func TestToResource_Ingress_TLS(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Ingress", "networking.k8s.io/v1", "my-ing", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"tls": []interface{}{
+			map[string]interface{}{"secretName": "web-tls", "hosts": []interface{}{"app.example.com"}},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "ingresses")
+	assert.Equal(t, []string{"default/web-tls"}, res.RouteMetadata.TLSSecretRefs)
+}
+
+// ── cert-manager Certificate ──────────────────────────────────────────────────────
+
+func TestToResource_Certificate_Ready(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Certificate", "cert-manager.io/v1", "web-cert", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"secretName": "web-tls",
+		"issuerRef":  map[string]interface{}{"name": "letsencrypt-prod", "kind": "ClusterIssuer"},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"notAfter": "2026-09-01T00:00:00Z",
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "Ready", "status": "True"},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "certificates")
+	assert.Equal(t, "web-tls", res.CertificateMetadata.SecretName)
+	assert.True(t, res.CertificateMetadata.Ready)
+	assert.Equal(t, "letsencrypt-prod", res.CertificateMetadata.Issuer)
+	assert.Equal(t, "2026-09-01T00:00:00Z", res.CertificateMetadata.NotAfter)
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_Certificate_Failed(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Certificate", "cert-manager.io/v1", "web-cert", "default")
+	obj.Object["spec"] = map[string]interface{}{"secretName": "web-tls"}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "Ready", "status": "False", "reason": "Failed", "message": "issuance failed"},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "certificates")
+	assert.False(t, res.CertificateMetadata.Ready)
+	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+func TestToResource_Certificate_Issuing(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Certificate", "cert-manager.io/v1", "web-cert", "default")
+	obj.Object["spec"] = map[string]interface{}{"secretName": "web-tls"}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "Ready", "status": "False", "reason": "Issuing"},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "certificates")
+	assert.False(t, res.CertificateMetadata.Ready)
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+// ── Traefik IngressRoute ────────────────────────────────────────────────────────
+
+func TestToResource_TraefikIngressRoute(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("IngressRoute", "traefik.io/v1alpha1", "web-route", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"entryPoints": []interface{}{"websecure"},
+		"routes": []interface{}{
+			map[string]interface{}{
+				"match": "Host(`app.example.com`) && PathPrefix(`/`)",
+				"kind":  "Rule",
+				"services": []interface{}{
+					map[string]interface{}{"name": "web", "port": int64(80)},
+				},
+			},
+			map[string]interface{}{
+				"match": "Host(`api.example.com`, `alt.example.com`)",
+				"services": []interface{}{
+					map[string]interface{}{"name": "api", "port": int64(8080), "namespace": "other"},
+				},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "ingressroutes")
+
+	assert.ElementsMatch(t, []string{"app.example.com", "api.example.com", "alt.example.com"}, res.RouteMetadata.Hostnames)
+	assert.Len(t, res.RouteMetadata.BackendRefs, 2)
+	assert.Equal(t, "web", res.RouteMetadata.BackendRefs[0].Name)
+	assert.Equal(t, "default", res.RouteMetadata.BackendRefs[0].Namespace)
+	assert.Equal(t, int32(80), res.RouteMetadata.BackendRefs[0].Port)
+	assert.Equal(t, "api", res.RouteMetadata.BackendRefs[1].Name)
+	assert.Equal(t, "other", res.RouteMetadata.BackendRefs[1].Namespace)
+}
+
+func TestToResource_TraefikIngressRoute_Middlewares(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("IngressRoute", "traefik.io/v1alpha1", "web-route", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"routes": []interface{}{
+			map[string]interface{}{
+				"match": "Host(`app.example.com`)",
+				"middlewares": []interface{}{
+					map[string]interface{}{"name": "auth"},
+					map[string]interface{}{"name": "ratelimit", "namespace": "traefik"},
+				},
+				"services": []interface{}{
+					map[string]interface{}{"name": "web", "port": int64(80)},
+				},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "ingressroutes")
+	assert.Equal(t, []string{"default/auth", "traefik/ratelimit"}, res.RouteMetadata.MiddlewareRefs)
+}
+
+func TestToResource_TraefikIngressRoute_NoHost(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("IngressRoute", "traefik.io/v1alpha1", "r", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"routes": []interface{}{
+			map[string]interface{}{
+				"match":    "PathPrefix(`/metrics`)",
+				"services": []interface{}{map[string]interface{}{"name": "metrics"}},
+			},
+		},
+	}
+
+	assert.NotPanics(t, func() {
+		res := mapper.ToResource(*obj, "ingressroutes")
+		assert.Empty(t, res.RouteMetadata.Hostnames)
+		assert.Len(t, res.RouteMetadata.BackendRefs, 1)
+	})
+}
+
+// ── EndpointSlice ───────────────────────────────────────────────────────────────
+
+func TestToResource_EndpointSlice(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("EndpointSlice", "discovery.k8s.io/v1", "web-abc", "default")
+	obj.Object["metadata"].(map[string]interface{})["labels"] = map[string]interface{}{
+		"kubernetes.io/service-name": "web",
+	}
+	obj.Object["addressType"] = "IPv4"
+	obj.Object["endpoints"] = []interface{}{
+		map[string]interface{}{
+			"addresses":  []interface{}{"10.1.0.5"},
+			"conditions": map[string]interface{}{"ready": true},
+			"targetRef": map[string]interface{}{
+				"kind": "Pod", "name": "web-1", "uid": "pod-uid-1",
+			},
+		},
+		map[string]interface{}{
+			"addresses":  []interface{}{"10.1.0.6"},
+			"conditions": map[string]interface{}{"ready": false},
+			"targetRef": map[string]interface{}{
+				"kind": "Pod", "name": "web-2", "uid": "pod-uid-2",
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "endpointslices")
+
+	assert.Equal(t, "web", res.EndpointSliceMetadata.ServiceName)
+	assert.Len(t, res.EndpointSliceMetadata.Endpoints, 2)
+	assert.Equal(t, "pod-uid-1", res.EndpointSliceMetadata.Endpoints[0].TargetUID)
+	assert.Equal(t, "web-1", res.EndpointSliceMetadata.Endpoints[0].TargetName)
+	assert.True(t, res.EndpointSliceMetadata.Endpoints[0].Ready)
+	assert.False(t, res.EndpointSliceMetadata.Endpoints[1].Ready)
+}
+
+func TestToResource_EndpointSlice_NoServiceLabel(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("EndpointSlice", "discovery.k8s.io/v1", "orphan", "default")
+	obj.Object["addressType"] = "IPv4"
+
+	assert.NotPanics(t, func() {
+		res := mapper.ToResource(*obj, "endpointslices")
+		assert.Equal(t, "", res.EndpointSliceMetadata.ServiceName)
+		assert.Empty(t, res.EndpointSliceMetadata.Endpoints)
+	})
+}
+
+// ── NetworkPolicy ─────────────────────────────────────────────────────────────────
+
+func TestToResource_NetworkPolicy(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("NetworkPolicy", "networking.k8s.io/v1", "deny-web", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"podSelector": map[string]interface{}{
+			"matchLabels": map[string]interface{}{"app": "web"},
+		},
+		"policyTypes": []interface{}{"Ingress", "Egress"},
+		"ingress": []interface{}{
+			map[string]interface{}{"from": []interface{}{}},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "networkpolicies")
+	assert.Equal(t, map[string]string{"app": "web"}, res.NetworkPolicyMetadata.PodSelector)
+	assert.Equal(t, []string{"Ingress", "Egress"}, res.NetworkPolicyMetadata.PolicyTypes)
+	assert.Equal(t, 1, res.NetworkPolicyMetadata.IngressRules)
+	assert.Equal(t, 0, res.NetworkPolicyMetadata.EgressRules)
+}
+
+// ── Gateway API ─────────────────────────────────────────────────────────────────
+
+func TestToResource_Gateway(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Gateway", "gateway.networking.k8s.io/v1", "main", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"gatewayClassName": "cilium",
+		"listeners": []interface{}{
+			map[string]interface{}{
+				"name": "http", "protocol": "HTTP", "port": int64(80),
+				"hostname": "*.example.com",
+			},
+		},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"addresses": []interface{}{
+			map[string]interface{}{"type": "IPAddress", "value": "192.168.1.60"},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "gateways")
+
+	assert.Equal(t, "cilium", res.GatewayMetadata.GatewayClassName)
+	assert.Equal(t, []string{"192.168.1.60"}, res.GatewayMetadata.Addresses)
+	assert.Len(t, res.GatewayMetadata.Listeners, 1)
+	assert.Equal(t, "http", res.GatewayMetadata.Listeners[0].Name)
+	assert.Equal(t, int32(80), res.GatewayMetadata.Listeners[0].Port)
+	assert.Equal(t, "*.example.com", res.GatewayMetadata.Listeners[0].Hostname)
+}
+
+func TestToResource_HTTPRoute(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("HTTPRoute", "gateway.networking.k8s.io/v1", "web", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"hostnames": []interface{}{"app.example.com"},
+		"parentRefs": []interface{}{
+			map[string]interface{}{"name": "main", "namespace": "infra", "sectionName": "http"},
+		},
+		"rules": []interface{}{
+			map[string]interface{}{
+				"backendRefs": []interface{}{
+					map[string]interface{}{"name": "web", "port": int64(80)},
+					map[string]interface{}{"name": "web-canary", "port": int64(80), "namespace": "other"},
+				},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "httproutes")
+
+	assert.Equal(t, []string{"app.example.com"}, res.RouteMetadata.Hostnames)
+	assert.Len(t, res.RouteMetadata.ParentRefs, 1)
+	assert.Equal(t, "main", res.RouteMetadata.ParentRefs[0].Name)
+	assert.Equal(t, "infra", res.RouteMetadata.ParentRefs[0].Namespace)
+	assert.Equal(t, "http", res.RouteMetadata.ParentRefs[0].SectionName)
+	assert.Len(t, res.RouteMetadata.BackendRefs, 2)
+	assert.Equal(t, "web", res.RouteMetadata.BackendRefs[0].Name)
+	assert.Equal(t, "default", res.RouteMetadata.BackendRefs[0].Namespace)
+	assert.Equal(t, "other", res.RouteMetadata.BackendRefs[1].Namespace)
+	assert.Equal(t, int32(80), res.RouteMetadata.BackendRefs[0].Port)
+}
+
+func TestToResource_HTTPRoute_ParentDefaultNamespace(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("HTTPRoute", "gateway.networking.k8s.io/v1", "web", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"parentRefs": []interface{}{
+			map[string]interface{}{"name": "main"},
+		},
+	}
+
+	assert.NotPanics(t, func() {
+		res := mapper.ToResource(*obj, "httproutes")
+		assert.Equal(t, "default", res.RouteMetadata.ParentRefs[0].Namespace)
+	})
+}
+
 // ── StatefulSet ───────────────────────────────────────────────────────────────
 
 func TestToResource_StatefulSet_Ready(t *testing.T) {
@@ -723,7 +1474,6 @@ func TestToResource_StatefulSet_NilReplicas(t *testing.T) {
 		mapper.ToResource(*obj, "statefulsets")
 	})
 }
-
 
 func fluxReadyCondition(status, reason string) map[string]interface{} {
 	return map[string]interface{}{

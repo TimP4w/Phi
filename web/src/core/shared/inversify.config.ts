@@ -9,6 +9,8 @@ import { TreeService } from '../fluxTree/services/tree.service';
 import { TreeServiceImpl } from '../fluxTree/services/impl/tree.service.impl';
 import { ResourceService } from '../resource/services/resource.service';
 import { ResourceServiceImpl } from "../resource/services/impl/resource.service.impl";
+import { TrivyService } from "../trivy/services/trivy.service";
+import { TrivyServiceImpl } from "../trivy/services/impl/trivy.service.impl";
 import { EventsStore } from "../fluxTree/stores/events.store";
 import { ReconcileUseCase } from "../resource/usecases/reconcile.usecase";
 import { SuspendUseCase } from "../resource/usecases/suspend.usecase";
@@ -17,17 +19,23 @@ import { WatchLogsUseCase } from "../resource/usecases/watchLogs.usecase";
 import { DescribeNodeUseCase } from "../resource/usecases/describeNode.usecase";
 import { FetchEventsUseCase } from "../fluxTree/usecases/FetchEvents.usecase";
 import { LayoutTreeUseCase } from "../fluxTree/usecases/LayoutTree.usecase";
+import { NetworkTopologyUseCase } from "../network/usecases/NetworkTopology.usecase";
 import { HandleWsMessageUseCase } from "../realtime/usecases/handleWsMessage.usecase";
+import { MetricsStore } from "../metrics/stores/metrics.store";
+import { WatchMetricsUseCase } from "../metrics/usecases/watchMetrics.usecase";
+import { StopWatchMetricsUseCase } from "../metrics/usecases/stopWatchMetrics.usecase";
 
 const container = new Container();
 
 /* Stores */
 container.bind(FluxTreeStore).toSelf().inSingletonScope();
 container.bind(EventsStore).toSelf().inSingletonScope();
+container.bind(MetricsStore).toSelf().inSingletonScope();
 
 /* Core */
 container.bind<TreeService>(TYPES.TreeService).to(TreeServiceImpl).inSingletonScope();
 container.bind<ResourceService>(TYPES.ResourceService).to(ResourceServiceImpl).inSingletonScope();
+container.bind<TrivyService>(TYPES.TrivyService).to(TrivyServiceImpl).inSingletonScope();
 
 /* Infra */
 container.bind<WebSocketService>(TYPES.WebSocket).to(WebSocketServiceImpl).inSingletonScope();
@@ -41,6 +49,9 @@ container.bind(TYPES.WatchLogsUseCase).to(WatchLogsUseCase).inSingletonScope();
 container.bind(TYPES.DescribeNodeUseCase).to(DescribeNodeUseCase).inSingletonScope();
 container.bind(TYPES.FetchEventsUseCase).to(FetchEventsUseCase).inSingletonScope();
 container.bind(TYPES.LayoutTreeUseCase).to(LayoutTreeUseCase).inSingletonScope();
+container.bind(TYPES.NetworkTopologyUseCase).to(NetworkTopologyUseCase).inSingletonScope();
 container.bind(TYPES.HandleWsMessageUseCase).to(HandleWsMessageUseCase).inSingletonScope();
+container.bind(TYPES.WatchMetricsUseCase).to(WatchMetricsUseCase).inSingletonScope();
+container.bind(TYPES.StopWatchMetricsUseCase).to(StopWatchMetricsUseCase).inSingletonScope();
 
 export { container };

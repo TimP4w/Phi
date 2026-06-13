@@ -12,6 +12,7 @@
   "dependencies": {
     "@heroui/react": "~2.7.5",
     "@icons-pack/react-simple-icons": "13.8.0",
+    "@tanstack/react-virtual": "^3.14.2",
     "@xyflow/react": "^12.11.0",
     "ansi-to-html": "^0.7.2",
     "date-fns": "^3.6.0",
@@ -27,6 +28,7 @@
     "react-code-blocks": "^0.1.6",
     "react-dom": "^19.0.0",
     "react-router-dom": "^6.30.4",
+    "recharts": "^3.8.1",
     "reflect-metadata": "^0.2.2"
   },
   "devDependencies": {

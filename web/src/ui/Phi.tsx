@@ -28,7 +28,7 @@ export default function Phi() {
         <Routes>
           <Route path={ROUTES.DASHBOARD} element={<DashboardView />} />
           <Route
-            path={ROUTES.RESOURCE + "/:nodeUid"}
+            path={ROUTES.RESOURCE + "/:nodeUid/:view?"}
             element={<ResourceView />}
           />
         </Routes>

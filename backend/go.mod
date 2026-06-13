@@ -73,7 +73,6 @@ require (
 	golang.org/x/mod v0.36.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/term v0.43.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
@@ -102,6 +101,7 @@ require (
 	github.com/fluxcd/source-controller/api v1.8.5
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674
 	github.com/mark3labs/mcp-go v0.54.1
+	golang.org/x/sync v0.20.0
 	k8s.io/cli-runtime v0.36.1
 	k8s.io/client-go v0.36.1
 )

@@ -12,12 +12,16 @@ import {
   Deployment,
   Pod,
   PersistentVolumeClaim,
+  PersistentVolume,
 } from "../../../core/fluxTree/models/tree";
+import { formatBytes } from "../../shared/format";
 import AppLogo from "../resource-icon/ResourceIcon";
 import StatusChip from "../status-chip/StatusChip";
 import { Handle, NodeProps, Position, Node } from "@xyflow/react";
 import { ROUTES } from "../../routes/routes.enum";
 import { Pause } from "lucide-react";
+import UsageChip from "../metrics/UsageChip";
+import { METRICS_KINDS } from "../../../core/metrics/constants/metrics.const";
 
 type ResourceProps = NodeProps<Node<VisualizationNodeData>>;
 
@@ -83,6 +87,15 @@ function getExtraInfo(node: KubeResource): string | null {
     return [phase, sc, capacity, mode].filter(Boolean).join(" · ") || null;
   }
 
+  if (node instanceof PersistentVolume) {
+    const phase = node.metadata?.phase ?? "";
+    const capacity = node.metadata?.capacity ? formatBytes(node.metadata.capacity) : "";
+    const driver = node.metadata?.nfsServer
+      ? "nfs"
+      : (node.metadata?.driver ?? "");
+    return [phase, capacity, driver].filter(Boolean).join(" · ") || null;
+  }
+
   return null;
 }
 
@@ -144,6 +157,11 @@ function Resource({ data }: ResourceProps) {
             ) : (
               <p className="text-xs text-default-500 truncate">{extraInfo}</p>
             )}
+          </div>
+        )}
+        {METRICS_KINDS.has(treeNode.kind) && (
+          <div className="px-3 pb-2">
+            <UsageChip uid={treeNode.uid} />
           </div>
         )}
       </div>

@@ -1,4 +1,16 @@
-import { ConditionDto, LogMessageDto, TreeNodeDto } from "./dtos/treeDto";
+import {
+  ConditionDto,
+  LogMessageDto,
+  TreeNodeDto,
+  ServiceMetadataDto,
+  RouteMetadataDto,
+  EndpointSliceMetadataDto,
+  GatewayMetadataDto,
+  CertificateMetadataDto,
+  NetworkPolicyMetadataDto,
+  ProxyMetadataDto,
+  TrivyMetadataDto,
+} from "./dtos/treeDto";
 import { FLUX_NAMESPACE, RESOURCE_TYPE } from "../constants/resources.const";
 
 export class Tree {
@@ -64,6 +76,18 @@ export class KubeResource {
   logs: PodLog[] = [];
   isFluxManaged: boolean = false;
   isReconcilable: boolean = false;
+  // Networking metadata — present only on the relevant kinds, used by the
+  // network topology view to resolve traffic edges.
+  serviceMetadata?: ServiceMetadataDto;
+  routeMetadata?: RouteMetadataDto;
+  endpointSliceMetadata?: EndpointSliceMetadataDto;
+  gatewayMetadata?: GatewayMetadataDto;
+  certificateMetadata?: CertificateMetadataDto;
+  networkPolicyMetadata?: NetworkPolicyMetadataDto;
+  proxyMetadata?: ProxyMetadataDto;
+  // Present only on Trivy Operator report resources; consumed as a findings
+  // overlay rather than rendered as a tree node.
+  trivyMetadata?: TrivyMetadataDto;
 
   constructor();
   constructor(dto: TreeNodeDto);
@@ -94,6 +118,14 @@ export class KubeResource {
         ? stringToResourceStatus(dto.status)
         : ResourceStatus.UNKNOWN;
       this.isFluxManaged = dto.isFluxManaged;
+      this.serviceMetadata = dto.serviceMetadata;
+      this.routeMetadata = dto.routeMetadata;
+      this.endpointSliceMetadata = dto.endpointSliceMetadata;
+      this.gatewayMetadata = dto.gatewayMetadata;
+      this.certificateMetadata = dto.certificateMetadata;
+      this.networkPolicyMetadata = dto.networkPolicyMetadata;
+      this.proxyMetadata = dto.proxyMetadata;
+      this.trivyMetadata = dto.trivyMetadata;
     } else {
       this.uid = "";
       this.name = "";
@@ -128,6 +160,20 @@ export class KubeResource {
         return new HelmRepository(dto);
       case RESOURCE_TYPE.PVC:
         return new PersistentVolumeClaim(dto);
+      case RESOURCE_TYPE.PV:
+        return new PersistentVolume(dto);
+      case RESOURCE_TYPE.VOLUME:
+        // "Volume" is a Longhorn CRD; other groups fall through to the base class.
+        if (dto.group === "longhorn.io") {
+          return new LonghornVolume(dto);
+        }
+        return new KubeResource(dto);
+      case RESOURCE_TYPE.NODE:
+        // "Node" is both a core kind and a Longhorn CRD; only the latter carries disk stats.
+        if (dto.group === "longhorn.io") {
+          return new LonghornNode(dto);
+        }
+        return new KubeResource(dto);
       case RESOURCE_TYPE.OCI_REPOSITORY:
         return new OCIRepository(dto);
       default:
@@ -307,9 +353,79 @@ export class PersistentVolumeClaim extends KubeResource {
   }
 }
 
+export class PersistentVolume extends KubeResource {
+  metadata: PersistentVolumeMetadata | null;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.metadata = dto.pvMetadata ? dto.pvMetadata : null;
+  }
+}
+
+// sumRequestedStorage totals spec.resources.requests.storage (bytes) across
+// every PersistentVolumeClaim in the subtree rooted at node — how much storage
+// the branch (e.g. a Kustomization) asks for. Always derivable from the tree,
+// independent of the Prometheus integration. pvcCount lets callers caveat a
+// measured-usage figure that covers only some of the claims.
+export function sumRequestedStorage(node: KubeResource): {
+  requested: number;
+  pvcCount: number;
+} {
+  let requested = 0;
+  let pvcCount = 0;
+  const visit = (n: KubeResource) => {
+    if (n instanceof PersistentVolumeClaim) {
+      pvcCount++;
+      requested += n.metadata?.requested ?? 0;
+    }
+    n.children.forEach(visit);
+  };
+  visit(node);
+  return { requested, pvcCount };
+}
+
+export class LonghornVolume extends KubeResource {
+  metadata: LonghornVolumeMetadata | null;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.metadata = dto.longhornVolumeMetadata ? dto.longhornVolumeMetadata : null;
+  }
+}
+
+export class LonghornNode extends KubeResource {
+  metadata: LonghornNodeMetadata | null;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.metadata = dto.longhornNodeMetadata ? dto.longhornNodeMetadata : null;
+  }
+}
+
 export type PodMetadata = {
   phase: string;
   image: string;
+};
+
+export type LonghornNodeMetadata = {
+  ready: boolean;
+  schedulable: boolean;
+  storageMaximum: number;
+  storageUsed: number;
+  storageReserved: number;
+  storageSchedulable: number;
+  storageDisabled: number;
+};
+
+export type LonghornVolumeMetadata = {
+  state: string;
+  robustness: string;
+  size: number;
+  actualSize: number;
+  numberOfReplicas: number;
+  nodeID: string;
+  frontend: string;
+  accessMode: string;
 };
 
 type HelmReleaseMetadata = {
@@ -344,6 +460,19 @@ type PersistentVolumeClaimMetadata = {
   accessModes: string[];
   capacity: Map<string, string>;
   phase: string;
+  requested?: number;
+};
+
+export type PersistentVolumeMetadata = {
+  capacity?: number;
+  storageClass?: string;
+  driver?: string;
+  accessModes?: string[];
+  reclaimPolicy?: string;
+  volumeMode?: string;
+  phase?: string;
+  nfsServer?: string;
+  nfsShare?: string;
 };
 
 type DeploymentMetadata = {

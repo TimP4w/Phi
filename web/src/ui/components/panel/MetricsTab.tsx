@@ -1,0 +1,137 @@
+import { observer } from "mobx-react-lite";
+import { useInjection } from "inversify-react";
+import { format } from "date-fns";
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { MetricsStore } from "../../../core/metrics/stores/metrics.store";
+import { SamplePointDto, SpecValueDto } from "../../../core/metrics/models/dtos/metricsDto";
+import { formatBytes, formatCores } from "../../shared/format";
+import { Spinner } from "@heroui/react";
+
+type MetricsTabProps = {
+  uid: string;
+};
+
+type ChartDef = {
+  title: string;
+  seriesKeys: { key: string; label: string; color: string }[];
+  formatValue: (v: number) => string;
+  spec?: SpecValueDto;
+};
+
+function SeriesChart({ def, series }: { def: ChartDef; series: Record<string, SamplePointDto[]> }) {
+  // Join series by timestamp, not index — scrape gaps can leave one series
+  // shorter than another, and an index join would silently shift values.
+  const byTime = new Map<number, Record<string, number>>();
+  for (const sk of def.seriesKeys) {
+    for (const point of series[sk.key] ?? []) {
+      const row = byTime.get(point.t) ?? { t: point.t };
+      row[sk.key] = point.v;
+      byTime.set(point.t, row);
+    }
+  }
+  const data = [...byTime.values()].sort((a, b) => a.t - b.t);
+
+  const specLine = (value: number | null | undefined, label: string) =>
+    value != null ? (
+      <ReferenceLine y={value} strokeDasharray="4 4" stroke="#888" label={{ value: label, fontSize: 10, fill: "#888" }} />
+    ) : null;
+
+  return (
+    <div>
+      <div className="flex items-baseline gap-3 mb-1">
+        <h3 className="text-sm font-semibold">{def.title}</h3>
+        {def.spec && (
+          <span className="text-xs text-default-400 font-mono">
+            {`requested ${def.spec.requests != null ? def.formatValue(def.spec.requests) : "—"} · limit ${
+              def.spec.limits != null ? def.formatValue(def.spec.limits) : "—"
+            }`}
+          </span>
+        )}
+      </div>
+      <ResponsiveContainer width="100%" height={180}>
+        <AreaChart data={data}>
+          <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
+          <XAxis
+            dataKey="t"
+            tickFormatter={(t: number) => format(new Date(t * 1000), "HH:mm")}
+            fontSize={10}
+            minTickGap={40}
+          />
+          <YAxis tickFormatter={(v: number) => def.formatValue(v)} fontSize={10} width={56} />
+          <Tooltip
+            labelFormatter={(t) => format(new Date((t as number) * 1000), "MMM d HH:mm")}
+            formatter={(v) => def.formatValue(v as number)}
+          />
+          {def.seriesKeys.map((sk) => (
+            <Area key={sk.key} dataKey={sk.key} name={sk.label} stroke={sk.color} fill={sk.color} fillOpacity={0.12} isAnimationActive={false} connectNulls={false} />
+          ))}
+          {def.spec && specLine(def.spec.requests, "request")}
+          {def.spec && specLine(def.spec.limits, "limit")}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+const MetricsTab = observer(({ uid }: MetricsTabProps) => {
+  const metricsStore = useInjection(MetricsStore);
+  const metrics = metricsStore.resourceMetrics.get(uid);
+
+  if (!metrics) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Spinner size="sm" label="Waiting for metrics…" />
+      </div>
+    );
+  }
+
+  const charts: ChartDef[] = [
+    {
+      title: "CPU (cores)",
+      seriesKeys: [{ key: "cpu", label: "used", color: "#3b82f6" }],
+      formatValue: formatCores,
+      spec: metrics.spec.cpu,
+    },
+    {
+      title: "Memory",
+      seriesKeys: [{ key: "memory", label: "used", color: "#22c55e" }],
+      formatValue: formatBytes,
+      spec: metrics.spec.memory,
+    },
+    {
+      title: "Network (B/s)",
+      seriesKeys: [
+        { key: "networkRx", label: "rx", color: "#a855f7" },
+        { key: "networkTx", label: "tx", color: "#f97316" },
+      ],
+      formatValue: formatBytes,
+    },
+    {
+      title: "Disk I/O (B/s)",
+      seriesKeys: [
+        { key: "diskRead", label: "read", color: "#06b6d4" },
+        { key: "diskWrite", label: "write", color: "#ef4444" },
+      ],
+      formatValue: formatBytes,
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-6">
+      {charts.map((def) => (
+        <SeriesChart key={def.title} def={def} series={metrics.series} />
+      ))}
+    </div>
+  );
+});
+
+export default MetricsTab;
