@@ -7,13 +7,13 @@ export const colorByStatus = (status: ResourceStatus) => {
     case ResourceStatus.FAILED:
       return "danger";
     case ResourceStatus.PENDING:
-      return "warning";
+      return "primary";
     case ResourceStatus.WARNING:
       return "warning";
     case ResourceStatus.SUSPENDED:
       return "default";
     default:
-      return "primary";
+      return "default";
   }
 };
 
