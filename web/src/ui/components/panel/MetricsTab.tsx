@@ -27,6 +27,38 @@ type ChartDef = {
   spec?: SpecValueDto;
 };
 
+// recharts' default tooltip is a white box (unreadable on the dark UI) and
+// color-codes the item text rather than showing a swatch. This renders a dark
+// box with a colored dot before each series label, injected with active/payload/
+// label by recharts when passed to <Tooltip content={...} />.
+type TooltipEntry = { name?: string; value?: number; color?: string; dataKey?: string | number };
+
+function ChartTooltip({
+  active,
+  payload,
+  label,
+  formatValue,
+}: {
+  active?: boolean;
+  payload?: TooltipEntry[];
+  label?: number;
+  formatValue: (v: number) => string;
+}) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border border-[#3c3c3c] bg-[#0F0F0F] px-2.5 py-1.5 text-xs text-[#e5e5e5]">
+      <div className="mb-1 text-default-400">{format(new Date((label ?? 0) * 1000), "MMM d HH:mm")}</div>
+      {payload.map((entry) => (
+        <div key={entry.dataKey} className="flex items-center gap-1.5">
+          <span className="inline-block h-2 w-2 rounded-full" style={{ background: entry.color }} />
+          <span>{entry.name}</span>
+          <span className="ml-auto pl-3 font-mono tabular-nums">{formatValue(entry.value ?? 0)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SeriesChart({ def, series }: { def: ChartDef; series: Record<string, SamplePointDto[]> }) {
   // Join series by timestamp, not index — scrape gaps can leave one series
   // shorter than another, and an index join would silently shift values.
@@ -67,10 +99,7 @@ function SeriesChart({ def, series }: { def: ChartDef; series: Record<string, Sa
             minTickGap={40}
           />
           <YAxis tickFormatter={(v: number) => def.formatValue(v)} fontSize={10} width={56} />
-          <Tooltip
-            labelFormatter={(t) => format(new Date((t as number) * 1000), "MMM d HH:mm")}
-            formatter={(v) => def.formatValue(v as number)}
-          />
+          <Tooltip cursor={{ stroke: "#3c3c3c" }} content={<ChartTooltip formatValue={def.formatValue} />} />
           {def.seriesKeys.map((sk) => (
             <Area key={sk.key} dataKey={sk.key} name={sk.label} stroke={sk.color} fill={sk.color} fillOpacity={0.12} isAnimationActive={false} connectNulls={false} />
           ))}
