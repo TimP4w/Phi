@@ -39,13 +39,6 @@ const STATUS_CONFIG = [
     textClass: "text-default-400",
     match: (r: KubeResource) => r.status === ResourceStatus.SUSPENDED,
   },
-  {
-    label: "Unknown",
-    status: ResourceStatus.UNKNOWN,
-    dotClass: "bg-default-400",
-    textClass: "text-default-400",
-    match: (r: KubeResource) => r.status === ResourceStatus.UNKNOWN,
-  },
 ];
 
 const FluxApplicationsWidget: React.FC<FluxApplicationsWidgetProps> = observer(

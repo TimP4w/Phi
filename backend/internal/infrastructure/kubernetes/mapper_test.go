@@ -57,7 +57,8 @@ func TestToResource_BasicFields(t *testing.T) {
 	assert.Equal(t, "test", res.Labels["app"])
 	assert.Equal(t, "hello", res.Annotations["note"])
 	assert.False(t, res.CreatedAt.IsZero())
-	assert.Equal(t, kube.StatusUnknown, res.Status)
+	// ConfigMap is a static config object with no health concept; it maps to success.
+	assert.Equal(t, kube.StatusSuccess, res.Status)
 }
 
 func TestToResource_OwnerRefs(t *testing.T) {
@@ -1790,4 +1791,191 @@ func TestToResource_ImageUpdateAutomation_DependencyNotReady_IsPending(t *testin
 
 	res := mapper.ToResource(*obj, "imageupdateautomations")
 	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+// ── Generic status fallback for kinds without a dedicated mapper ───────────────
+
+func TestToResource_StaticKindsAreSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	cases := []struct {
+		kind    string
+		version string
+	}{
+		{"ConfigMap", "v1"},
+		{"Secret", "v1"},
+		{"ServiceAccount", "v1"},
+		{"ClusterRole", "rbac.authorization.k8s.io/v1"},
+		{"ClusterRoleBinding", "rbac.authorization.k8s.io/v1"},
+		{"Role", "rbac.authorization.k8s.io/v1"},
+		{"RoleBinding", "rbac.authorization.k8s.io/v1"},
+		{"CustomResourceDefinition", "apiextensions.k8s.io/v1"},
+		{"ControllerRevision", "apps/v1"},
+		{"EndpointSlice", "discovery.k8s.io/v1"},
+		{"PriorityClass", "scheduling.k8s.io/v1"},
+		{"RuntimeClass", "node.k8s.io/v1"},
+		{"StorageClass", "storage.k8s.io/v1"},
+		{"IngressClass", "networking.k8s.io/v1"},
+		{"Lease", "coordination.k8s.io/v1"},
+		{"ValidatingWebhookConfiguration", "admissionregistration.k8s.io/v1"},
+		{"MutatingWebhookConfiguration", "admissionregistration.k8s.io/v1"},
+		{"CSIDriver", "storage.k8s.io/v1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.kind, func(t *testing.T) {
+			obj := newUnstructuredResource(tc.kind, tc.version, "x", "default")
+			res := mapper.ToResource(*obj, "")
+			assert.Equal(t, kube.StatusSuccess, res.Status)
+		})
+	}
+}
+
+func TestToResource_GenericConditions_ReadyTrue_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Backup", "longhorn.io/v1beta2", "my-backup", "longhorn-system")
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("True", "Completed"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "backups")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_GenericConditions_ReadyFalse_IsFailed(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Backup", "longhorn.io/v1beta2", "my-backup", "longhorn-system")
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			fluxReadyCondition("False", "Error"),
+		},
+	}
+
+	res := mapper.ToResource(*obj, "backups")
+	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+func TestToResource_GenericConditions_AvailableTrue_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("OnePasswordItem", "onepassword.com/v1", "item", "default")
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{
+				"type":   "Available",
+				"status": "True",
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "onepassworditems")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_NamespaceActive_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Namespace", "v1", "media", "")
+	obj.Object["status"] = map[string]interface{}{"phase": "Active"}
+
+	res := mapper.ToResource(*obj, "namespaces")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_NamespaceTerminating_IsPending(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Namespace", "v1", "media", "")
+	obj.Object["status"] = map[string]interface{}{"phase": "Terminating"}
+
+	res := mapper.ToResource(*obj, "namespaces")
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+func TestToResource_ReplicaSet_AllReplicasReady_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("ReplicaSet", "apps/v1", "my-rs", "default")
+	obj.Object["spec"] = map[string]interface{}{"replicas": int64(3)}
+	obj.Object["status"] = map[string]interface{}{"readyReplicas": int64(3)}
+
+	res := mapper.ToResource(*obj, "replicasets")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_ReplicaSet_MissingReplicas_IsPending(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("ReplicaSet", "apps/v1", "my-rs", "default")
+	obj.Object["spec"] = map[string]interface{}{"replicas": int64(3)}
+	obj.Object["status"] = map[string]interface{}{"readyReplicas": int64(1)}
+
+	res := mapper.ToResource(*obj, "replicasets")
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+func TestToResource_ReplicaSet_ScaledToZero_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("ReplicaSet", "apps/v1", "my-rs", "default")
+	obj.Object["spec"] = map[string]interface{}{"replicas": int64(0)}
+
+	res := mapper.ToResource(*obj, "replicasets")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_NetworkPolicy_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("NetworkPolicy", "networking.k8s.io/v1", "deny-all", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"podSelector": map[string]interface{}{},
+		"policyTypes": []interface{}{"Ingress"},
+	}
+
+	res := mapper.ToResource(*obj, "networkpolicies")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_DaemonSet_AllReady_IsSuccess(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("DaemonSet", "apps/v1", "my-ds", "kube-system")
+	setGeneration(obj.Object, 2)
+	obj.Object["status"] = map[string]interface{}{
+		"observedGeneration":     int64(2),
+		"desiredNumberScheduled": int64(3),
+		"numberReady":            int64(3),
+	}
+
+	res := mapper.ToResource(*obj, "daemonsets")
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+}
+
+func TestToResource_DaemonSet_NotAllReady_IsPending(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("DaemonSet", "apps/v1", "my-ds", "kube-system")
+	setGeneration(obj.Object, 2)
+	obj.Object["status"] = map[string]interface{}{
+		"observedGeneration":     int64(2),
+		"desiredNumberScheduled": int64(3),
+		"numberReady":            int64(1),
+	}
+
+	res := mapper.ToResource(*obj, "daemonsets")
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+func TestToResource_DaemonSet_StaleGeneration_IsPending(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("DaemonSet", "apps/v1", "my-ds", "kube-system")
+	setGeneration(obj.Object, 3)
+	obj.Object["status"] = map[string]interface{}{
+		"observedGeneration":     int64(2),
+		"desiredNumberScheduled": int64(3),
+		"numberReady":            int64(3),
+	}
+
+	res := mapper.ToResource(*obj, "daemonsets")
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
+func TestToResource_UnknownKindWithoutConditions_RemainsUnknown(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("SomeWeirdThing", "example.com/v1", "x", "default")
+
+	res := mapper.ToResource(*obj, "someweirdthings")
+	assert.Equal(t, kube.StatusUnknown, res.Status)
 }

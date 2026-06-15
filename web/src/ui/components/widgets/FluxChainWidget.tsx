@@ -21,6 +21,7 @@ const dotClass = (resource: KubeResource): string => {
     case ResourceStatus.FAILED:
       return "bg-danger";
     case ResourceStatus.PENDING:
+      return "bg-primary";
     case ResourceStatus.WARNING:
       return "bg-warning";
     default:

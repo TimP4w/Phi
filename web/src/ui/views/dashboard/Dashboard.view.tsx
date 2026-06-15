@@ -95,12 +95,6 @@ const statusFilter: {
     color: "default",
     filter: (r) => r.status === ResourceStatus.SUSPENDED,
   },
-  {
-    label: "Unknown",
-    key: ResourceStatus.UNKNOWN,
-    color: "default",
-    filter: (r) => r.status === ResourceStatus.UNKNOWN,
-  },
 ];
 
 const suspendedFilter = [
