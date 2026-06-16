@@ -15,11 +15,12 @@ import {
   KubeResource,
   Kustomization,
 } from "../models/tree";
-import { RESOURCE_TYPE, FLUX_NAMESPACE, TRIVY_REPORT_KINDS } from "../constants/resources.const";
 import {
-  indexFindingsByTarget,
-  TrivySummary,
-} from "../../trivy/trivy";
+  RESOURCE_TYPE,
+  FLUX_NAMESPACE,
+  TRIVY_REPORT_KINDS,
+} from "../constants/resources.const";
+import { indexFindingsByTarget, TrivySummary } from "../../trivy/trivy";
 import { TreeNodeDto } from "../models/dtos/treeDto";
 
 const APPLICATION_KINDS = new Set([
@@ -77,7 +78,10 @@ function buildTree(resources: Map<string, KubeResource>): Tree {
 class FluxTreeStore {
   // resources: MobX ObservableMap that holds all cached KubeResources by UID.
   // MobX automatically tracks reads/writes; computed and actions react to changes.
-  resources: ObservableMap<string, KubeResource> = observable.map<string, KubeResource>();
+  resources: ObservableMap<string, KubeResource> = observable.map<
+    string,
+    KubeResource
+  >();
   private _tree: Tree = new Tree(new KubeResource());
   private selectedUid: string | null = null;
 
@@ -100,7 +104,9 @@ class FluxTreeStore {
   }
 
   get selectedResource(): KubeResource | null {
-    return this.selectedUid ? (this.resources.get(this.selectedUid) ?? null) : null;
+    return this.selectedUid
+      ? (this.resources.get(this.selectedUid) ?? null)
+      : null;
   }
 
   get tree(): Tree {
@@ -119,16 +125,24 @@ class FluxTreeStore {
 
   // --- flat map mutators ---
 
+  // Coalesce rebuilds over a short window.
+  private static readonly REBUILD_WINDOW_MS = 150;
   private _rebuildScheduled = false;
+  private _lastBuild = 0;
 
   private scheduleBuild(): void {
     if (this._rebuildScheduled) return;
     this._rebuildScheduled = true;
-    Promise.resolve().then(() =>
-      runInAction(() => {
-        this._tree = buildTree(this.resources);
-        this._rebuildScheduled = false;
-      }),
+    const elapsed = Date.now() - this._lastBuild;
+    const delay = Math.max(0, FluxTreeStore.REBUILD_WINDOW_MS - elapsed);
+    setTimeout(
+      () =>
+        runInAction(() => {
+          this._tree = buildTree(this.resources);
+          this._lastBuild = Date.now();
+          this._rebuildScheduled = false;
+        }),
+      delay,
     );
   }
 
@@ -149,6 +163,7 @@ class FluxTreeStore {
       if (dto.uid) this.resources.set(dto.uid, KubeResource.fromDto(dto));
     }
     this._tree = buildTree(this.resources);
+    this._lastBuild = Date.now();
   }
 
   // --- computed getters ---
@@ -230,7 +245,9 @@ class FluxTreeStore {
   }
 
   appendLog(log: PodLog) {
-    const resource = this.selectedUid ? this.resources.get(this.selectedUid) : undefined;
+    const resource = this.selectedUid
+      ? this.resources.get(this.selectedUid)
+      : undefined;
     if (!resource) return;
     resource.logs.push(log);
     // Create a new Tree instance to trigger observable.ref reactivity

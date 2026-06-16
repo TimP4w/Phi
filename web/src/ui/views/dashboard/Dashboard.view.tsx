@@ -8,8 +8,8 @@ import { FluxResource, ResourceStatus } from "../../../core/fluxTree/models/tree
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import { Chip, Input } from "@heroui/react";
 import FluxResourceCard from "../../components/flux-resource-card/FluxResourceCard";
-import FluxControllersWidget from "../../components/widgets/FluxControllersWidget";
 import FluxApplicationsWidget from "../../components/widgets/FluxApplicationsWidget";
+import FluxControllersWidget from "../../components/widgets/FluxControllersWidget";
 import FluxKindsWidget from "../../components/widgets/FluxKindsWidget";
 import { useSessionState } from "../../../core/utils/useSessionState";
 import Header from "../../components/layout/Header";
@@ -269,7 +269,11 @@ const AppsView: React.FC = observer(() => {
 
             {/* Widgets row */}
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <FluxControllersWidget />
+              {/* Controllers live in the header on lg+; surface the widget on
+                  smaller screens where the header pills are hidden. */}
+              <div className="lg:hidden">
+                <FluxControllersWidget />
+              </div>
               <FluxApplicationsWidget
                 filters={selectedStatusesToFilter}
                 toggleStatusFilter={(status) => onFilterToggle(status, APP_FILTER.STATUS)}
