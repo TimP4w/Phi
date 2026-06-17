@@ -1,5 +1,6 @@
 import { Chip } from "@heroui/react";
 import {
+  Container,
   Deployment,
   HelmRelease,
   Kustomization,
@@ -17,6 +18,7 @@ import { EventsStore } from "../../../core/fluxTree/stores/events.store";
 import { MetricsStore } from "../../../core/metrics/stores/metrics.store";
 import { formatBytes, usageColor, usagePercent } from "../../shared/format";
 import { robustnessColor } from "../../../core/fluxTree/constants/resources.const";
+import { isContainerErrorReason } from "../../../core/fluxTree/constants/conditions.const";
 
 type InfoTabProps = {
   resource: KubeResource | null;
@@ -67,6 +69,51 @@ const KVChips = ({ entries }: { entries: Map<string, string> }) => (
     ))}
   </div>
 );
+
+const containerStateColor = (
+  c: Container
+): "success" | "danger" | "warning" | "default" => {
+  if (isContainerErrorReason(c.reason)) return "danger";
+  if (c.state === "Terminated" && (c.exitCode ?? 0) !== 0) return "danger";
+  if (c.state === "Running" && c.ready) return "success";
+  if (c.state === "Waiting") return "warning";
+  return "default";
+};
+
+const ContainerRow = ({ container }: { container: Container }) => {
+  const color = containerStateColor(container);
+  const status = container.reason || container.state || "Unknown";
+  return (
+    <div className="flex flex-col gap-1 px-2 py-2 rounded-lg hover:bg-default-50 border-b border-default-100 last:border-b-0">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          {container.isInit && (
+            <Chip size="sm" variant="flat" color="default" className="text-[10px]">
+              init
+            </Chip>
+          )}
+          <span className="text-sm font-medium truncate">{container.name}</span>
+        </div>
+        <Chip size="sm" variant="flat" color={color} className="flex-shrink-0">
+          {status}
+        </Chip>
+      </div>
+      <span className="text-xs font-mono text-default-400 break-all">
+        {container.image}
+      </span>
+      <div className="flex items-center gap-3 text-xs text-default-400">
+        <span>{container.ready ? "Ready" : "Not Ready"}</span>
+        <span>Restarts: {container.restartCount}</span>
+        {container.state === "Terminated" && (
+          <span>Exit: {container.exitCode ?? 0}</span>
+        )}
+      </div>
+      {container.message && (
+        <span className="text-xs text-danger break-all">{container.message}</span>
+      )}
+    </div>
+  );
+};
 
 const renderKindFields = (resource: KubeResource) => {
   switch (resource.kind) {
@@ -160,18 +207,28 @@ const renderKindFields = (resource: KubeResource) => {
     }
     case "Pod": {
       const n = resource as Pod;
+      const containers = n.metadata?.containers ?? [];
       return (
-        <Section title="Pod">
-          <InfoRow label="Phase" value={n.metadata?.phase?.toString()} />
-          <InfoRow
-            label="Image"
-            value={
-              <Chip size="sm" variant="flat" className="font-mono text-xs">
-                {n.metadata?.image}
-              </Chip>
-            }
-          />
-        </Section>
+        <>
+          <Section title="Pod">
+            <InfoRow label="Phase" value={n.metadata?.phase?.toString()} />
+            <InfoRow
+              label="Image"
+              value={
+                <Chip size="sm" variant="flat" className="font-mono text-xs">
+                  {n.metadata?.image}
+                </Chip>
+              }
+            />
+          </Section>
+          {containers.length > 0 && (
+            <Section title={`Containers (${containers.length})`}>
+              {containers.map((c) => (
+                <ContainerRow key={`${c.isInit ? "init/" : ""}${c.name}`} container={c} />
+              ))}
+            </Section>
+          )}
+        </>
       );
     }
     case "PersistentVolumeClaim": {

@@ -151,6 +151,83 @@ func TestToResource_Pod_Status_Failed(t *testing.T) {
 	assert.Equal(t, kube.StatusFailed, res.Status)
 }
 
+func TestToResource_Pod_Status_CrashLoopBackOff(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Pod", "v1", "p", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"containers": []interface{}{map[string]interface{}{"name": "c"}},
+	}
+	// A crashing pod is reported by Kubernetes as Phase==Pending with a
+	// ContainersNotReady condition; it must surface as a failure, not pending.
+	obj.Object["status"] = map[string]interface{}{
+		"phase": "Pending",
+		"conditions": []interface{}{
+			map[string]interface{}{
+				"type":   "Ready",
+				"status": "False",
+				"reason": "ContainersNotReady",
+			},
+		},
+		"containerStatuses": []interface{}{
+			map[string]interface{}{
+				"name": "c",
+				"state": map[string]interface{}{
+					"waiting": map[string]interface{}{"reason": "CrashLoopBackOff"},
+				},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "pods")
+	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+func TestToResource_Pod_Status_InitCrashLoopBackOff(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Pod", "v1", "p", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"containers": []interface{}{map[string]interface{}{"name": "c"}},
+	}
+	obj.Object["status"] = map[string]interface{}{
+		"phase": "Pending",
+		"initContainerStatuses": []interface{}{
+			map[string]interface{}{
+				"name": "init-db",
+				"state": map[string]interface{}{
+					"waiting": map[string]interface{}{"reason": "CrashLoopBackOff"},
+				},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "pods")
+	assert.Equal(t, kube.StatusFailed, res.Status)
+}
+
+func TestToResource_Pod_Status_PodInitializing(t *testing.T) {
+	mapper := NewKubeMapper()
+	obj := newUnstructuredResource("Pod", "v1", "p", "default")
+	obj.Object["spec"] = map[string]interface{}{
+		"containers": []interface{}{map[string]interface{}{"name": "c"}},
+	}
+	// PodInitializing / ContainerCreating are normal startup states and must
+	// remain pending rather than being treated as failures.
+	obj.Object["status"] = map[string]interface{}{
+		"phase": "Pending",
+		"containerStatuses": []interface{}{
+			map[string]interface{}{
+				"name": "c",
+				"state": map[string]interface{}{
+					"waiting": map[string]interface{}{"reason": "PodInitializing"},
+				},
+			},
+		},
+	}
+
+	res := mapper.ToResource(*obj, "pods")
+	assert.Equal(t, kube.StatusPending, res.Status)
+}
+
 func TestToResource_Pod_Status_Deleting(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("Pod", "v1", "p", "default")

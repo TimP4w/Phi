@@ -92,7 +92,7 @@ func (e *Resource) Copy(other Resource) {
 	e.DeletedAt = other.DeletedAt
 	e.IsFluxManaged = other.IsFluxManaged
 	e.FluxMetadata = other.FluxMetadata
-	e.PodMetadata = other.PodMetadata
+	e.PodMetadata = other.PodMetadata.clone()
 	e.DeploymentMetadata = other.DeploymentMetadata
 	e.HelmReleaseMetadata = other.HelmReleaseMetadata
 	e.KustomizationMetadata = other.KustomizationMetadata
@@ -141,7 +141,7 @@ func (e *Resource) IsDeepEqual(other Resource) bool {
 		e.DeletedAt != other.DeletedAt ||
 		e.IsFluxManaged != other.IsFluxManaged ||
 		e.FluxMetadata != other.FluxMetadata ||
-		e.PodMetadata != other.PodMetadata ||
+		!podMetadataEqual(e.PodMetadata, other.PodMetadata) ||
 		!deploymentMetadataEqual(e.DeploymentMetadata, other.DeploymentMetadata) ||
 		e.HelmReleaseMetadata != other.HelmReleaseMetadata ||
 		!kustomizationMetadataEqual(e.KustomizationMetadata, other.KustomizationMetadata) ||
@@ -197,6 +197,22 @@ func (e *Resource) IsDeepEqual(other Resource) bool {
 		}
 	}
 
+	return true
+}
+
+// podMetadataEqual compares two PodMetadata structs for equality.
+func podMetadataEqual(a, b PodMetadata) bool {
+	if a.Phase != b.Phase || a.Image != b.Image {
+		return false
+	}
+	if len(a.Containers) != len(b.Containers) {
+		return false
+	}
+	for i := range a.Containers {
+		if a.Containers[i] != b.Containers[i] {
+			return false
+		}
+	}
 	return true
 }
 
@@ -594,8 +610,32 @@ type FluxMetadata struct {
 }
 
 type PodMetadata struct {
-	Phase string `json:"phase"`
-	Image string `json:"image"`
+	Phase      string      `json:"phase"`
+	Image      string      `json:"image"`
+	Containers []Container `json:"containers,omitempty"`
+}
+
+// Container is the per-container status of a pod, covering both init and regular
+// containers so the UI can show which container is failing and why.
+type Container struct {
+	Name         string `json:"name"`
+	Image        string `json:"image"`
+	Ready        bool   `json:"ready"`
+	Started      bool   `json:"started"`
+	RestartCount int32  `json:"restartCount"`
+	State        string `json:"state"`            // Running, Waiting, Terminated
+	Reason       string `json:"reason,omitempty"` // e.g. CrashLoopBackOff, PodInitializing
+	Message      string `json:"message,omitempty"`
+	ExitCode     int32  `json:"exitCode,omitempty"`
+	IsInit       bool   `json:"isInit,omitempty"`
+}
+
+// clone returns a deep copy so a stored Resource never shares the underlying
+// Containers slice with the snapshot it was copied from.
+func (p PodMetadata) clone() PodMetadata {
+	out := PodMetadata{Phase: p.Phase, Image: p.Image}
+	out.Containers = append([]Container(nil), p.Containers...)
+	return out
 }
 
 type HelmReleaseMetadata struct {

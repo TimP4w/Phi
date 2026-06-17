@@ -155,9 +155,23 @@ export type ConditionDto = {
   reason: string;
 };
 
+export type ContainerDto = {
+  name: string;
+  image: string;
+  ready: boolean;
+  started: boolean;
+  restartCount: number;
+  state: string;
+  reason?: string;
+  message?: string;
+  exitCode?: number;
+  isInit?: boolean;
+};
+
 export type PodMetadataDto = {
   phase: string;
   image: string;
+  containers?: ContainerDto[];
 };
 
 type HelmReleaseMetadataDto = {

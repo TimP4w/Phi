@@ -56,3 +56,20 @@ export const SUCCESS_REASONS = [
   "ArtifactUpToDate",
   "NewReplicaSetAvailable",
 ];
+
+// Container waiting reasons that indicate a genuine failure rather than a
+// transient startup state (e.g. PodInitializing, ContainerCreating).
+// Mirrors isErrorContainerReason in the backend mapper.
+export const CONTAINER_ERROR_REASONS = [
+  "CrashLoopBackOff",
+  "ImagePullBackOff",
+  "ErrImagePull",
+  "CreateContainerConfigError",
+  "CreateContainerError",
+  "InvalidImageName",
+  "RunContainerError",
+  "CreateContainerLimitError",
+];
+
+export const isContainerErrorReason = (reason?: string): boolean =>
+  !!reason && CONTAINER_ERROR_REASONS.includes(reason);

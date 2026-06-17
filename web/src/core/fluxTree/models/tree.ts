@@ -402,9 +402,23 @@ export class LonghornNode extends KubeResource {
   }
 }
 
+export type Container = {
+  name: string;
+  image: string;
+  ready: boolean;
+  started: boolean;
+  restartCount: number;
+  state: string;
+  reason?: string;
+  message?: string;
+  exitCode?: number;
+  isInit?: boolean;
+};
+
 export type PodMetadata = {
   phase: string;
   image: string;
+  containers?: Container[];
 };
 
 export type LonghornNodeMetadata = {

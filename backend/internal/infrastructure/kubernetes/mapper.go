@@ -347,6 +347,21 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 			return kube.StatusPending
 		}
 
+		// Inspect the container statuses directly so these surface as failures
+		// instead of being flattened to a generic "pending" state.
+		containerStatuses := make([]v1.ContainerStatus, 0,
+			len(pod.Status.InitContainerStatuses)+len(pod.Status.ContainerStatuses))
+		containerStatuses = append(containerStatuses, pod.Status.InitContainerStatuses...)
+		containerStatuses = append(containerStatuses, pod.Status.ContainerStatuses...)
+		for _, cs := range containerStatuses {
+			if w := cs.State.Waiting; w != nil && isErrorContainerReason(w.Reason) {
+				return kube.StatusFailed
+			}
+			if t := cs.State.Terminated; t != nil && t.ExitCode != 0 {
+				return kube.StatusFailed
+			}
+		}
+
 		for _, cond := range pod.Status.Conditions {
 			if cond.Type == "Ready" && cond.Reason == "ContainersNotReady" {
 				return kube.StatusPending
@@ -371,10 +386,73 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 		image = pod.Spec.Containers[0].Image
 	}
 	el.PodMetadata = kube.PodMetadata{
-		Phase: string(pod.Status.Phase),
-		Image: image,
+		Phase:      string(pod.Status.Phase),
+		Image:      image,
+		Containers: mapContainerStatuses(pod),
 	}
 
+}
+
+// mapContainerStatuses flattens a pod's init and regular container statuses into
+// a UI-friendly list, recording each container's current state and reason.
+func mapContainerStatuses(pod *v1.Pod) []kube.Container {
+	containers := make([]kube.Container, 0,
+		len(pod.Status.InitContainerStatuses)+len(pod.Status.ContainerStatuses))
+
+	mapOne := func(cs v1.ContainerStatus, isInit bool) kube.Container {
+		c := kube.Container{
+			Name:         cs.Name,
+			Image:        cs.Image,
+			Ready:        cs.Ready,
+			RestartCount: cs.RestartCount,
+			IsInit:       isInit,
+		}
+		if cs.Started != nil {
+			c.Started = *cs.Started
+		}
+		switch {
+		case cs.State.Running != nil:
+			c.State = "Running"
+		case cs.State.Waiting != nil:
+			c.State = "Waiting"
+			c.Reason = cs.State.Waiting.Reason
+			c.Message = cs.State.Waiting.Message
+		case cs.State.Terminated != nil:
+			c.State = "Terminated"
+			c.Reason = cs.State.Terminated.Reason
+			c.Message = cs.State.Terminated.Message
+			c.ExitCode = cs.State.Terminated.ExitCode
+		}
+		return c
+	}
+
+	for _, cs := range pod.Status.InitContainerStatuses {
+		containers = append(containers, mapOne(cs, true))
+	}
+	for _, cs := range pod.Status.ContainerStatuses {
+		containers = append(containers, mapOne(cs, false))
+	}
+	return containers
+}
+
+// isErrorContainerReason reports whether a container's waiting reason indicates
+// a genuine failure rather than a transient startup state. Reasons such as
+// "ContainerCreating" or "PodInitializing" are normal during startup and must
+// not be treated as failures.
+func isErrorContainerReason(reason string) bool {
+	switch reason {
+	case "CrashLoopBackOff",
+		"ImagePullBackOff",
+		"ErrImagePull",
+		"CreateContainerConfigError",
+		"CreateContainerError",
+		"InvalidImageName",
+		"RunContainerError",
+		"CreateContainerLimitError":
+		return true
+	default:
+		return false
+	}
 }
 
 func mapPVCData(el *kube.Resource, obj unstructured.Unstructured) {
