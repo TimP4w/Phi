@@ -14,7 +14,7 @@ import {
 import { MetricsStore } from "../../../core/metrics/stores/metrics.store";
 import { SamplePointDto, SpecValueDto } from "../../../core/metrics/models/dtos/metricsDto";
 import { formatBytes, formatCores } from "../../shared/format";
-import { Spinner } from "@heroui/react";
+import { Skeleton } from "@heroui/react";
 
 type MetricsTabProps = {
   uid: string;
@@ -27,10 +27,6 @@ type ChartDef = {
   spec?: SpecValueDto;
 };
 
-// recharts' default tooltip is a white box (unreadable on the dark UI) and
-// color-codes the item text rather than showing a swatch. This renders a dark
-// box with a colored dot before each series label, injected with active/payload/
-// label by recharts when passed to <Tooltip content={...} />.
 type TooltipEntry = { name?: string; value?: number; color?: string; dataKey?: string | number };
 
 function ChartTooltip({
@@ -59,7 +55,22 @@ function ChartTooltip({
   );
 }
 
-function SeriesChart({ def, series }: { def: ChartDef; series: Record<string, SamplePointDto[]> }) {
+function ChartHeader({ def }: { def: ChartDef }) {
+  return (
+    <div className="flex items-baseline gap-3">
+      <h3 className="text-sm font-semibold">{def.title}</h3>
+      {def.spec && (
+        <span className="text-xs text-default-400 font-mono">
+          {`requested ${def.spec.requests != null ? def.formatValue(def.spec.requests) : "—"} · limit ${
+            def.spec.limits != null ? def.formatValue(def.spec.limits) : "—"
+          }`}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function ChartBody({ def, series }: { def: ChartDef; series: Record<string, SamplePointDto[]> }) {
   // Join series by timestamp, not index — scrape gaps can leave one series
   // shorter than another, and an index join would silently shift values.
   const byTime = new Map<number, Record<string, number>>();
@@ -78,36 +89,24 @@ function SeriesChart({ def, series }: { def: ChartDef; series: Record<string, Sa
     ) : null;
 
   return (
-    <div>
-      <div className="flex items-baseline gap-3 mb-1">
-        <h3 className="text-sm font-semibold">{def.title}</h3>
-        {def.spec && (
-          <span className="text-xs text-default-400 font-mono">
-            {`requested ${def.spec.requests != null ? def.formatValue(def.spec.requests) : "—"} · limit ${
-              def.spec.limits != null ? def.formatValue(def.spec.limits) : "—"
-            }`}
-          </span>
-        )}
-      </div>
-      <ResponsiveContainer width="100%" height={180}>
-        <AreaChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
-          <XAxis
-            dataKey="t"
-            tickFormatter={(t: number) => format(new Date(t * 1000), "HH:mm")}
-            fontSize={10}
-            minTickGap={40}
-          />
-          <YAxis tickFormatter={(v: number) => def.formatValue(v)} fontSize={10} width={56} />
-          <Tooltip cursor={{ stroke: "#3c3c3c" }} content={<ChartTooltip formatValue={def.formatValue} />} />
-          {def.seriesKeys.map((sk) => (
-            <Area key={sk.key} dataKey={sk.key} name={sk.label} stroke={sk.color} fill={sk.color} fillOpacity={0.12} isAnimationActive={false} connectNulls={false} />
-          ))}
-          {def.spec && specLine(def.spec.requests, "request")}
-          {def.spec && specLine(def.spec.limits, "limit")}
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
+    <ResponsiveContainer width="100%" height={180}>
+      <AreaChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.15} />
+        <XAxis
+          dataKey="t"
+          tickFormatter={(t: number) => format(new Date(t * 1000), "HH:mm")}
+          fontSize={10}
+          minTickGap={40}
+        />
+        <YAxis tickFormatter={(v: number) => def.formatValue(v)} fontSize={10} width={56} />
+        <Tooltip cursor={{ stroke: "#3c3c3c" }} content={<ChartTooltip formatValue={def.formatValue} />} />
+        {def.seriesKeys.map((sk) => (
+          <Area key={sk.key} dataKey={sk.key} name={sk.label} stroke={sk.color} fill={sk.color} fillOpacity={0.12} isAnimationActive={false} connectNulls={false} />
+        ))}
+        {def.spec && specLine(def.spec.requests, "request")}
+        {def.spec && specLine(def.spec.limits, "limit")}
+      </AreaChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -115,26 +114,18 @@ const MetricsTab = observer(({ uid }: MetricsTabProps) => {
   const metricsStore = useInjection(MetricsStore);
   const metrics = metricsStore.resourceMetrics.get(uid);
 
-  if (!metrics) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <Spinner size="sm" label="Waiting for metrics…" />
-      </div>
-    );
-  }
-
   const charts: ChartDef[] = [
     {
       title: "CPU (cores)",
       seriesKeys: [{ key: "cpu", label: "used", color: "#3b82f6" }],
       formatValue: formatCores,
-      spec: metrics.spec.cpu,
+      spec: metrics?.spec.cpu,
     },
     {
       title: "Memory",
       seriesKeys: [{ key: "memory", label: "used", color: "#22c55e" }],
       formatValue: formatBytes,
-      spec: metrics.spec.memory,
+      spec: metrics?.spec.memory,
     },
     {
       title: "Network (B/s)",
@@ -154,10 +145,18 @@ const MetricsTab = observer(({ uid }: MetricsTabProps) => {
     },
   ];
 
+  // Title bar and chart area fade in independently once metrics arrive.
   return (
     <div className="flex flex-col gap-6">
       {charts.map((def) => (
-        <SeriesChart key={def.title} def={def} series={metrics.series} />
+        <div key={def.title}>
+          <Skeleton isLoaded={!!metrics} className="rounded-md mb-2 w-fit">
+            <ChartHeader def={def} />
+          </Skeleton>
+          <Skeleton isLoaded={!!metrics} className="rounded-lg w-full">
+            <ChartBody def={def} series={metrics?.series ?? {}} />
+          </Skeleton>
+        </div>
       ))}
     </div>
   );
