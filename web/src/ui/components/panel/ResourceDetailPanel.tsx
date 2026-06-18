@@ -4,7 +4,7 @@ import { useInjection } from "inversify-react";
 import { Alert, Chip, Tab, Tabs, Tooltip, useDisclosure } from "@heroui/react";
 import { Link } from "react-router-dom";
 import { formatDistanceToNowStrict } from "date-fns";
-import { AlertCircle, AlertTriangle, ChevronRight, HardDrive } from "lucide-react";
+import { AlertCircle, AlertTriangle, ChevronRight, GitCommitHorizontal, HardDrive } from "lucide-react";
 
 import {
   Container,
@@ -194,15 +194,28 @@ const shortRevision = (rev: string): string => {
   return tail.length > 12 ? tail.slice(0, 12) : tail;
 };
 
+// Web URL for a commit, derived from a git remote (https or git@ssh form).
+const gitCommitUrl = (repoUrl: string, sha: string): string => {
+  const host = repoUrl
+    .replace(/^https?:\/\//, "")
+    .replace(/^ssh:\/\//, "")
+    .replace(/^git@/, "")
+    .replace(/\.git$/, "")
+    .replace(":", "/");
+  return `https://${host}/commit/${sha}`;
+};
+
 type Pill = {
   label: string;
   value: React.ReactNode;
   href?: string;
+  /** Treat href as an external URL (new tab) rather than an in-app route. */
+  external?: boolean;
   tone?: "default" | "warning";
   mono?: boolean;
 };
 
-const InfoPill = ({ label, value, href, tone, mono }: Pill) => {
+const InfoPill = ({ label, value, href, external, tone, mono }: Pill) => {
   const body = (
     <>
       <span className="text-default-400 flex-shrink-0">{label}</span>
@@ -217,6 +230,13 @@ const InfoPill = ({ label, value, href, tone, mono }: Pill) => {
   );
   const cls =
     "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-default-200 bg-content1 text-xs max-w-full";
+  if (href && external) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className={`${cls} hover:bg-content2 transition-colors`}>
+        {body}
+      </a>
+    );
+  }
   return href ? (
     <Link to={href} className={`${cls} hover:bg-content2 transition-colors`}>
       {body}
@@ -244,8 +264,22 @@ const kindPills = (node: KubeResource, store: FluxTreeStore): Pill[] => {
         mono: true,
       });
     if (m?.path) pills.push({ label: "Path", value: m.path, mono: true });
-    if (m?.lastAppliedRevision)
-      pills.push({ label: "Revision", value: shortRevision(m.lastAppliedRevision), mono: true });
+    if (m?.lastAppliedRevision) {
+      const repoUrl = m.sourceRef ? store.findRepositoryByRef(m.sourceRef)?.getURL() : undefined;
+      const sha = m.lastAppliedRevision.slice(m.lastAppliedRevision.indexOf(":") + 1);
+      pills.push({
+        label: "Revision",
+        value: (
+          <span className="inline-flex items-center gap-1">
+            <GitCommitHorizontal className="w-3 h-3 flex-shrink-0" />
+            {shortRevision(m.lastAppliedRevision)}
+          </span>
+        ),
+        mono: true,
+        href: repoUrl && sha ? gitCommitUrl(repoUrl, sha) : undefined,
+        external: true,
+      });
+    }
   } else if (node instanceof HelmRelease) {
     const m = node.metadata;
     if (m?.chartName) pills.push({ label: "Chart", value: m.chartName, mono: true });
