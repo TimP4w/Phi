@@ -23,7 +23,10 @@ export class Tree {
   public getFluxControllersDeployments(): Deployment[] {
     const result: Deployment[] = [];
     this.root.children.forEach((child) => {
-      if (child.kind === RESOURCE_TYPE.DEPLOYMENT && child.namespace === FLUX_NAMESPACE) {
+      if (
+        child.kind === RESOURCE_TYPE.DEPLOYMENT &&
+        child.namespace === FLUX_NAMESPACE
+      ) {
         result.push(child as Deployment);
       }
     });
@@ -54,7 +57,6 @@ export class Tree {
       this.traverseRecursive(child, layer + 1, callback, visited);
     }
   }
-
 }
 
 export class KubeResource {
@@ -163,17 +165,15 @@ export class KubeResource {
       case RESOURCE_TYPE.PV:
         return new PersistentVolume(dto);
       case RESOURCE_TYPE.VOLUME:
-        // "Volume" is a Longhorn CRD; other groups fall through to the base class.
         if (dto.group === "longhorn.io") {
           return new LonghornVolume(dto);
         }
         return new KubeResource(dto);
       case RESOURCE_TYPE.NODE:
-        // "Node" is both a core kind and a Longhorn CRD; only the latter carries disk stats.
         if (dto.group === "longhorn.io") {
           return new LonghornNode(dto);
         }
-        return new KubeResource(dto);
+        return new Node(dto);
       case RESOURCE_TYPE.OCI_REPOSITORY:
         return new OCIRepository(dto);
       default:
@@ -191,19 +191,21 @@ export abstract class FluxResource extends KubeResource {
 
   constructor(dto: TreeNodeDto) {
     super(dto);
-    this.lastHandledReconcileAt = dto.fluxMetadata?.lastHandledReconcileAt;
+    this.lastHandledReconcileAt = dto.fluxMetadata?.lastHandledReconcileAt
+      ? new Date(dto.fluxMetadata.lastHandledReconcileAt)
+      : undefined;
     this.isReconciling = dto.fluxMetadata?.isReconciling || false;
     this.isSuspended = dto.fluxMetadata?.isSuspended || false;
-    this.lastSyncAt = dto.fluxMetadata?.lastSyncAt;
+    this.lastSyncAt = dto.fluxMetadata?.lastSyncAt
+      ? new Date(dto.fluxMetadata.lastSyncAt)
+      : undefined;
   }
 }
-
 
 export interface Repository extends FluxResource {
   getURL(): string;
   getCode(): string;
 }
-
 
 // TODO: don't map into metadata, but as object property directly (TBD)
 export class HelmRelease extends FluxResource {
@@ -225,8 +227,8 @@ export class Kustomization extends FluxResource {
   getLastAttemptedHash(): string {
     return this.metadata?.lastAttemptedRevision
       ? this.metadata?.lastAttemptedRevision.slice(
-        this.metadata?.lastAttemptedRevision.indexOf(":") + 1,
-      )
+          this.metadata?.lastAttemptedRevision.indexOf(":") + 1,
+        )
       : "";
   }
 }
@@ -325,7 +327,6 @@ export class OCIRepository extends FluxResource implements Repository {
   }
 }
 
-
 export class Pod extends KubeResource {
   metadata: PodMetadata | null;
 
@@ -389,7 +390,9 @@ export class LonghornVolume extends KubeResource {
 
   constructor(dto: TreeNodeDto) {
     super(dto);
-    this.metadata = dto.longhornVolumeMetadata ? dto.longhornVolumeMetadata : null;
+    this.metadata = dto.longhornVolumeMetadata
+      ? dto.longhornVolumeMetadata
+      : null;
   }
 }
 
@@ -399,6 +402,20 @@ export class LonghornNode extends KubeResource {
   constructor(dto: TreeNodeDto) {
     super(dto);
     this.metadata = dto.longhornNodeMetadata ? dto.longhornNodeMetadata : null;
+  }
+}
+
+export class Node extends KubeResource {
+  metadata: NodeMetadata | null;
+
+  constructor(dto: TreeNodeDto) {
+    super(dto);
+    this.metadata = dto.nodeMetadata ? dto.nodeMetadata : null;
+  }
+
+  /** Ready when the Kubernetes "Ready" condition reports status "True". */
+  get isReady(): boolean {
+    return this.conditions.some((c) => c.type === "Ready" && c.status);
   }
 }
 
@@ -431,6 +448,18 @@ export type LonghornNodeMetadata = {
   storageDisabled: number;
 };
 
+export type NodeMetadata = {
+  internalIP?: string;
+  os?: string;
+  architecture?: string;
+  kernelVersion?: string;
+  osImage?: string;
+  kubeletVersion?: string;
+  containerRuntime?: string;
+  roles?: string[];
+  unschedulable?: boolean;
+};
+
 export type LonghornVolumeMetadata = {
   state: string;
   robustness: string;
@@ -445,20 +474,15 @@ export type LonghornVolumeMetadata = {
 type HelmReleaseMetadata = {
   chartName: string;
   chartVersion: string;
-  isReconciling: boolean;
-  isSuspended: boolean;
   sourceRef: SourceRef; // HelmRepository
   // TODO: chartRef: OCIRepository or HelmChart
 };
 
 type KustomizationMetadata = {
   path: string;
-  isReconciling: boolean;
-  isSuspended: boolean;
   sourceRef: SourceRef; // GitRepository, OCIRepository or Bucket
   lastAppliedRevision: string;
   lastAttemptedRevision: string;
-  lastHandledReconcileAt: Date;
   dependsOn: string[];
 };
 
@@ -472,7 +496,7 @@ type PersistentVolumeClaimMetadata = {
   volumeName: string;
   volumeMode: string;
   accessModes: string[];
-  capacity: Map<string, string>;
+  capacity: Record<string, string>;
   phase: string;
   requested?: number;
 };
@@ -517,8 +541,6 @@ type OCIRepositoryMetadata = {
 type HelmChartMetadata = unknown;
 
 type HelmRepositoryMetadata = unknown;
-
-
 
 export enum ResourceStatus {
   SUCCESS = "success",

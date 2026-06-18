@@ -62,6 +62,29 @@ export const TRIVY_REPORT_KINDS = new Set<string>([
   RESOURCE_TYPE.RBAC_ASSESSMENT_REPORT,
 ]);
 
+// Flux kinds, grouped the way the UI treats them: "applications" are the
+// reconciling workloads and "repositories" are the sources they pull from.
+// FLUX_KINDS is the union (applications first, then repositories) and is the
+// single source of truth for "which kinds are reconcilable Flux resources",
+// mirroring the backend reconcilableKinds in core/kubernetes/type.go.
+export const FLUX_APPLICATION_KINDS = [
+  RESOURCE_TYPE.KUSTOMIZATION,
+  RESOURCE_TYPE.HELM_RELEASE,
+  RESOURCE_TYPE.HELM_CHART,
+] as const;
+
+export const FLUX_REPOSITORY_KINDS = [
+  RESOURCE_TYPE.HELM_REPOSITORY,
+  RESOURCE_TYPE.GIT_REPOSITORY,
+  RESOURCE_TYPE.OCI_REPOSITORY,
+  RESOURCE_TYPE.BUCKET,
+] as const;
+
+export const FLUX_KINDS: RESOURCE_TYPE[] = [
+  ...FLUX_APPLICATION_KINDS,
+  ...FLUX_REPOSITORY_KINDS,
+];
+
 // Resource kinds that carry RouteMetadata and act as HTTP routing entry points
 // in the network topology (Ingress, Traefik IngressRoute, Gateway API HTTPRoute).
 export const ROUTE_KINDS = new Set<string>([

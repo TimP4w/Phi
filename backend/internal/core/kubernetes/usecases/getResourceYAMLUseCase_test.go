@@ -18,7 +18,7 @@ func TestGetResourceYAMLUseCase_Success(t *testing.T) {
 	store.On("GetResourceByUID", "pod-uid").Return(res)
 	kubeSvc.On("GetResourceYAML", *res).Return([]byte("apiVersion: v1\nkind: Pod\n"), nil)
 
-	uc := NewGetResourceYAMlUseCase(kubeSvc, store)
+	uc := NewGetResourceYAMLUseCase(kubeSvc, store)
 	yaml, err := uc.Execute(GetResourceYAMLInput{ResourceUid: "pod-uid"})
 
 	require.NoError(t, err)
@@ -31,7 +31,7 @@ func TestGetResourceYAMLUseCase_ResourceNotFound(t *testing.T) {
 
 	store.On("GetResourceByUID", "missing").Return((*kube.Resource)(nil))
 
-	uc := NewGetResourceYAMlUseCase(kubeSvc, store)
+	uc := NewGetResourceYAMLUseCase(kubeSvc, store)
 	_, err := uc.Execute(GetResourceYAMLInput{ResourceUid: "missing"})
 
 	assert.ErrorContains(t, err, "resource not found")
@@ -46,7 +46,7 @@ func TestGetResourceYAMLUseCase_ServiceError(t *testing.T) {
 	store.On("GetResourceByUID", "pod-uid").Return(res)
 	kubeSvc.On("GetResourceYAML", *res).Return([]byte(nil), errors.New("not found in cluster"))
 
-	uc := NewGetResourceYAMlUseCase(kubeSvc, store)
+	uc := NewGetResourceYAMLUseCase(kubeSvc, store)
 	_, err := uc.Execute(GetResourceYAMLInput{ResourceUid: "pod-uid"})
 
 	assert.ErrorContains(t, err, "not found in cluster")

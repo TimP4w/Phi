@@ -2,6 +2,7 @@ package metricsusecases
 
 import (
 	"context"
+	"slices"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ type WatchMetricsInput struct {
 	UIDs     []string `json:"uids"`
 	Nodes    bool     `json:"nodes"`
 	UID      string   `json:"uid"`
+	Range    string   `json:"range"` // detail-only window label, e.g. "15m" | "24h" | "7d"
 }
 
 type subscription struct {
@@ -46,6 +48,15 @@ type subscription struct {
 	uids    []string
 	nodes   bool
 	uid     string
+	rng     string
+}
+
+func sameSub(a, b subscription) bool {
+	return a.channel == b.channel &&
+		a.uid == b.uid &&
+		a.rng == b.rng &&
+		a.nodes == b.nodes &&
+		slices.Equal(a.uids, b.uids)
 }
 
 type metricsCurrentPayload struct {
@@ -111,16 +122,19 @@ func (uc *WatchMetricsUseCase) Execute(in WatchMetricsInput) (struct{}, error) {
 		return struct{}{}, nil
 	}
 
-	sub := subscription{channel: in.Channel, uids: in.UIDs, nodes: in.Nodes, uid: in.UID}
+	sub := subscription{channel: in.Channel, uids: in.UIDs, nodes: in.Nodes, uid: in.UID, rng: in.Range}
 
 	uc.mu.Lock()
 	if uc.subs[in.ClientID] == nil {
 		uc.subs[in.ClientID] = make(map[string]subscription)
 	}
+	prev, hadPrev := uc.subs[in.ClientID][in.Channel]
 	uc.subs[in.ClientID][in.Channel] = sub
 	needListener := !uc.listening[in.ClientID]
 	uc.listening[in.ClientID] = true
-	doImmediate := time.Since(uc.lastServed[in.ClientID]) >= minImmediateInterval
+	// A parameter change must refresh
+	changed := !hadPrev || !sameSub(prev, sub)
+	doImmediate := changed || time.Since(uc.lastServed[in.ClientID]) >= minImmediateInterval
 	if doImmediate {
 		uc.lastServed[in.ClientID] = time.Now()
 	}
@@ -130,8 +144,7 @@ func (uc *WatchMetricsUseCase) Execute(in WatchMetricsInput) (struct{}, error) {
 		clientID := in.ClientID
 		uc.realtimeService.AddConnectionListener(realtime.Listener{
 			// Namespaced so it does not overwrite the logs use case's listener,
-			// which is keyed by the bare client ID in the same map. OnClose is
-			// still invoked with the bare client ID, so the filter below works.
+			// which is keyed by the bare client ID in the same map.
 			ID: "metrics-" + clientID,
 			OnClose: func(closedID string) {
 				if closedID != clientID {
@@ -243,8 +256,8 @@ func (uc *WatchMetricsUseCase) tick() bool {
 	return true
 }
 
-// detailCache memoises GetResourceMetrics by UID within a tick. Safe for the
-// concurrent serveClient goroutines.
+// detailCache memoises GetResourceMetrics by uid+range within a tick. Safe for
+// the concurrent serveClient goroutines.
 type detailCache struct {
 	mu sync.Mutex
 	m  map[string]*metrics.ResourceMetrics
@@ -252,17 +265,17 @@ type detailCache struct {
 
 func newDetailCache() *detailCache { return &detailCache{m: map[string]*metrics.ResourceMetrics{}} }
 
-func (d *detailCache) get(uid string) (*metrics.ResourceMetrics, bool) {
+func (d *detailCache) get(key string) (*metrics.ResourceMetrics, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	rm, ok := d.m[uid]
+	rm, ok := d.m[key]
 	return rm, ok
 }
 
-func (d *detailCache) set(uid string, rm *metrics.ResourceMetrics) {
+func (d *detailCache) set(key string, rm *metrics.ResourceMetrics) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.m[uid] = rm
+	d.m[key] = rm
 }
 
 // serveClient pushes status + data for one client's subscriptions. The status
@@ -320,19 +333,22 @@ func (uc *WatchMetricsUseCase) serveClient(clientID string, chans map[string]sub
 		if sub.channel != ChannelDetail || sub.uid == "" {
 			continue
 		}
+		// Cache key spans uid and range: two clients viewing the same resource
+		// over different windows must not share a fetch.
+		cacheKey := sub.uid + "\x00" + sub.rng
 		var rm *metrics.ResourceMetrics
 		if cache != nil {
-			rm, _ = cache.get(sub.uid)
+			rm, _ = cache.get(cacheKey)
 		}
 		if rm == nil {
-			fetched, err := uc.metricsService.GetResourceMetrics(ctx, sub.uid)
+			fetched, err := uc.metricsService.GetResourceMetrics(ctx, sub.uid, sub.rng)
 			if err != nil {
 				uc.logger.WithError(err).WithField("uid", sub.uid).Warn("Failed to fetch resource metrics")
 				continue
 			}
 			rm = &fetched
 			if cache != nil {
-				cache.set(sub.uid, rm)
+				cache.set(cacheKey, rm)
 			}
 		}
 		uc.send(clientID, realtime.METRICS_RESOURCE, metricsResourcePayload{UID: sub.uid, Metrics: *rm})

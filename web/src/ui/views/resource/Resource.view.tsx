@@ -24,6 +24,7 @@ import NetworkGraph from "../../components/network/NetworkGraph";
 import { ReactFlowProvider } from "@xyflow/react";
 import { COLOR_HEALTHY, COLOR_UNHEALTHY } from "../../../core/network/usecases/NetworkTopology.usecase";
 import { ResourceFilter } from "../../shared/resourceFilter";
+import { statusDotClass } from "../../shared/helpers";
 import ReconcileSuspendButtonGroup from "../../components/play-pause/ReconcileSuspendButtonGroup";
 import { Check, ChevronDown, List, Network, PanelRightClose, PanelRightOpen, Workflow, X } from "lucide-react";
 import StatusChip from "../../components/status-chip/StatusChip";
@@ -40,11 +41,11 @@ const NETWORK_LEGEND: { color: string; label: string; dash: boolean }[] = [
   { color: COLOR_UNHEALTHY, label: "Pending / not ready", dash: true },
 ];
 
-const STATUS_FILTER_OPTIONS: { value: ResourceStatus; label: string; dot: string }[] = [
-  { value: ResourceStatus.FAILED, label: "Failed", dot: "bg-danger" },
-  { value: ResourceStatus.WARNING, label: "Warning", dot: "bg-warning" },
-  { value: ResourceStatus.PENDING, label: "Pending", dot: "bg-primary" },
-  { value: ResourceStatus.SUCCESS, label: "Ready", dot: "bg-success" },
+const STATUS_FILTER_OPTIONS: { value: ResourceStatus; label: string }[] = [
+  { value: ResourceStatus.FAILED, label: "Failed" },
+  { value: ResourceStatus.WARNING, label: "Warning" },
+  { value: ResourceStatus.PENDING, label: "Pending" },
+  { value: ResourceStatus.SUCCESS, label: "Ready" },
 ];
 
 function collectKinds(node: KubeResource, kinds: Set<string>, visited = new Set<string>()) {
@@ -325,7 +326,7 @@ const ResourceView: React.FC = observer(() => {
           {activeView !== "network" && (
           <div className="flex-1 min-w-0 overflow-x-auto">
             <div className="flex items-center gap-1 w-max">
-              {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
+              {STATUS_FILTER_OPTIONS.map(({ value, label }) => {
                 const active = statusFilters.includes(value);
                 return (
                   <button
@@ -337,7 +338,7 @@ const ResourceView: React.FC = observer(() => {
                         : "text-default-400 hover:text-foreground hover:bg-content2"
                     }`}
                   >
-                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(value)}`} />
                     {label}
                   </button>
                 );
@@ -440,7 +441,7 @@ const ResourceView: React.FC = observer(() => {
             {/* Filter bar — desktop only (graph/tree only) */}
             {activeView !== "network" && (
             <div className="hidden md:flex absolute top-3 left-4 z-10 items-center gap-1 bg-content1/90 backdrop-blur-sm rounded-lg px-2 py-1 border border-default-200 shadow-sm">
-              {STATUS_FILTER_OPTIONS.map(({ value, label, dot }) => {
+              {STATUS_FILTER_OPTIONS.map(({ value, label }) => {
                 const active = statusFilters.includes(value);
                 return (
                   <button
@@ -452,7 +453,7 @@ const ResourceView: React.FC = observer(() => {
                         : "text-default-400 hover:text-foreground hover:bg-content2"
                     }`}
                   >
-                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
+                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(value)}`} />
                     {label}
                   </button>
                 );

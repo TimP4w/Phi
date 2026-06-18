@@ -634,15 +634,53 @@ func TestToResource_LonghornNode_NotReady(t *testing.T) {
 	assert.Equal(t, kube.StatusFailed, res.Status)
 }
 
-func TestToResource_CoreNode_Untouched(t *testing.T) {
+func TestToResource_CoreNode(t *testing.T) {
 	mapper := NewKubeMapper()
-	// A core v1 Node must not be treated as a Longhorn node.
+	// A core v1 Node must not be treated as a Longhorn node, and its host
+	// facts should be surfaced in NodeMetadata.
 	obj := newUnstructuredResource("Node", "v1", "worker-1", "")
+	obj.Object["metadata"].(map[string]interface{})["labels"] = map[string]interface{}{
+		"node-role.kubernetes.io/control-plane": "",
+		"node-role.kubernetes.io/worker":        "",
+		"node-role.kubernetes.io/":              "",
+		"kubernetes.io/arch":                    "amd64",
+	}
+	obj.Object["spec"] = map[string]interface{}{"unschedulable": true}
+	obj.Object["status"] = map[string]interface{}{
+		"conditions": []interface{}{
+			map[string]interface{}{"type": "MemoryPressure", "status": "False"},
+			map[string]interface{}{"type": "Ready", "status": "True"},
+		},
+		"addresses": []interface{}{
+			map[string]interface{}{"type": "Hostname", "address": "worker-1"},
+			map[string]interface{}{"type": "InternalIP", "address": "10.0.0.5"},
+		},
+		"nodeInfo": map[string]interface{}{
+			"operatingSystem":         "linux",
+			"architecture":            "amd64",
+			"kernelVersion":           "6.1.0",
+			"osImage":                 "Talos v1.7",
+			"kubeletVersion":          "v1.30.1",
+			"containerRuntimeVersion": "containerd://1.7.13",
+		},
+	}
 
-	assert.NotPanics(t, func() {
-		res := mapper.ToResource(*obj, "nodes")
-		assert.Equal(t, int64(0), res.LonghornNodeMetadata.StorageMaximum)
-	})
+	res := mapper.ToResource(*obj, "nodes")
+
+	assert.Equal(t, int64(0), res.LonghornNodeMetadata.StorageMaximum)
+	assert.Equal(t, kube.StatusSuccess, res.Status)
+	assert.Len(t, res.Conditions, 2)
+	meta := res.NodeMetadata
+	assert.Equal(t, "10.0.0.5", meta.InternalIP)
+	assert.Equal(t, "linux", meta.OS)
+	assert.Equal(t, "amd64", meta.Architecture)
+	assert.Equal(t, "6.1.0", meta.KernelVersion)
+	assert.Equal(t, "Talos v1.7", meta.OSImage)
+	assert.Equal(t, "v1.30.1", meta.KubeletVersion)
+	assert.Equal(t, "containerd://1.7.13", meta.ContainerRuntime)
+	assert.True(t, meta.Unschedulable)
+	// Sorted, and the empty-suffix "node-role.kubernetes.io/" label is ignored.
+	assert.Equal(t, []string{"control-plane", "worker"}, meta.Roles)
 }
 
 // ── Kustomization ─────────────────────────────────────────────────────────────
@@ -1504,16 +1542,16 @@ func TestToEvent(t *testing.T) {
 	assert.Equal(t, int32(5), event.Count)
 }
 
-// ── refGroupAndVersion / makeRef / GetRefVersion ─────────────────────────────
+// ── SplitAPIVersion / makeRef ────────────────────────────────────────────────
 
 func TestRefGroupAndVersion_CoreGroup(t *testing.T) {
-	group, version := refGroupAndVersion("v1")
+	group, version := kube.SplitAPIVersion("v1")
 	assert.Equal(t, "core", group)
 	assert.Equal(t, "v1", version)
 }
 
 func TestRefGroupAndVersion_CustomGroup(t *testing.T) {
-	group, version := refGroupAndVersion("apps/v1")
+	group, version := kube.SplitAPIVersion("apps/v1")
 	assert.Equal(t, "apps", group)
 	assert.Equal(t, "v1", version)
 }

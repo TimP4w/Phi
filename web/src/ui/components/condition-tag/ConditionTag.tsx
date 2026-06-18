@@ -10,7 +10,7 @@ import {
   SUCCESS_TYPES,
   WARNING_REASONS,
 } from "../../../core/fluxTree/constants/conditions.const";
-import { stringToEnum } from "../../../core/shared/enum.utils";
+import { isEnumValue } from "../../../core/shared/enum.utils";
 import { ICONS } from "../../shared/icons";
 import { Chip, Tooltip } from "@heroui/react";
 
@@ -25,7 +25,9 @@ function getConditionDisplay(condition: Condition): {
   icon: IconName;
   color: ChipColor;
 } {
-  const conditionType = stringToEnum(CONDITION_TYPE, condition.type);
+  const conditionType = isEnumValue(CONDITION_TYPE, condition.type)
+    ? condition.type
+    : undefined;
 
   if (conditionType && SUCCESS_TYPES.includes(conditionType)) {
     if (condition.status) {

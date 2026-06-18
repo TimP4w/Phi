@@ -114,7 +114,7 @@ func TestTickFansOutPerChannel(t *testing.T) {
 	ms.On("GetCurrentUsage", mock.Anything, mock.Anything).Return(map[string]metrics.CurrentUsage{}, nil)
 	ms.On("GetStorageUsage", mock.Anything, mock.Anything).Return(map[string]metrics.StorageUsage{}, nil).Maybe()
 	ms.On("GetNodeUsage", mock.Anything).Return([]metrics.NodeUsage{{Node: "n1"}}, nil)
-	ms.On("GetResourceMetrics", mock.Anything, "det1").Return(metrics.ResourceMetrics{Range: "24h"}, nil)
+	ms.On("GetResourceMetrics", mock.Anything, "det1", mock.Anything).Return(metrics.ResourceMetrics{Range: "24h"}, nil)
 
 	rec := &recorder{}
 	rt.On("SendMessage", mock.Anything, mock.Anything).Run(rec.record).Return(nil)

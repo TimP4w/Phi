@@ -103,3 +103,16 @@ func TestStepForRange(t *testing.T) {
 	assert.Equal(t, 432*time.Second, StepForRange(24*time.Hour))
 	assert.Equal(t, 30*time.Second, StepForRange(15*time.Minute))
 }
+
+func TestParseRange(t *testing.T) {
+	assert.Equal(t, 15*time.Minute, ParseRange("15m"))
+	assert.Equal(t, 6*time.Hour, ParseRange("6h"))
+	assert.Equal(t, 3*24*time.Hour, ParseRange("3d"))
+	assert.Equal(t, 14*24*time.Hour, ParseRange("14d"))
+	// Empty and unparseable fall back to the default window.
+	assert.Equal(t, DefaultDetailRange, ParseRange(""))
+	assert.Equal(t, DefaultDetailRange, ParseRange("bogus"))
+	// Out-of-bounds requests clamp to [min, max].
+	assert.Equal(t, minDetailRange, ParseRange("1s"))
+	assert.Equal(t, maxDetailRange, ParseRange("365d"))
+}

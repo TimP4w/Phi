@@ -1,45 +1,22 @@
 import { observer } from "mobx-react-lite";
-import { ResourceStatus, KubeResource } from "../../../core/fluxTree/models/tree";
+import { ResourceStatus } from "../../../core/fluxTree/models/tree";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
 import WidgetCard from "./Widget";
+import { STATUS_BUCKETS } from "../../shared/helpers";
 
 type FluxApplicationsWidgetProps = {
   filters: string[];
   toggleStatusFilter: (status: ResourceStatus) => void;
 };
 
-const STATUS_CONFIG = [
-  {
-    label: "Ready",
-    status: ResourceStatus.SUCCESS,
-    dotClass: "bg-success",
-    textClass: "text-success",
-    match: (r: KubeResource) => r.status === ResourceStatus.SUCCESS,
-  },
-  {
-    label: "Not Ready",
-    status: ResourceStatus.FAILED,
-    dotClass: "bg-danger",
-    textClass: "text-danger",
-    match: (r: KubeResource) =>
-      r.status === ResourceStatus.FAILED || r.status === ResourceStatus.WARNING,
-  },
-  {
-    label: "Reconciling",
-    status: ResourceStatus.PENDING,
-    dotClass: "bg-warning",
-    textClass: "text-warning",
-    match: (r: KubeResource) => r.status === ResourceStatus.PENDING,
-  },
-  {
-    label: "Suspended",
-    status: ResourceStatus.SUSPENDED,
-    dotClass: "bg-default-400",
-    textClass: "text-default-400",
-    match: (r: KubeResource) => r.status === ResourceStatus.SUSPENDED,
-  },
-];
+const STATUS_CONFIG = STATUS_BUCKETS.map((bucket) => ({
+  label: bucket.label,
+  status: bucket.status,
+  dotClass: bucket.dotClass,
+  textClass: bucket.textClass,
+  match: (r: { status: ResourceStatus }) => bucket.matches(r.status),
+}));
 
 const FluxApplicationsWidget: React.FC<FluxApplicationsWidgetProps> = observer(
   ({ filters, toggleStatusFilter }) => {

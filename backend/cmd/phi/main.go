@@ -79,7 +79,7 @@ func main() {
 
 			// Usecase providers
 			kubernetesusecases.NewWatchLogsUseCase,
-			kubernetesusecases.NewGetResourceYAMlUseCase,
+			kubernetesusecases.NewGetResourceYAMLUseCase,
 			realtimeusecases.NewUpgradeConnectionUseCase,
 			kubernetesusecases.NewReconcileUseCase,
 			kubernetesusecases.NewSuspendUseCase,
@@ -145,16 +145,19 @@ func createRouter(uc UseCases, realtimeService realtime.RealtimeService, mcpSrv 
 	return r
 }
 
-// corsMiddleware handles CORS headers. Allowed origin is controlled by PHI_ALLOWED_ORIGIN (default: *).
+// same-origin by default, override with PHI_ALLOWED_ORIGIN
 func corsMiddleware(next http.Handler) http.Handler {
-	allowedOrigin := os.Getenv("PHI_ALLOWED_ORIGIN")
-	if allowedOrigin == "" {
-		allowedOrigin = "*"
-	}
+	allowedOrigin := os.Getenv(shared.ENV_PHI_ALLOWED_ORIGIN)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Origin, X-Requested-With")
+		if allowedOrigin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Accept, Origin, X-Requested-With")
+			// The response varies by Origin once a specific origin is configured.
+			if allowedOrigin != "*" {
+				w.Header().Add("Vary", "Origin")
+			}
+		}
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return

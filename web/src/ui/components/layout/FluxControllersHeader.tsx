@@ -1,6 +1,6 @@
 import { observer } from "mobx-react-lite";
 import { Chip, Tooltip } from "@heroui/react";
-import { Deployment, ResourceStatus } from "../../../core/fluxTree/models/tree";
+import { Deployment } from "../../../core/fluxTree/models/tree";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
 import { Link } from "react-router-dom";
@@ -8,21 +8,7 @@ import { ROUTES } from "../../routes/routes.enum";
 import { useMemo } from "react";
 import { FLUX_VERSION_LABEL } from "../../../core/fluxTree/constants/resources.const";
 import { SiFlux } from "@icons-pack/react-simple-icons";
-
-const dotClass = (status: ResourceStatus): string => {
-  switch (status) {
-    case ResourceStatus.SUCCESS:
-      return "bg-success";
-    case ResourceStatus.FAILED:
-      return "bg-danger";
-    case ResourceStatus.PENDING:
-      return "bg-primary";
-    case ResourceStatus.WARNING:
-      return "bg-warning";
-    default:
-      return "bg-default-400";
-  }
-};
+import { statusDotClass } from "../../shared/helpers";
 
 const extractTag = (imageName: string) => {
   const parts = imageName.split(":");
@@ -94,7 +80,7 @@ const FluxControllersHeader: React.FC = observer(() => {
                 className="flex items-center gap-1.5 group"
               >
                 <div
-                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotClass(resource.status)}`}
+                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(resource.status)}`}
                 />
                 <span className="text-xs text-default-400 group-hover:text-foreground transition-colors">
                   {shortName(resource.name)}

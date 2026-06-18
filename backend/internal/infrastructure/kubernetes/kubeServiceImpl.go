@@ -18,7 +18,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -140,6 +139,9 @@ func (k *KubeServiceImpl) GetResourceYAML(resource kube.Resource) ([]byte, error
 		return nil, err
 	}
 
+	// Strip secret values before serialising
+	redactSecretData(&unstructuredObj)
+
 	// Convert to YAML
 	yamlData, err := yaml.Marshal(unstructuredObj)
 	if err != nil {
@@ -147,6 +149,34 @@ func (k *KubeServiceImpl) GetResourceYAML(resource kube.Resource) ([]byte, error
 	}
 
 	return yamlData, nil
+}
+
+const redactedValue = "[REDACTED]"
+
+// lastAppliedConfigAnnotation mirrors the full applied object, so it is dropped from Secret objects.
+const lastAppliedConfigAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
+
+// redactSecretData masks sensitive values on Secret objects in place
+func redactSecretData(obj *unstructured.Unstructured) {
+	if obj == nil || !strings.EqualFold(obj.GetKind(), "Secret") {
+		return
+	}
+
+	for _, field := range []string{"data", "stringData"} {
+		if m, found, _ := unstructured.NestedMap(obj.Object, field); found {
+			for key := range m {
+				m[key] = redactedValue
+			}
+			_ = unstructured.SetNestedMap(obj.Object, m, field)
+		}
+	}
+
+	if annotations := obj.GetAnnotations(); annotations != nil {
+		if _, ok := annotations[lastAppliedConfigAnnotation]; ok {
+			delete(annotations, lastAppliedConfigAnnotation)
+			obj.SetAnnotations(annotations)
+		}
+	}
 }
 
 func (k *KubeServiceImpl) WatchLogs(pod kube.Resource, ctx context.Context, onLog func(kube.KubeLog)) error {
@@ -160,7 +190,7 @@ func (k *KubeServiceImpl) WatchLogs(pod kube.Resource, ctx context.Context, onLo
 		return fmt.Errorf("failed to get pod resource: %v", err)
 	}
 
-	podR := &v1.Pod{}
+	podR := &corev1.Pod{}
 	err = runtime.DefaultUnstructuredConverter.FromUnstructured(podResource.UnstructuredContent(), podR)
 	if err != nil {
 		return fmt.Errorf("failed to convert pod resource: %v", err)
@@ -462,11 +492,7 @@ func (k *KubeServiceImpl) PatchResource(pr kube.PatchableResource) (*kube.Resour
 // It extracts the group, version, and resource name from the kube.Resource.
 // If the version contains a slash (e.g., "core/v1"), it splits it to get the actual version.
 func (k *KubeServiceImpl) gvrFromResource(el kube.Resource) schema.GroupVersionResource {
-	version := el.Version
-	if parts := strings.SplitN(el.Version, "/", 2); len(parts) == 2 {
-		version = parts[1]
-	}
-
+	_, version := kube.SplitAPIVersion(el.Version)
 	return schema.GroupVersionResource{
 		Group:    el.Group,
 		Version:  version,

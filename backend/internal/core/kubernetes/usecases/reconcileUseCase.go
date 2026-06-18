@@ -41,8 +41,9 @@ func (uc *ReconcileUseCase) Execute(in ReconcileInput) (struct{}, error) {
 		return struct{}{}, fmt.Errorf("failed to reconcile resource: %v", err)
 	}
 
-	// Optimistically update resource state
-	el.FluxMetadata.IsReconciling = true
+	// Optimistically update resource state under the store lock to avoid a data
+	// race with informer-driven UpdateResource writes.
+	uc.kubeStore.SetReconciling(in.ResourceUid, true)
 	logger.Debug("Resource optimistically reconciled")
 	return struct{}{}, nil
 }

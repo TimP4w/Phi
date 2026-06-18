@@ -13,12 +13,15 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/realtime"
+	"github.com/timp4w/phi/internal/core/shared"
 )
 
 const (
-	readTimeout       = 90 * time.Second
-	writeTimeout      = 10 * time.Second
-	writeChannelSize  = 64
+	readTimeout      = 90 * time.Second
+	writeTimeout     = 10 * time.Second
+	writeChannelSize = 64
+	// cap message size to prevend DoS
+	maxMessageSize = 1 << 20 // 1 MiB
 )
 
 type WebSocketManagerImpl struct {
@@ -32,7 +35,7 @@ type WebSocketManagerImpl struct {
 }
 
 func allowedOrigin(r *http.Request) bool {
-	if os.Getenv("PHI_DEV") == "true" {
+	if os.Getenv(shared.ENV_PHI_DEV) == "true" {
 		return true
 	}
 	origin := r.Header.Get("Origin")
@@ -94,6 +97,7 @@ func (wm *WebSocketManagerImpl) Upgrade(w http.ResponseWriter, r *http.Request) 
 		fn(clientId)
 	}
 
+	conn.SetReadLimit(maxMessageSize)
 	conn.SetReadDeadline(time.Now().Add(readTimeout))
 	for {
 		_, p, err := conn.ReadMessage()
@@ -105,15 +109,16 @@ func (wm *WebSocketManagerImpl) Upgrade(w http.ResponseWriter, r *http.Request) 
 			logging.Logger().WithClient(clientId).WithError(err).Error("Error reading message")
 			return "", err
 		}
+		conn.SetReadDeadline(time.Now().Add(readTimeout))
 
 		message := realtime.Message{}
 		err = json.Unmarshal(p, &message)
 		if err != nil {
-			logging.Logger().WithClient(clientId).WithError(err).Error("Failed to unmarshal message")
-			return "", err
+			// A malformed frame shouldn't tear down the connection; skip it.
+			logging.Logger().WithClient(clientId).WithError(err).Warn("Failed to unmarshal message, skipping")
+			continue
 		}
 		message.ClientId = clientId
-		conn.SetReadDeadline(time.Now().Add(readTimeout))
 
 		switch message.Type {
 		case realtime.PING:

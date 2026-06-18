@@ -79,9 +79,7 @@ function getExtraInfo(node: KubeResource): string | null {
   if (node instanceof PersistentVolumeClaim) {
     const phase = node.metadata?.phase ?? "";
     const sc = node.metadata?.storageClass ?? "";
-    const capacity = node.metadata?.capacity instanceof Map
-      ? node.metadata.capacity.get("storage") ?? ""
-      : "";
+    const capacity = node.metadata?.capacity?.["storage"] ?? "";
     const mode = node.metadata?.accessModes?.[0]
       ? (ACCESS_MODE_SHORT[node.metadata.accessModes[0]] ?? node.metadata.accessModes[0])
       : "";

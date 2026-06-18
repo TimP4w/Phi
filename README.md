@@ -33,6 +33,7 @@ Recently it has moved to an "agentic" supported development, since it does what 
 - Prometheus integration: show resource usage per pod and aggregate per kustomization, helmrelease
 - Trivy integration: show vulnerabilities aggregated per kustomization or helmrelease
 - Longhorn integration: show disk usage
+- Command Palette - Find the resource you're looking for easily
 
 
 ## Local Development

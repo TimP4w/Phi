@@ -3,8 +3,8 @@ package kubernetes
 import (
 	"errors"
 	"maps"
+	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -32,7 +32,7 @@ type Resource struct {
 	Status                 Status                 `json:"status"`
 	Conditions             []Condition            `json:"conditions"`
 	CreatedAt              time.Time              `json:"createdAt"`
-	DeletedAt              time.Time              `json:"deletedAt"`
+	DeletedAt              *time.Time             `json:"deletedAt,omitempty"`
 	IsFluxManaged          bool                   `json:"isFluxManaged"`
 	FluxMetadata           FluxMetadata           `json:"fluxMetadata,omitempty"`
 	PodMetadata            PodMetadata            `json:"podMetadata,omitempty"`
@@ -43,6 +43,7 @@ type Resource struct {
 	PVMetadata             PVMetadata             `json:"pvMetadata,omitempty"`
 	LonghornVolumeMetadata LonghornVolumeMetadata `json:"longhornVolumeMetadata,omitempty"`
 	LonghornNodeMetadata   LonghornNodeMetadata   `json:"longhornNodeMetadata,omitempty"`
+	NodeMetadata           NodeMetadata           `json:"nodeMetadata,omitempty"`
 	GitRepositoryMetadata  GitRepositoryMetadata  `json:"gitRepositoryMetadata,omitempty"`
 	OCIRepositoryMetadata  OCIRepositoryMetadata  `json:"ociRepositoryMetadata,omitempty"`
 	ServiceMetadata        ServiceMetadata        `json:"serviceMetadata,omitempty"`
@@ -55,209 +56,52 @@ type Resource struct {
 	TrivyMetadata          TrivyMetadata          `json:"trivyMetadata,omitempty"`
 }
 
-// Copy copies all fields from another Resource into the receiver
-func (e *Resource) Copy(other Resource) {
-	e.UID = other.UID
-	e.Kind = other.Kind
-	e.Version = other.Version
-	e.Namespace = other.Namespace
-	e.Name = other.Name
-	e.Resource = other.Resource
-
-	e.ParentIDs = append([]string(nil), other.ParentIDs...)
-	e.ParentRefs = append([]string(nil), other.ParentRefs...)
-
-	if other.Labels != nil {
-		e.Labels = make(map[string]string, len(other.Labels))
-		for k, v := range other.Labels {
-			e.Labels[k] = v
-		}
-	} else {
-		e.Labels = nil
-	}
-	if other.Annotations != nil {
-		e.Annotations = make(map[string]string, len(other.Annotations))
-		for k, v := range other.Annotations {
-			e.Annotations[k] = v
-		}
-	} else {
-		e.Annotations = nil
-	}
-
-	e.Group = other.Group
-	e.Status = other.Status
-	e.Conditions = append([]Condition(nil), other.Conditions...)
-
-	e.CreatedAt = other.CreatedAt
-	e.DeletedAt = other.DeletedAt
-	e.IsFluxManaged = other.IsFluxManaged
-	e.FluxMetadata = other.FluxMetadata
-	e.PodMetadata = other.PodMetadata.clone()
-	e.DeploymentMetadata = other.DeploymentMetadata
-	e.HelmReleaseMetadata = other.HelmReleaseMetadata
-	e.KustomizationMetadata = other.KustomizationMetadata
-	e.PVCMetadata = other.PVCMetadata
-	e.PVMetadata = other.PVMetadata.clone()
-	e.LonghornVolumeMetadata = other.LonghornVolumeMetadata
-	e.LonghornNodeMetadata = other.LonghornNodeMetadata
-	e.GitRepositoryMetadata = other.GitRepositoryMetadata
-	e.OCIRepositoryMetadata = other.OCIRepositoryMetadata
-	e.ServiceMetadata = other.ServiceMetadata.clone()
-	e.RouteMetadata = other.RouteMetadata.clone()
-	e.EndpointSliceMetadata = other.EndpointSliceMetadata.clone()
-	e.GatewayMetadata = other.GatewayMetadata.clone()
-	e.CertificateMetadata = other.CertificateMetadata.clone()
-	e.NetworkPolicyMetadata = other.NetworkPolicyMetadata.clone()
-	e.ProxyMetadata = other.ProxyMetadata.clone()
-	e.TrivyMetadata = other.TrivyMetadata
+// Clone returns a deep copy of the Resource. Every value-typed field is copied
+// by the struct assignment; the reference-typed fields (slices, maps, and the
+// metadata structs that hold them) are cloned so the copy never shares backing
+// storage with the original. TestClone guards that no reference field is missed.
+func (e Resource) Clone() Resource {
+	out := e
+	out.ParentIDs = slices.Clone(e.ParentIDs)
+	out.ParentRefs = slices.Clone(e.ParentRefs)
+	out.Labels = maps.Clone(e.Labels)
+	out.Annotations = maps.Clone(e.Annotations)
+	out.Conditions = slices.Clone(e.Conditions)
+	out.PodMetadata = e.PodMetadata.clone()
+	out.DeploymentMetadata = e.DeploymentMetadata.clone()
+	out.KustomizationMetadata = e.KustomizationMetadata.clone()
+	out.PVCMetadata = e.PVCMetadata.clone()
+	out.PVMetadata = e.PVMetadata.clone()
+	out.ServiceMetadata = e.ServiceMetadata.clone()
+	out.RouteMetadata = e.RouteMetadata.clone()
+	out.EndpointSliceMetadata = e.EndpointSliceMetadata.clone()
+	out.GatewayMetadata = e.GatewayMetadata.clone()
+	out.CertificateMetadata = e.CertificateMetadata.clone()
+	out.NetworkPolicyMetadata = e.NetworkPolicyMetadata.clone()
+	out.ProxyMetadata = e.ProxyMetadata.clone()
+	out.NodeMetadata = e.NodeMetadata.clone()
+	return out
 }
 
 func (e *Resource) GetRef() string {
-	group := e.Group
-	if group == "" {
-		group = "core"
-	}
-	return group + "/" + e.GetRefVersion() + "/" + e.Kind + ":" + e.Namespace + "/" + e.Name
+	return ResourceRef{
+		Group:     e.Group,
+		Version:   e.Version,
+		Kind:      e.Kind,
+		Namespace: e.Namespace,
+		Name:      e.Name,
+	}.String()
 }
 
 func (e *Resource) GetRefVersion() string {
-	versionParts := strings.Split(e.Version, "/")
-	if len(versionParts) > 1 {
-		return versionParts[1]
-	}
-	return e.Version
+	_, version := SplitAPIVersion(e.Version)
+	return version
 }
 
 func (e *Resource) IsDeepEqual(other Resource) bool {
-	if e.UID != other.UID ||
-		e.Kind != other.Kind ||
-		e.Version != other.Version ||
-		e.Namespace != other.Namespace ||
-		e.Name != other.Name ||
-		e.Resource != other.Resource ||
-		e.Group != other.Group ||
-		e.Status != other.Status ||
-		e.CreatedAt != other.CreatedAt ||
-		e.DeletedAt != other.DeletedAt ||
-		e.IsFluxManaged != other.IsFluxManaged ||
-		e.FluxMetadata != other.FluxMetadata ||
-		!podMetadataEqual(e.PodMetadata, other.PodMetadata) ||
-		!deploymentMetadataEqual(e.DeploymentMetadata, other.DeploymentMetadata) ||
-		e.HelmReleaseMetadata != other.HelmReleaseMetadata ||
-		!kustomizationMetadataEqual(e.KustomizationMetadata, other.KustomizationMetadata) ||
-		!pvcMetadataEqual(e.PVCMetadata, other.PVCMetadata) ||
-		!pvMetadataEqual(e.PVMetadata, other.PVMetadata) ||
-		e.LonghornVolumeMetadata != other.LonghornVolumeMetadata ||
-		e.LonghornNodeMetadata != other.LonghornNodeMetadata ||
-		e.GitRepositoryMetadata != other.GitRepositoryMetadata ||
-		e.OCIRepositoryMetadata != other.OCIRepositoryMetadata ||
-		!serviceMetadataEqual(e.ServiceMetadata, other.ServiceMetadata) ||
-		!routeMetadataEqual(e.RouteMetadata, other.RouteMetadata) ||
-		!endpointSliceMetadataEqual(e.EndpointSliceMetadata, other.EndpointSliceMetadata) ||
-		!gatewayMetadataEqual(e.GatewayMetadata, other.GatewayMetadata) ||
-		!certificateMetadataEqual(e.CertificateMetadata, other.CertificateMetadata) ||
-		!networkPolicyMetadataEqual(e.NetworkPolicyMetadata, other.NetworkPolicyMetadata) ||
-		!proxyMetadataEqual(e.ProxyMetadata, other.ProxyMetadata) ||
-		e.TrivyMetadata != other.TrivyMetadata {
-		return false
-	}
-
-	if len(e.ParentIDs) != len(other.ParentIDs) {
-		return false
-	}
-	for i := range e.ParentIDs {
-		if e.ParentIDs[i] != other.ParentIDs[i] {
-			return false
-		}
-	}
-
-	if len(e.ParentRefs) != len(other.ParentRefs) {
-		return false
-	}
-	for i := range e.ParentRefs {
-		if e.ParentRefs[i] != other.ParentRefs[i] {
-			return false
-		}
-	}
-
-	if maps.Equal(e.Labels, other.Labels) == false {
-		return false
-	}
-
-	if maps.Equal(e.Annotations, other.Annotations) == false {
-		return false
-	}
-
-	if len(e.Conditions) != len(other.Conditions) {
-		return false
-	}
-	for i := range e.Conditions {
-		if e.Conditions[i] != other.Conditions[i] {
-			return false
-		}
-	}
-
-	return true
+	return reflect.DeepEqual(*e, other)
 }
 
-// podMetadataEqual compares two PodMetadata structs for equality.
-func podMetadataEqual(a, b PodMetadata) bool {
-	if a.Phase != b.Phase || a.Image != b.Image {
-		return false
-	}
-	if len(a.Containers) != len(b.Containers) {
-		return false
-	}
-	for i := range a.Containers {
-		if a.Containers[i] != b.Containers[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// deploymentMetadataEqual compares two DeploymentMetadata structs for equality.
-func deploymentMetadataEqual(a, b DeploymentMetadata) bool {
-	if a.Replicas != b.Replicas ||
-		a.ReadyReplicas != b.ReadyReplicas ||
-		a.UpdatedReplicas != b.UpdatedReplicas ||
-		a.AvailableReplicas != b.AvailableReplicas {
-		return false
-	}
-	if len(a.Images) != len(b.Images) {
-		return false
-	}
-	for i := range a.Images {
-		if a.Images[i] != b.Images[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// kustomizationMetadataEqual compares two KustomizationMetadata structs for equality.
-func kustomizationMetadataEqual(a, b KustomizationMetadata) bool {
-	if a.Path != b.Path ||
-		a.IsReconciling != b.IsReconciling ||
-		a.IsSuspended != b.IsSuspended ||
-		a.SourceRef != b.SourceRef ||
-		a.LastAppliedRevision != b.LastAppliedRevision ||
-		a.LastAttemptedRevision != b.LastAttemptedRevision ||
-		!a.LastHandledReconcileAt.Equal(b.LastHandledReconcileAt) {
-		return false
-	}
-	if len(a.DependsOn) != len(b.DependsOn) {
-		return false
-	}
-	for i := range a.DependsOn {
-		if a.DependsOn[i] != b.DependsOn[i] {
-			return false
-		}
-	}
-	return true
-}
-
-// pvcMetadataEqual compares two PVCMetadata structs for equality.
 // ServiceMetadata carries the networking-relevant fields of a core/v1 Service.
 // ExternalIPs are sourced from status.loadBalancer.ingress (e.g. the address
 // MetalLB assigns to a type=LoadBalancer Service).
@@ -289,18 +133,6 @@ func (s ServiceMetadata) clone() ServiceMetadata {
 		maps.Copy(out.Selector, s.Selector)
 	}
 	return out
-}
-
-func serviceMetadataEqual(a, b ServiceMetadata) bool {
-	if a.Type != b.Type {
-		return false
-	}
-	if !slices.Equal(a.ClusterIPs, b.ClusterIPs) ||
-		!slices.Equal(a.ExternalIPs, b.ExternalIPs) ||
-		!slices.Equal(a.Ports, b.Ports) {
-		return false
-	}
-	return maps.Equal(a.Selector, b.Selector)
 }
 
 // RouteMetadata is the kind-agnostic representation of anything that routes
@@ -366,18 +198,6 @@ func (r RouteMetadata) clone() RouteMetadata {
 	}
 }
 
-func routeMetadataEqual(a, b RouteMetadata) bool {
-	return a.Class == b.Class &&
-		a.TLSEnabled == b.TLSEnabled &&
-		slices.Equal(a.Hostnames, b.Hostnames) &&
-		slices.Equal(a.BackendRefs, b.BackendRefs) &&
-		slices.Equal(a.ParentRefs, b.ParentRefs) &&
-		slices.Equal(a.Addresses, b.Addresses) &&
-		slices.Equal(a.TLSSecretRefs, b.TLSSecretRefs) &&
-		slices.Equal(a.MiddlewareRefs, b.MiddlewareRefs) &&
-		slices.Equal(a.EntryPoints, b.EntryPoints)
-}
-
 // EndpointSliceMetadata carries the Service→Pod backing of a
 // discovery.k8s.io/v1 EndpointSlice. ServiceName is the Service this slice backs
 // (same namespace), from the kubernetes.io/service-name label. Each endpoint
@@ -399,10 +219,6 @@ func (e EndpointSliceMetadata) clone() EndpointSliceMetadata {
 		ServiceName: e.ServiceName,
 		Endpoints:   append([]EndpointTarget(nil), e.Endpoints...),
 	}
-}
-
-func endpointSliceMetadataEqual(a, b EndpointSliceMetadata) bool {
-	return a.ServiceName == b.ServiceName && slices.Equal(a.Endpoints, b.Endpoints)
 }
 
 // GatewayMetadata carries the entrypoint-relevant fields of a Gateway API
@@ -433,13 +249,6 @@ func (g GatewayMetadata) clone() GatewayMetadata {
 	}
 }
 
-func gatewayMetadataEqual(a, b GatewayMetadata) bool {
-	return a.GatewayClassName == b.GatewayClassName &&
-		slices.Equal(a.Addresses, b.Addresses) &&
-		slices.Equal(a.Listeners, b.Listeners) &&
-		slices.Equal(a.TLSSecretRefs, b.TLSSecretRefs)
-}
-
 // NetworkPolicyMetadata carries the selector and rule shape of a NetworkPolicy,
 // so the network view can show which pods it gates and in which directions.
 type NetworkPolicyMetadata struct {
@@ -462,13 +271,6 @@ func (n NetworkPolicyMetadata) clone() NetworkPolicyMetadata {
 	return out
 }
 
-func networkPolicyMetadataEqual(a, b NetworkPolicyMetadata) bool {
-	return a.IngressRules == b.IngressRules &&
-		a.EgressRules == b.EgressRules &&
-		slices.Equal(a.PolicyTypes, b.PolicyTypes) &&
-		maps.Equal(a.PodSelector, b.PodSelector)
-}
-
 // ProxyMetadata carries ingress-controller ("proxy") configuration that has no
 // first-class Kubernetes object — currently the middlewares/filters applied at
 // each named entrypoint. Populated by controller-specific providers (e.g. the
@@ -489,18 +291,6 @@ func (p ProxyMetadata) clone() ProxyMetadata {
 	return ProxyMetadata{EntrypointMiddlewares: out}
 }
 
-func proxyMetadataEqual(a, b ProxyMetadata) bool {
-	if len(a.EntrypointMiddlewares) != len(b.EntrypointMiddlewares) {
-		return false
-	}
-	for k, av := range a.EntrypointMiddlewares {
-		if !slices.Equal(av, b.EntrypointMiddlewares[k]) {
-			return false
-		}
-	}
-	return true
-}
-
 // CertificateMetadata carries the debugging-relevant status of a cert-manager
 // Certificate: the secret it writes, whether it is Ready, when it expires, and
 // its issuer.
@@ -516,55 +306,6 @@ func (c CertificateMetadata) clone() CertificateMetadata {
 	out := c
 	out.DNSNames = append([]string(nil), c.DNSNames...)
 	return out
-}
-
-func certificateMetadataEqual(a, b CertificateMetadata) bool {
-	return a.SecretName == b.SecretName &&
-		a.Ready == b.Ready &&
-		a.NotAfter == b.NotAfter &&
-		a.Issuer == b.Issuer &&
-		slices.Equal(a.DNSNames, b.DNSNames)
-}
-
-func pvMetadataEqual(a, b PVMetadata) bool {
-	if a.Capacity != b.Capacity ||
-		a.StorageClass != b.StorageClass ||
-		a.Driver != b.Driver ||
-		a.ReclaimPolicy != b.ReclaimPolicy ||
-		a.VolumeMode != b.VolumeMode ||
-		a.Phase != b.Phase ||
-		a.NFSServer != b.NFSServer ||
-		a.NFSShare != b.NFSShare {
-		return false
-	}
-	return slices.Equal(a.AccessModes, b.AccessModes)
-}
-
-func pvcMetadataEqual(a, b PVCMetadata) bool {
-	if a.StorageClass != b.StorageClass ||
-		a.VolumeName != b.VolumeName ||
-		a.VolumeMode != b.VolumeMode ||
-		a.Phase != b.Phase ||
-		a.Requested != b.Requested {
-		return false
-	}
-	if len(a.AccessModes) != len(b.AccessModes) {
-		return false
-	}
-	for i := range a.AccessModes {
-		if a.AccessModes[i] != b.AccessModes[i] {
-			return false
-		}
-	}
-	if len(a.Capacity) != len(b.Capacity) {
-		return false
-	}
-	for k, v := range a.Capacity {
-		if bv, ok := b.Capacity[k]; !ok || bv != v {
-			return false
-		}
-	}
-	return true
 }
 
 var reconcilableKinds = map[string]struct{}{
@@ -603,10 +344,10 @@ type Event struct {
 }
 
 type FluxMetadata struct {
-	LastHandledReconcileAt time.Time `json:"lastHandledReconcileAt,omitempty"`
-	LastSyncAt             time.Time `json:"lastSyncAt,omitempty"`
-	IsSuspended            bool      `json:"isSuspended,omitempty"`
-	IsReconciling          bool      `json:"isReconciling,omitempty"`
+	LastHandledReconcileAt *time.Time `json:"lastHandledReconcileAt,omitempty"`
+	LastSyncAt             *time.Time `json:"lastSyncAt,omitempty"`
+	IsSuspended            bool       `json:"isSuspended,omitempty"`
+	IsReconciling          bool       `json:"isReconciling,omitempty"`
 }
 
 type PodMetadata struct {
@@ -639,22 +380,23 @@ func (p PodMetadata) clone() PodMetadata {
 }
 
 type HelmReleaseMetadata struct {
-	ChartName     string    `json:"chartName,omitempty"`
-	ChartVersion  string    `json:"chartVersion,omitempty"`
-	IsReconciling bool      `json:"isReconciling,omitempty"`
-	IsSuspended   bool      `json:"isSuspended,omitempty"`
-	SourceRef     SourceRef `json:"sourceRef,omitempty"`
+	ChartName    string    `json:"chartName,omitempty"`
+	ChartVersion string    `json:"chartVersion,omitempty"`
+	SourceRef    SourceRef `json:"sourceRef,omitempty"`
 }
 
 type KustomizationMetadata struct {
-	Path                   string    `json:"path,omitempty"`
-	IsReconciling          bool      `json:"isReconciling,omitempty"`
-	IsSuspended            bool      `json:"isSuspended,omitempty"`
-	SourceRef              SourceRef `json:"sourceRef,omitempty"`
-	LastAppliedRevision    string    `json:"lastAppliedRevision,omitempty"`
-	LastAttemptedRevision  string    `json:"lastAttemptedRevision,omitempty"`
-	LastHandledReconcileAt time.Time `json:"lastHandledReconcileAt,omitempty"`
-	DependsOn              []string  `json:"dependsOn,omitempty"`
+	Path                  string    `json:"path,omitempty"`
+	SourceRef             SourceRef `json:"sourceRef,omitempty"`
+	LastAppliedRevision   string    `json:"lastAppliedRevision,omitempty"`
+	LastAttemptedRevision string    `json:"lastAttemptedRevision,omitempty"`
+	DependsOn             []string  `json:"dependsOn,omitempty"`
+}
+
+func (k KustomizationMetadata) clone() KustomizationMetadata {
+	out := k
+	out.DependsOn = slices.Clone(k.DependsOn)
+	return out
 }
 
 type DeploymentMetadata struct {
@@ -663,6 +405,12 @@ type DeploymentMetadata struct {
 	UpdatedReplicas   int32    `json:"updatedReplicas,omitempty"`
 	AvailableReplicas int32    `json:"availableReplicas,omitempty"`
 	Images            []string `json:"images,omitempty"`
+}
+
+func (d DeploymentMetadata) clone() DeploymentMetadata {
+	out := d
+	out.Images = slices.Clone(d.Images)
+	return out
 }
 
 type PVCMetadata struct {
@@ -677,12 +425,18 @@ type PVCMetadata struct {
 	Requested int64 `json:"requested,omitempty"`
 }
 
+func (p PVCMetadata) clone() PVCMetadata {
+	out := p
+	out.AccessModes = slices.Clone(p.AccessModes)
+	out.Capacity = maps.Clone(p.Capacity)
+	return out
+}
+
 // PVMetadata carries the provisioning-relevant fields of a core/v1
 // PersistentVolume. Capacity is spec.capacity.storage in bytes (mirroring the
 // Longhorn byte counts) so the frontend can sum it without parsing quantities.
 // Driver is spec.csi.driver; NFSServer/NFSShare are populated by the csi
-// provider only for nfs.csi.k8s.io volumes. AccessModes makes the struct
-// non-comparable, so equality uses pvMetadataEqual.
+// provider only for nfs.csi.k8s.io volumes.
 type PVMetadata struct {
 	Capacity      int64    `json:"capacity,omitempty"`      // spec.capacity.storage, bytes
 	StorageClass  string   `json:"storageClass,omitempty"`  // spec.storageClassName
@@ -717,6 +471,25 @@ type LonghornNodeMetadata struct {
 	StorageReserved    int64 `json:"storageReserved,omitempty"`    // admin reserved
 	StorageSchedulable int64 `json:"storageSchedulable,omitempty"` // max - reserved - scheduled
 	StorageDisabled    int64 `json:"storageDisabled,omitempty"`    // capacity of unschedulable disks
+}
+
+// NodeMetadata carries the host-level facts of a core/v1 Node
+type NodeMetadata struct {
+	InternalIP       string   `json:"internalIP,omitempty"`       // status.addresses InternalIP
+	OS               string   `json:"os,omitempty"`               // status.nodeInfo.operatingSystem
+	Architecture     string   `json:"architecture,omitempty"`     // status.nodeInfo.architecture
+	KernelVersion    string   `json:"kernelVersion,omitempty"`    // status.nodeInfo.kernelVersion
+	OSImage          string   `json:"osImage,omitempty"`          // status.nodeInfo.osImage
+	KubeletVersion   string   `json:"kubeletVersion,omitempty"`   // status.nodeInfo.kubeletVersion
+	ContainerRuntime string   `json:"containerRuntime,omitempty"` // status.nodeInfo.containerRuntimeVersion
+	Roles            []string `json:"roles,omitempty"`            // from node-role.kubernetes.io/* labels
+	Unschedulable    bool     `json:"unschedulable,omitempty"`    // spec.unschedulable (cordoned)
+}
+
+func (n NodeMetadata) clone() NodeMetadata {
+	out := n
+	out.Roles = slices.Clone(n.Roles)
+	return out
 }
 
 // LonghornVolumeMetadata carries the Longhorn-specific status of a

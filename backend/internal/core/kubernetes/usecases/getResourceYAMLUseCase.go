@@ -18,7 +18,7 @@ type GetResourceYAMLUseCase struct {
 	logger      logging.PhiLogger
 }
 
-func NewGetResourceYAMlUseCase(KubeService kubernetes.KubeService, KubeStore kubernetes.KubeStore) shared.UseCase[GetResourceYAMLInput, []byte] {
+func NewGetResourceYAMLUseCase(KubeService kubernetes.KubeService, KubeStore kubernetes.KubeStore) shared.UseCase[GetResourceYAMLInput, []byte] {
 	return &GetResourceYAMLUseCase{
 		kubeService: KubeService,
 		kubeStore:   KubeStore,

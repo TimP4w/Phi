@@ -35,7 +35,7 @@ yarn install
 ```sh
 VITE_VERSION=local
 VITE_URL=http://localhost:8080
-VITE_WS=http://localhost:8080/ws
+VITE_WS=ws://localhost:8080/ws
 ```
 
 ### 5. Run the development server

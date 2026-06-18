@@ -14,27 +14,20 @@ import {
   Tree,
   KubeResource,
   Kustomization,
+  Node,
 } from "../models/tree";
 import {
   RESOURCE_TYPE,
   FLUX_NAMESPACE,
   TRIVY_REPORT_KINDS,
+  FLUX_APPLICATION_KINDS,
+  FLUX_REPOSITORY_KINDS,
 } from "../constants/resources.const";
 import { indexFindingsByTarget, TrivySummary } from "../../trivy/trivy";
 import { TreeNodeDto } from "../models/dtos/treeDto";
 
-const APPLICATION_KINDS = new Set([
-  RESOURCE_TYPE.KUSTOMIZATION,
-  RESOURCE_TYPE.HELM_RELEASE,
-  RESOURCE_TYPE.HELM_CHART,
-]);
-
-const REPOSITORY_KINDS = new Set([
-  RESOURCE_TYPE.OCI_REPOSITORY,
-  RESOURCE_TYPE.HELM_REPOSITORY,
-  RESOURCE_TYPE.GIT_REPOSITORY,
-  RESOURCE_TYPE.BUCKET,
-]);
+const APPLICATION_KINDS = new Set<RESOURCE_TYPE>(FLUX_APPLICATION_KINDS);
+const REPOSITORY_KINDS = new Set<RESOURCE_TYPE>(FLUX_REPOSITORY_KINDS);
 
 function buildTree(resources: Map<string, KubeResource>): Tree {
   resources.forEach((resource) => {
@@ -93,6 +86,7 @@ class FluxTreeStore {
       tree: computed,
       applications: computed,
       repositories: computed,
+      nodes: computed,
       resourceCount: computed,
       trivyIndex: computed,
       upsertResource: action,
@@ -186,6 +180,15 @@ class FluxTreeStore {
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  /** Core v1 Nodes (the Longhorn Node CRD is modelled separately). */
+  get nodes(): Node[] {
+    const result: Node[] = [];
+    this.resources.forEach((r) => {
+      if (r instanceof Node) result.push(r);
+    });
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
   // --- lookup helpers ---
 
   findResourceByUid(uid: string): KubeResource | undefined {
@@ -256,5 +259,3 @@ class FluxTreeStore {
 }
 
 export { FluxTreeStore };
-
-export const fluxTreeStore = new FluxTreeStore();

@@ -11,11 +11,14 @@ export interface MetricsSubscription {
   uids?: string[];
   nodes?: boolean;
   uid?: string;
+  range?: string;
 }
 
 @injectable()
 export class WatchMetricsUseCase extends UseCase<MetricsSubscription, void> {
-  constructor(@inject(TYPES.WebSocket) private readonly realtimeService: WebSocketService) {
+  constructor(
+    @inject(TYPES.WebSocket) private readonly realtimeService: WebSocketService,
+  ) {
     super();
   }
 

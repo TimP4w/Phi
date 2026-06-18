@@ -15,10 +15,11 @@ export type TreeNodeDto = {
   annotations: Record<string, string>;
   labels: Record<string, string>;
   conditions: ConditionDto[];
-  status: "unknown" | "success" | "failed" | "pending" | "warning";
+  status: "unknown" | "success" | "failed" | "pending" | "warning" | "suspended";
   isFluxManaged: boolean;
-  createdAt: Date;
-  deletedAt: Date;
+  // Timestamps arrive as JSON strings; the model constructors convert to Date.
+  createdAt: string;
+  deletedAt?: string;
   podMetadata?: PodMetadataDto;
   deploymentMetadata?: DeploymentMetadataDto;
   helmReleaseMetadata?: HelmReleaseMetadataDto;
@@ -27,6 +28,7 @@ export type TreeNodeDto = {
   pvMetadata?: PersistentVolumeMetadataDto;
   longhornVolumeMetadata?: LonghornVolumeMetadataDto;
   longhornNodeMetadata?: LonghornNodeMetadataDto;
+  nodeMetadata?: NodeMetadataDto;
   gitRepositoryMetadata?: GitRepositoryMetadataDto;
   helmChartMetadata?: HelmChartMetadataDto;
   helmRepositoryMetadata?: HelmRepositoryMetadataDto;
@@ -148,7 +150,7 @@ export type GatewayMetadataDto = {
 };
 
 export type ConditionDto = {
-  lastTransitionTime: Date;
+  lastTransitionTime: string;
   type: string;
   status: "True" | "False";
   message: string;
@@ -177,19 +179,14 @@ export type PodMetadataDto = {
 type HelmReleaseMetadataDto = {
   chartName: string;
   chartVersion: string;
-  isReconciling: boolean;
-  isSuspended: boolean;
   sourceRef: SourceRefDto;
 };
 
 type KustomizationMetadataDto = {
   path: string;
-  isReconciling: boolean;
-  isSuspended: boolean;
   sourceRef: SourceRefDto;
   lastAppliedRevision: string;
   lastAttemptedRevision: string;
-  lastHandledReconcileAt: Date;
   dependsOn: string[];
 };
 
@@ -203,7 +200,7 @@ type PersistentVolumeClaimMetadataDto = {
   volumeName: string;
   volumeMode: string;
   accessModes: string[];
-  capacity: Map<string, string>;
+  capacity: Record<string, string>;
   phase: string;
   requested?: number;
 };
@@ -241,6 +238,18 @@ type LonghornNodeMetadataDto = {
   storageDisabled: number;
 };
 
+type NodeMetadataDto = {
+  internalIP?: string;
+  os?: string;
+  architecture?: string;
+  kernelVersion?: string;
+  osImage?: string;
+  kubeletVersion?: string;
+  containerRuntime?: string;
+  roles?: string[];
+  unschedulable?: boolean;
+};
+
 type DeploymentMetadataDto = {
   replicas: number;
   readyReplicas: number;
@@ -272,17 +281,17 @@ type HelmChartMetadataDto = unknown;
 type HelmRepositoryMetadataDto = unknown;
 
 type FluxMetadataDto = {
-  lastHandledReconcileAt: Date;
+  lastHandledReconcileAt?: string;
   isReconciling: boolean;
   isSuspended: boolean;
-  lastSyncAt: Date;
+  lastSyncAt?: string;
 };
 
 
 export type LogMessageDto = {
   uid: string;
   log: string;
-  timestamp: Date;
+  timestamp: string;
   container: string;
 };
 

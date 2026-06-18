@@ -56,7 +56,7 @@ func TestGetResourceMetricsHappyPath(t *testing.T) {
 	prom.On("Query", mock.Anything, QueryLimitsCount(m, "memory"), mock.Anything).Return(scalar(1), nil)
 
 	svc := NewMetricsService(store, prom)
-	rm, err := svc.GetResourceMetrics(context.Background(), "p1")
+	rm, err := svc.GetResourceMetrics(context.Background(), "p1", "")
 
 	assert.NoError(t, err)
 	assert.Equal(t, "24h", rm.Range)
@@ -129,7 +129,7 @@ func TestGetResourceMetricsLimitNullWhenContainerUnbounded(t *testing.T) {
 	prom.On("Query", mock.Anything, mock.Anything, mock.Anything).Return(scalar(1), nil) // everything else
 
 	svc := NewMetricsService(store, prom)
-	rm, err := svc.GetResourceMetrics(context.Background(), "p1")
+	rm, err := svc.GetResourceMetrics(context.Background(), "p1", "")
 
 	assert.NoError(t, err)
 	assert.Nil(t, rm.Spec.CPU.Limits)
@@ -143,7 +143,7 @@ func TestGetResourceMetricsNoPods(t *testing.T) {
 	store.On("GetResources").Return(map[string]*kube.Resource{"ks": ks})
 
 	svc := NewMetricsService(store, NewMockPrometheusService(t))
-	_, err := svc.GetResourceMetrics(context.Background(), "ks")
+	_, err := svc.GetResourceMetrics(context.Background(), "ks", "")
 	assert.ErrorIs(t, err, metrics.ErrNoPods)
 }
 
