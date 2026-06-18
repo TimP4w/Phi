@@ -336,7 +336,9 @@ func (s *metricsService) GetStorageUsage(ctx context.Context, uids []string) (ma
 	for uid, pvcs := range pvcsByUID {
 		su := metrics.StorageUsage{PVCCount: len(pvcs)}
 		for _, p := range pvcs {
-			su.Requested += p.PVCMetadata.Requested
+			if p.PVCMetadata != nil {
+				su.Requested += p.PVCMetadata.Requested
+			}
 			if used, ok := usedByPVC[pvcKey{p.Namespace, p.Name}]; ok {
 				su.Used += int64(used)
 				su.Measured++

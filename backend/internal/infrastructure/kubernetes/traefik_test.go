@@ -74,5 +74,5 @@ func TestToResource_NonProxyWorkload_NoEntrypointMiddlewares(t *testing.T) {
 	}
 
 	res := mapper.ToResource(*obj, "daemonsets")
-	assert.Empty(t, res.ProxyMetadata.EntrypointMiddlewares)
+	assert.Nil(t, res.ProxyMetadata)
 }

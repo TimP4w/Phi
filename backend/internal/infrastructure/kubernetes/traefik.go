@@ -131,7 +131,7 @@ func mapTraefikIngressRouteData(el *kube.Resource, obj unstructured.Unstructured
 		}
 	}
 
-	el.RouteMetadata = route
+	el.RouteMetadata = &route
 }
 
 // traefikProxyData detects a Traefik proxy workload and extracts the middlewares
@@ -166,6 +166,6 @@ func traefikProxyData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	if len(entrypointMiddlewares) > 0 {
-		el.ProxyMetadata = kube.ProxyMetadata{EntrypointMiddlewares: entrypointMiddlewares}
+		el.ProxyMetadata = &kube.ProxyMetadata{EntrypointMiddlewares: entrypointMiddlewares}
 	}
 }

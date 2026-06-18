@@ -34,12 +34,12 @@ func createSampleResource() Resource {
 			IsSuspended:            false,
 			IsReconciling:          false,
 		},
-		PodMetadata:           PodMetadata{Phase: "Running"},
-		DeploymentMetadata:    DeploymentMetadata{Replicas: 3},
-		HelmReleaseMetadata:   HelmReleaseMetadata{},
-		KustomizationMetadata: KustomizationMetadata{},
-		GitRepositoryMetadata: GitRepositoryMetadata{URL: "https://github.com/example/repo.git"},
-		OCIRepositoryMetadata: OCIRepositoryMetadata{URL: "oci://example.com/repo"},
+		PodMetadata:           ptr(PodMetadata{Phase: "Running"}),
+		DeploymentMetadata:    ptr(DeploymentMetadata{Replicas: 3}),
+		HelmReleaseMetadata:   ptr(HelmReleaseMetadata{}),
+		KustomizationMetadata: ptr(KustomizationMetadata{}),
+		GitRepositoryMetadata: ptr(GitRepositoryMetadata{URL: "https://github.com/example/repo.git"}),
+		OCIRepositoryMetadata: ptr(OCIRepositoryMetadata{URL: "oci://example.com/repo"}),
 	}
 }
 
@@ -64,25 +64,25 @@ func TestCloneIndependence(t *testing.T) {
 		Labels:      map[string]string{"k": "v"},
 		Annotations: map[string]string{"a": "v"},
 		Conditions:  []Condition{{Type: "Ready", Status: "True"}},
-		PodMetadata: PodMetadata{Containers: []Container{{Name: "c1"}}},
-		DeploymentMetadata: DeploymentMetadata{
+		PodMetadata: ptr(PodMetadata{Containers: []Container{{Name: "c1"}}}),
+		DeploymentMetadata: ptr(DeploymentMetadata{
 			Images: []string{"img:1"},
-		},
-		KustomizationMetadata: KustomizationMetadata{
+		}),
+		KustomizationMetadata: ptr(KustomizationMetadata{
 			DependsOn: []string{"dep1"},
-		},
-		PVCMetadata: PVCMetadata{
+		}),
+		PVCMetadata: ptr(PVCMetadata{
 			AccessModes: []string{"ReadWriteOnce"},
 			Capacity:    map[string]string{"storage": "1Gi"},
-		},
-		PVMetadata:            PVMetadata{AccessModes: []string{"ReadWriteOnce"}},
-		ServiceMetadata:       ServiceMetadata{ClusterIPs: []string{"10.0.0.1"}, Selector: map[string]string{"app": "x"}},
-		RouteMetadata:         RouteMetadata{Hostnames: []string{"example.com"}},
-		EndpointSliceMetadata: EndpointSliceMetadata{Endpoints: []EndpointTarget{{TargetName: "pod1"}}},
-		GatewayMetadata:       GatewayMetadata{Addresses: []string{"1.2.3.4"}},
-		CertificateMetadata:   CertificateMetadata{DNSNames: []string{"example.com"}},
-		NetworkPolicyMetadata: NetworkPolicyMetadata{PodSelector: map[string]string{"app": "x"}, PolicyTypes: []string{"Ingress"}},
-		ProxyMetadata:         ProxyMetadata{EntrypointMiddlewares: map[string][]string{"web": {"mw1"}}},
+		}),
+		PVMetadata:            ptr(PVMetadata{AccessModes: []string{"ReadWriteOnce"}}),
+		ServiceMetadata:       ptr(ServiceMetadata{ClusterIPs: []string{"10.0.0.1"}, Selector: map[string]string{"app": "x"}}),
+		RouteMetadata:         ptr(RouteMetadata{Hostnames: []string{"example.com"}}),
+		EndpointSliceMetadata: ptr(EndpointSliceMetadata{Endpoints: []EndpointTarget{{TargetName: "pod1"}}}),
+		GatewayMetadata:       ptr(GatewayMetadata{Addresses: []string{"1.2.3.4"}}),
+		CertificateMetadata:   ptr(CertificateMetadata{DNSNames: []string{"example.com"}}),
+		NetworkPolicyMetadata: ptr(NetworkPolicyMetadata{PodSelector: map[string]string{"app": "x"}, PolicyTypes: []string{"Ingress"}}),
+		ProxyMetadata:         ptr(ProxyMetadata{EntrypointMiddlewares: map[string][]string{"web": {"mw1"}}}),
 	}
 	snapshot := original.Clone()
 
@@ -144,20 +144,20 @@ func TestIsDeepEqual_DifferentConditions(t *testing.T) {
 }
 
 func TestIsDeepEqual_DifferentDeploymentMetadata(t *testing.T) {
-	a := Resource{UID: "uid1", DeploymentMetadata: DeploymentMetadata{Replicas: 1}}
-	b := Resource{UID: "uid1", DeploymentMetadata: DeploymentMetadata{Replicas: 2}}
+	a := Resource{UID: "uid1", DeploymentMetadata: ptr(DeploymentMetadata{Replicas: 1})}
+	b := Resource{UID: "uid1", DeploymentMetadata: ptr(DeploymentMetadata{Replicas: 2})}
 	assert.False(t, a.IsDeepEqual(b))
 }
 
 func TestIsDeepEqual_DifferentKustomizationMetadata(t *testing.T) {
-	a := Resource{UID: "uid1", KustomizationMetadata: KustomizationMetadata{Path: "./apps"}}
-	b := Resource{UID: "uid1", KustomizationMetadata: KustomizationMetadata{Path: "./infra"}}
+	a := Resource{UID: "uid1", KustomizationMetadata: ptr(KustomizationMetadata{Path: "./apps"})}
+	b := Resource{UID: "uid1", KustomizationMetadata: ptr(KustomizationMetadata{Path: "./infra"})}
 	assert.False(t, a.IsDeepEqual(b))
 }
 
 func TestIsDeepEqual_DifferentPVCMetadata(t *testing.T) {
-	a := Resource{UID: "uid1", PVCMetadata: PVCMetadata{StorageClass: "standard"}}
-	b := Resource{UID: "uid1", PVCMetadata: PVCMetadata{StorageClass: "fast"}}
+	a := Resource{UID: "uid1", PVCMetadata: ptr(PVCMetadata{StorageClass: "standard"})}
+	b := Resource{UID: "uid1", PVCMetadata: ptr(PVCMetadata{StorageClass: "fast"})}
 	assert.False(t, a.IsDeepEqual(b))
 }
 

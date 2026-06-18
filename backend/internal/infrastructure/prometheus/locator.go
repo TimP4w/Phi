@@ -79,6 +79,9 @@ func isPrometheusService(r *kube.Resource) bool {
 // or the well-known 9090), falling back to the first declared port and finally
 // to defaultPort so a non-standard listener is still reachable.
 func prometheusPort(r *kube.Resource) int32 {
+	if r.ServiceMetadata == nil {
+		return defaultPort
+	}
 	for _, p := range r.ServiceMetadata.Ports {
 		switch p.Name {
 		case "web", "http-web", "http":

@@ -17,25 +17,14 @@ import (
 
 const trivyGroup = "aquasecurity.github.io"
 
-// trivyReportTypes maps each report kind to the ReportType label surfaced to the
-// frontend. The four kinds share an identical report.summary shape, so a single
-// mapper handles all of them.
-var trivyReportTypes = map[string]string{
-	"VulnerabilityReport":  "vulnerability",
-	"ConfigAuditReport":    "configAudit",
-	"ExposedSecretReport":  "exposedSecret",
-	"RbacAssessmentReport": "rbacAssessment",
-}
-
-// mapTrivyReport extracts the report summary and target workload reference into
-// TrivyMetadata. The target is taken from the trivy-operator.resource.* labels
-// the operator stamps on every report (more reliable than ownerReferences, which
-// point at the intermediate ReplicaSet for Deployments).
-func mapTrivyReport(el *kube.Resource, obj unstructured.Unstructured, reportType string) {
+// mapTrivyReport extracts the report summary and target into TrivyMetadata. The
+// report type comes from the registry; the target from the trivy-operator.resource.*
+// labels (more reliable than ownerReferences, which point at the ReplicaSet).
+func mapTrivyReport(el *kube.Resource, obj unstructured.Unstructured) {
 	summary, _, _ := unstructured.NestedMap(obj.Object, "report", "summary")
 
-	el.TrivyMetadata = kube.TrivyMetadata{
-		ReportType:      reportType,
+	el.TrivyMetadata = &kube.TrivyMetadata{
+		ReportType:      string(kube.ClassificationFor(el.GroupKind()).TrivyReportType),
 		Critical:        nestedInt(summary, "criticalCount"),
 		High:            nestedInt(summary, "highCount"),
 		Medium:          nestedInt(summary, "mediumCount"),

@@ -72,11 +72,11 @@ func TestGetStorageUsage(t *testing.T) {
 	ks := &kube.Resource{UID: "ks", Kind: "Kustomization", Name: "ks", Namespace: "ns"}
 	pvc1 := &kube.Resource{
 		UID: "pvc1", Kind: "PersistentVolumeClaim", Name: "data-1", Namespace: "ns",
-		ParentIDs: []string{"ks"}, PVCMetadata: kube.PVCMetadata{Requested: 10},
+		ParentIDs: []string{"ks"}, PVCMetadata: &kube.PVCMetadata{Requested: 10},
 	}
 	pvc2 := &kube.Resource{
 		UID: "pvc2", Kind: "PersistentVolumeClaim", Name: "data-2", Namespace: "ns",
-		ParentIDs: []string{"ks"}, PVCMetadata: kube.PVCMetadata{Requested: 5},
+		ParentIDs: []string{"ks"}, PVCMetadata: &kube.PVCMetadata{Requested: 5},
 	}
 	store := mocks.NewKubeStore(t)
 	store.On("GetResourceByUID", "ks").Return(ks).Maybe()
