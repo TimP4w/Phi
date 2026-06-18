@@ -29,7 +29,7 @@ run-be:
 
 backend-mocks:
 	@echo "Generating mocks for backend..."
-	cd $(BACKEND_DIR) && mockery --all --recursive --output ./internal/testing/mocks --with-expecter --exported 
+	cd $(BACKEND_DIR) && mockery --all --recursive --output ./internal/testing/testdata --with-expecter --exported
 
 clean-be:
 	@echo "Cleaning backend..."
