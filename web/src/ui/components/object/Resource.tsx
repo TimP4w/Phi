@@ -41,10 +41,11 @@ function getExtraInfo(node: KubeResource): string | null {
 
   if (node instanceof Pod) {
     const phase = node.metadata?.phase ?? null;
-    const image = node.metadata?.image
-      ? node.metadata.image.split("/").pop()?.split(":").join(" · ") ?? null
-      : null;
-    return [phase, image].filter(Boolean).join("  ·  ") || null;
+    const raw = (node.metadata?.containers ?? []).map((c) => c.image).filter(Boolean);
+    if (raw.length === 0 && node.metadata?.image) raw.push(node.metadata.image);
+    const images = Array.from(new Set(raw)).map((img) => img.split("/").pop() ?? img);
+    const imageStr = images.join(", ") || null;
+    return [phase, imageStr].filter(Boolean).join("  ·  ") || null;
   }
 
   if (node instanceof HelmRelease) {

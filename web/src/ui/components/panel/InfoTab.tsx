@@ -198,17 +198,27 @@ const renderKindFields = (resource: KubeResource) => {
     }
     case "Pod": {
       const n = resource as Pod;
+      const images = Array.from(
+        new Set((n.metadata?.containers ?? []).map((c) => c.image).filter(Boolean))
+      );
+      if (images.length === 0 && n.metadata?.image) images.push(n.metadata.image);
       return (
         <Section title="Pod">
           <InfoRow label="Phase" value={n.metadata?.phase?.toString()} />
-          <InfoRow
-            label="Image"
-            value={
-              <Chip size="sm" variant="flat" className="font-mono text-xs">
-                {n.metadata?.image}
-              </Chip>
-            }
-          />
+          {images.length > 0 && (
+            <div className="px-2 py-1.5">
+              <p className="text-sm text-default-400 mb-1.5">
+                {images.length > 1 ? "Images" : "Image"}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {images.map((img) => (
+                  <Chip key={img} size="sm" variant="flat" className="font-mono text-xs">
+                    {img}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+          )}
         </Section>
       );
     }

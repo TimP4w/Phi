@@ -3,7 +3,7 @@ import { observer } from "mobx-react-lite";
 import { useInjection } from "inversify-react";
 import { Alert, Chip, Tab, Tabs, Tooltip, useDisclosure } from "@heroui/react";
 import { Link } from "react-router-dom";
-import { formatDistanceToNowStrict } from "date-fns";
+import { format, formatDistanceToNowStrict } from "date-fns";
 import { AlertCircle, AlertTriangle, ChevronRight, GitCommitHorizontal, HardDrive } from "lucide-react";
 
 import {
@@ -211,11 +211,13 @@ type Pill = {
   href?: string;
   /** Treat href as an external URL (new tab) rather than an in-app route. */
   external?: boolean;
+  /** Full detail shown on hover. */
+  tooltip?: React.ReactNode;
   tone?: "default" | "warning";
   mono?: boolean;
 };
 
-const InfoPill = ({ label, value, href, external, tone, mono }: Pill) => {
+const InfoPill = ({ label, value, href, external, tooltip, tone, mono }: Pill) => {
   const body = (
     <>
       <span className="text-default-400 flex-shrink-0">{label}</span>
@@ -230,19 +232,24 @@ const InfoPill = ({ label, value, href, external, tone, mono }: Pill) => {
   );
   const cls =
     "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-default-200 bg-content1 text-xs max-w-full";
-  if (href && external) {
-    return (
+  const el =
+    href && external ? (
       <a href={href} target="_blank" rel="noreferrer" className={`${cls} hover:bg-content2 transition-colors`}>
         {body}
       </a>
+    ) : href ? (
+      <Link to={href} className={`${cls} hover:bg-content2 transition-colors`}>
+        {body}
+      </Link>
+    ) : (
+      <div className={cls}>{body}</div>
     );
-  }
-  return href ? (
-    <Link to={href} className={`${cls} hover:bg-content2 transition-colors`}>
-      {body}
-    </Link>
+  return tooltip ? (
+    <Tooltip content={tooltip} className="dark">
+      {el}
+    </Tooltip>
   ) : (
-    <div className={cls}>{body}</div>
+    el
   );
 };
 
@@ -307,11 +314,13 @@ const kindPills = (node: KubeResource, store: FluxTreeStore): Pill[] => {
       pills.push({
         label: "Last reconcile",
         value: formatDistanceToNowStrict(node.lastHandledReconcileAt, { addSuffix: true }),
+        tooltip: format(node.lastHandledReconcileAt, "yyyy-MM-dd HH:mm:ss"),
       });
     if (node.lastSyncAt)
       pills.push({
         label: "Last sync",
         value: formatDistanceToNowStrict(node.lastSyncAt, { addSuffix: true }),
+        tooltip: format(node.lastSyncAt, "yyyy-MM-dd HH:mm:ss"),
       });
     if (node.isReconciling) pills.push({ label: "Reconciling", value: "yes", tone: "warning" });
     if (node.isSuspended) pills.push({ label: "Suspended", value: "yes", tone: "warning" });
