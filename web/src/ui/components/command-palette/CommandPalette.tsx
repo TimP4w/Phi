@@ -23,10 +23,10 @@ import { ResumeUseCase } from "../../../core/resource/usecases/resume.usecase";
 import {
   KubeResource,
   FluxResource,
-  ResourceStatus,
 } from "../../../core/fluxTree/models/tree";
 import { KubeEvent } from "../../../core/fluxTree/models/kubeEvent";
 import { ROUTES } from "../../routes/routes.enum";
+import { statusChipColor } from "../../shared/helpers";
 import EventDetailModal from "./EventDetailModal";
 import {
   CommandName,
@@ -49,22 +49,6 @@ type Item =
   | { type: "resource"; resource: KubeResource }
   | { type: "event"; event: KubeEvent }
   | { type: "command"; command: CommandName; resource: FluxResource };
-
-const statusColor = (
-  r: KubeResource
-): "success" | "danger" | "warning" | "default" => {
-  switch (r.status) {
-    case ResourceStatus.SUCCESS:
-      return "success";
-    case ResourceStatus.FAILED:
-      return "danger";
-    case ResourceStatus.WARNING:
-    case ResourceStatus.PENDING:
-      return "warning";
-    default:
-      return "default";
-  }
-};
 
 const COMMAND_ICON: Record<CommandName, React.ReactNode> = {
   suspend: <Pause className="w-4 h-4" />,
@@ -345,7 +329,7 @@ const CommandPalette: React.FC = observer(() => {
           <Chip
             size="sm"
             variant="flat"
-            color={statusColor(r)}
+            color={statusChipColor(r.status)}
             className="ml-auto flex-shrink-0"
           >
             {r.status}

@@ -1,6 +1,6 @@
 import { observer } from "mobx-react-lite";
 import { Chip } from "@heroui/react";
-import { Deployment, ResourceStatus } from "../../../core/fluxTree/models/tree";
+import { Deployment } from "../../../core/fluxTree/models/tree";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
 import { Link } from "react-router-dom";
@@ -8,16 +8,7 @@ import WidgetCard from "./Widget";
 import { ROUTES } from "../../routes/routes.enum";
 import { useMemo } from "react";
 import { FLUX_VERSION_LABEL } from "../../../core/fluxTree/constants/resources.const";
-
-const dotClass = (status: ResourceStatus): string => {
-  switch (status) {
-    case ResourceStatus.SUCCESS: return "bg-success";
-    case ResourceStatus.FAILED: return "bg-danger";
-    case ResourceStatus.PENDING: return "bg-primary";
-    case ResourceStatus.WARNING: return "bg-warning";
-    default: return "bg-default-400";
-  }
-};
+import { statusDotClass } from "../../shared/helpers";
 
 const extractTag = (imageName: string) => {
   const parts = imageName.split(":");
@@ -55,7 +46,7 @@ const FluxControllersWidget: React.FC = observer(() => {
         {fluxDeployments.map((resource: Deployment) => (
           <Link key={resource.uid} to={`${ROUTES.RESOURCE}/${resource.uid}`}>
             <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-content2 transition-colors group">
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass(resource.status)}`} />
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotClass(resource.status)}`} />
               <span className="text-sm flex-1 min-w-0 truncate text-default-300 group-hover:text-foreground transition-colors">
                 {resource.name}
               </span>
