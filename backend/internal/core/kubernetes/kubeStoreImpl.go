@@ -325,6 +325,17 @@ func (k *KubeStoreImpl) SetSuspended(uid string, suspended bool) bool {
 	return true
 }
 
+func (k *KubeStoreImpl) SetReconciling(uid string, reconciling bool) bool {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	res, exists := k.resources[uid]
+	if !exists {
+		return false
+	}
+	res.FluxMetadata.IsReconciling = reconciling
+	return true
+}
+
 func (k *KubeStoreImpl) AddEvent(resourceUID string, event Event, ttl time.Duration, max int) bool {
 	k.mu.Lock()
 	defer k.mu.Unlock()

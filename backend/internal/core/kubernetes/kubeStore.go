@@ -34,4 +34,7 @@ type KubeStore interface {
 	// SetSuspended mutates the IsSuspended flag on a resource under the store lock.
 	// Returns false if the resource does not exist.
 	SetSuspended(uid string, suspended bool) bool
+	// SetReconciling mutates the IsReconciling flag on a resource under the store lock.
+	// Returns false if the resource does not exist.
+	SetReconciling(uid string, reconciling bool) bool
 }

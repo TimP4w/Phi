@@ -17,12 +17,13 @@ func TestReconcileUseCase_Success(t *testing.T) {
 	res := &kube.Resource{UID: "ks-uid", Kind: "Kustomization"}
 	store.On("GetResourceByUID", "ks-uid").Return(res)
 	flux.On("Reconcile", *res).Return(res, nil)
+	store.On("SetReconciling", "ks-uid", true).Return(true)
 
 	uc := NewReconcileUseCase(flux, store)
 	_, err := uc.Execute(ReconcileInput{ResourceUid: "ks-uid"})
 
 	require.NoError(t, err)
-	assert.True(t, res.FluxMetadata.IsReconciling)
+	store.AssertCalled(t, "SetReconciling", "ks-uid", true)
 	store.AssertExpectations(t)
 	flux.AssertExpectations(t)
 }
