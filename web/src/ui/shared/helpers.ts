@@ -4,7 +4,7 @@ import {
   ERROR_TYPES,
   SUCCESS_TYPES,
 } from "../../core/fluxTree/constants/conditions.const";
-import { stringToEnum } from "../../core/shared/enum.utils";
+import { isEnumValue } from "../../core/shared/enum.utils";
 
 export const colorByStatus = (status: ResourceStatus) => {
   switch (status) {
@@ -77,7 +77,9 @@ export const statusChipColor = (
 
 // Dot color for a single resource condition, derived from its type then reason.
 export const conditionDotClass = (condition: Condition): string => {
-  const conditionType = stringToEnum(CONDITION_TYPE, condition.type);
+  const conditionType = isEnumValue(CONDITION_TYPE, condition.type)
+    ? condition.type
+    : undefined;
   if (conditionType && SUCCESS_TYPES.includes(conditionType)) {
     return condition.status ? "bg-success" : "bg-danger";
   }
