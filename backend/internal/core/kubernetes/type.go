@@ -33,7 +33,7 @@ type Resource struct {
 	Status                 Status                 `json:"status"`
 	Conditions             []Condition            `json:"conditions"`
 	CreatedAt              time.Time              `json:"createdAt"`
-	DeletedAt              time.Time              `json:"deletedAt"`
+	DeletedAt              *time.Time             `json:"deletedAt,omitempty"`
 	IsFluxManaged          bool                   `json:"isFluxManaged"`
 	FluxMetadata           FluxMetadata           `json:"fluxMetadata,omitempty"`
 	PodMetadata            PodMetadata            `json:"podMetadata,omitempty"`
@@ -344,10 +344,10 @@ type Event struct {
 }
 
 type FluxMetadata struct {
-	LastHandledReconcileAt time.Time `json:"lastHandledReconcileAt,omitempty"`
-	LastSyncAt             time.Time `json:"lastSyncAt,omitempty"`
-	IsSuspended            bool      `json:"isSuspended,omitempty"`
-	IsReconciling          bool      `json:"isReconciling,omitempty"`
+	LastHandledReconcileAt *time.Time `json:"lastHandledReconcileAt,omitempty"`
+	LastSyncAt             *time.Time `json:"lastSyncAt,omitempty"`
+	IsSuspended            bool       `json:"isSuspended,omitempty"`
+	IsReconciling          bool       `json:"isReconciling,omitempty"`
 }
 
 type PodMetadata struct {

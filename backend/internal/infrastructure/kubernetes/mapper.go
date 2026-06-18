@@ -58,8 +58,8 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		ParentRefs:  []string{},
 	}
 
-	if obj.GetDeletionTimestamp() != nil {
-		el.DeletedAt = obj.GetDeletionTimestamp().Time
+	if ts := obj.GetDeletionTimestamp(); ts != nil {
+		el.DeletedAt = &ts.Time
 	}
 
 	for _, ownerRef := range obj.GetOwnerReferences() {
@@ -179,6 +179,15 @@ func mapConditions(el *kube.Resource, conditions []metav1.Condition) []kube.Cond
 	return el.Conditions
 }
 
+// nilIfZeroTime returns a pointer to t, or nil when t is the zero value, so that
+// `omitempty` JSON tags drop unset timestamps instead of serializing year-1 dates.
+func nilIfZeroTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
+}
+
 func mapFluxMetadata(el *kube.Resource, annotations map[string]string, lastReconcileTimeStr string, isSuspended bool, conditions []metav1.Condition) {
 	isReconciling := false
 	didManuallyReconcile, exists := annotations["reconcile.fluxcd.io/requestedAt"]
@@ -211,8 +220,8 @@ func mapFluxMetadata(el *kube.Resource, annotations map[string]string, lastRecon
 	el.FluxMetadata = kube.FluxMetadata{
 		IsReconciling:          isReconciling,
 		IsSuspended:            isSuspended,
-		LastHandledReconcileAt: lastReconcileTime,
-		LastSyncAt:             lastSyncAt,
+		LastHandledReconcileAt: nilIfZeroTime(lastReconcileTime),
+		LastSyncAt:             nilIfZeroTime(lastSyncAt),
 	}
 
 	if isSuspended {
@@ -1330,8 +1339,8 @@ func mapFluxMetadataFromUnstructured(el *kube.Resource, annotations map[string]s
 	el.FluxMetadata = kube.FluxMetadata{
 		IsReconciling:          isReconciling,
 		IsSuspended:            isSuspended,
-		LastHandledReconcileAt: lastReconcileTime,
-		LastSyncAt:             lastSyncAt,
+		LastHandledReconcileAt: nilIfZeroTime(lastReconcileTime),
+		LastSyncAt:             nilIfZeroTime(lastSyncAt),
 	}
 
 	if isSuspended {

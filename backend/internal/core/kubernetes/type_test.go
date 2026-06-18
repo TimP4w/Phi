@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func ptr[T any](v T) *T { return &v }
+
 func createSampleResource() Resource {
 	return Resource{
 		Kind:          "SampleKind",
@@ -24,11 +26,11 @@ func createSampleResource() Resource {
 		Status:        "Active",
 		Conditions:    []Condition{{Type: "condition1", Status: "True"}},
 		CreatedAt:     time.Date(2024, 01, 01, 0, 0, 0, 0, time.UTC),
-		DeletedAt:     time.Date(2024, 02, 01, 0, 0, 0, 0, time.UTC),
+		DeletedAt:     ptr(time.Date(2024, 02, 01, 0, 0, 0, 0, time.UTC)),
 		IsFluxManaged: true,
 		FluxMetadata: FluxMetadata{
-			LastHandledReconcileAt: time.Date(2024, 01, 15, 0, 0, 0, 0, time.UTC),
-			LastSyncAt:             time.Date(2024, 01, 20, 0, 0, 0, 0, time.UTC),
+			LastHandledReconcileAt: ptr(time.Date(2024, 01, 15, 0, 0, 0, 0, time.UTC)),
+			LastSyncAt:             ptr(time.Date(2024, 01, 20, 0, 0, 0, 0, time.UTC)),
 			IsSuspended:            false,
 			IsReconciling:          false,
 		},
