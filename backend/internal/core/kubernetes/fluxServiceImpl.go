@@ -99,7 +99,7 @@ func (k *FluxServiceImpl) Resume(resource Resource) (*Resource, error) {
 	patch := ResumePatch{Resource: resource}
 	res, err := k.kubeService.PatchResource(patch)
 	if err != nil {
-		return nil, fmt.Errorf("failed to suspend resource: %v", err)
+		return nil, fmt.Errorf("failed to resume resource: %v", err)
 	}
 	return res, nil
 }

@@ -63,7 +63,7 @@ func (rc *ResourceController) RegisterRoutes(r chi.Router) {
 func (rc *ResourceController) GetDescribe(w http.ResponseWriter, r *http.Request) {
 	resourceUid := chi.URLParam(r, "id")
 	if resourceUid == "" {
-		http.Error(w, "Pod uid is required", http.StatusBadRequest)
+		http.Error(w, "Resource uid is required", http.StatusBadRequest)
 		return
 	}
 	yamlData, err := rc.getResourceYAMLUseCase.Execute(kubernetesusecases.GetResourceYAMLInput{ResourceUid: resourceUid})
