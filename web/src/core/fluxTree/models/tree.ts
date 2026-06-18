@@ -191,10 +191,14 @@ export abstract class FluxResource extends KubeResource {
 
   constructor(dto: TreeNodeDto) {
     super(dto);
-    this.lastHandledReconcileAt = dto.fluxMetadata?.lastHandledReconcileAt;
+    this.lastHandledReconcileAt = dto.fluxMetadata?.lastHandledReconcileAt
+      ? new Date(dto.fluxMetadata.lastHandledReconcileAt)
+      : undefined;
     this.isReconciling = dto.fluxMetadata?.isReconciling || false;
     this.isSuspended = dto.fluxMetadata?.isSuspended || false;
-    this.lastSyncAt = dto.fluxMetadata?.lastSyncAt;
+    this.lastSyncAt = dto.fluxMetadata?.lastSyncAt
+      ? new Date(dto.fluxMetadata.lastSyncAt)
+      : undefined;
   }
 }
 
@@ -467,7 +471,7 @@ type PersistentVolumeClaimMetadata = {
   volumeName: string;
   volumeMode: string;
   accessModes: string[];
-  capacity: Map<string, string>;
+  capacity: Record<string, string>;
   phase: string;
   requested?: number;
 };
