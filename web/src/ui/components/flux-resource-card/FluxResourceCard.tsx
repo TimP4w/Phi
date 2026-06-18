@@ -1,10 +1,10 @@
 import { observer } from "mobx-react-lite";
 import {
-  Condition,
   FluxResource,
   HelmRelease,
   Kustomization,
 } from "../../../core/fluxTree/models/tree";
+import { conditionDotClass } from "../../shared/helpers";
 import Source from "../source/Source";
 import ReconcileSuspendButtonGroup from "../play-pause/ReconcileSuspendButtonGroup";
 import AppLogo from "../resource-icon/ResourceIcon";
@@ -84,44 +84,8 @@ const ShieldStat: React.FC<{
     </Tooltip>
   );
 };
-import {
-  CONDITION_TYPE,
-  ERROR_TYPES,
-  SUCCESS_TYPES,
-} from "../../../core/fluxTree/constants/conditions.const";
-import { stringToEnum } from "../../../core/shared/enum.utils";
-
 type AppProps = {
   node: FluxResource;
-};
-
-const conditionDotClass = (condition: Condition): string => {
-  const conditionType = stringToEnum(CONDITION_TYPE, condition.type);
-  if (conditionType && SUCCESS_TYPES.includes(conditionType)) {
-    return condition.status ? "bg-success" : "bg-danger";
-  }
-  if (conditionType && ERROR_TYPES.includes(conditionType)) return "bg-danger";
-  const failing = [
-    "BuildFailed",
-    "Failed",
-    "Error",
-    "Invalid",
-    "HealthCheckFailed",
-    "UpgradeFailed",
-    "ReconciliationFailed",
-  ];
-  if (failing.includes(condition.reason)) return "bg-danger";
-  const warning = ["ProgressingWithRetry", "Progressing", "DependencyNotReady"];
-  if (warning.includes(condition.reason)) return "bg-warning";
-  const success = [
-    "InstallSucceeded",
-    "UpgradeSucceeded",
-    "ReconciliationSucceeded",
-    "Succeeded",
-    "ArtifactUpToDate",
-  ];
-  if (success.includes(condition.reason)) return "bg-success";
-  return "bg-default-400";
 };
 
 const App: React.FC<AppProps> = observer(({ node }) => {

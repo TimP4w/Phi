@@ -9,6 +9,7 @@ import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const"
 import { ChevronRight, ExternalLink, ShieldAlert } from "lucide-react";
 import StatusChip from "../status-chip/StatusChip";
 import { ResourceFilter, subtreeHasMatch } from "../../shared/resourceFilter";
+import { statusDotClass } from "../../shared/helpers";
 import { useInjection } from "inversify-react";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import {
@@ -23,16 +24,6 @@ const severityTextClass: Record<string, string> = {
   warning: "text-warning",
   success: "text-success",
   default: "text-default-400",
-};
-
-const dotClass = (status: ResourceStatus): string => {
-  switch (status) {
-    case ResourceStatus.SUCCESS: return "bg-success";
-    case ResourceStatus.FAILED: return "bg-danger";
-    case ResourceStatus.PENDING: return "bg-primary";
-    case ResourceStatus.WARNING: return "bg-warning";
-    default: return "bg-default-400";
-  }
 };
 
 function nodeMatchesFilter(node: KubeResource, filter: ResourceFilter): boolean {
@@ -125,7 +116,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
 
           {/* Status dot */}
           <div
-            className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass(resource.status)}`}
+            className={`w-2 h-2 rounded-full flex-shrink-0 ${statusDotClass(resource.status)}`}
           />
 
           {/* Kind icon */}

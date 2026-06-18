@@ -8,7 +8,6 @@ import { FluxTreeStore } from "../../fluxTree/stores/fluxTree.store";
 import { EventsStore } from "../../fluxTree/stores/events.store";
 import { KubeEvent } from "../../fluxTree/models/kubeEvent";
 import { EventDto } from "../../fluxTree/models/dtos/eventDto";
-import { addToast } from "@heroui/react";
 import { MetricsStore } from "../../metrics/stores/metrics.store";
 import {
   MetricsCurrentMessageDto,
@@ -17,43 +16,6 @@ import {
   MetricsStatusDto,
   NodeUsageDto,
 } from "../../metrics/models/dtos/metricsDto";
-
-const FLUX_KINDS = new Set([
-  "HelmRelease", "Kustomization", "GitRepository",
-  "HelmRepository", "HelmChart", "OCIRepository", "Bucket",
-]);
-
-const FLUX_REASON_COLOR: Record<string, "primary" | "success" | "warning" | "danger"> = {
-  // Shared / generic
-  ReconciliationStarted: "primary",
-  ReconciliationSucceeded: "success",
-  ReconciliationFailed: "danger",
-  DependencyNotReady: "warning",
-  ArtifactFailed: "danger",
-  // Helm controller
-  InstallSucceeded: "success",
-  InstallFailed: "danger",
-  UpgradeSucceeded: "success",
-  UpgradeFailed: "danger",
-  TestSucceeded: "success",
-  TestFailed: "warning",
-  RollbackSucceeded: "warning",
-  RollbackFailed: "danger",
-  UninstallSucceeded: "success",
-  UninstallFailed: "danger",
-  HelmChartNotFound: "warning",
-  // Kustomize controller
-  BuildFailed: "danger",
-  HealthCheckFailed: "danger",
-  PruneFailed: "danger",
-  // Source controller
-  NewArtifact: "success",
-  AuthenticationFailed: "danger",
-  GitOperationFailed: "danger",
-  VerificationFailed: "danger",
-  ChartPullFailed: "danger",
-  URLInvalid: "danger",
-};
 
 @injectable()
 export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
@@ -127,14 +89,6 @@ export class HandleWsMessageUseCase extends UseCase<Message, Promise<void>> {
   }
 
   private handleEventMessage(event: EventDto): void {
-    const color = FLUX_KINDS.has(event.kind) ? FLUX_REASON_COLOR[event.reason] : undefined;
-    if (color) {
-      addToast({
-        title: `[${event.kind}] ${event.name} — ${event.reason}`,
-        description: event.message,
-        color,
-      });
-    }
     this.eventsStore.addEvent(new KubeEvent(event));
   }
 }
