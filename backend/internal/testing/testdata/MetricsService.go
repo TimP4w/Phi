@@ -22,9 +22,9 @@ func (_m *MetricsService) EXPECT() *MetricsService_Expecter {
 	return &MetricsService_Expecter{mock: &_m.Mock}
 }
 
-// GetResourceMetrics provides a mock function with given fields: ctx, uid
-func (_m *MetricsService) GetResourceMetrics(ctx context.Context, uid string) (metrics.ResourceMetrics, error) {
-	ret := _m.Called(ctx, uid)
+// GetResourceMetrics provides a mock function with given fields: ctx, uid, rng
+func (_m *MetricsService) GetResourceMetrics(ctx context.Context, uid string, rng string) (metrics.ResourceMetrics, error) {
+	ret := _m.Called(ctx, uid, rng)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetResourceMetrics")
@@ -32,17 +32,17 @@ func (_m *MetricsService) GetResourceMetrics(ctx context.Context, uid string) (m
 
 	var r0 metrics.ResourceMetrics
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, string) (metrics.ResourceMetrics, error)); ok {
-		return rf(ctx, uid)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) (metrics.ResourceMetrics, error)); ok {
+		return rf(ctx, uid, rng)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, string) metrics.ResourceMetrics); ok {
-		r0 = rf(ctx, uid)
+	if rf, ok := ret.Get(0).(func(context.Context, string, string) metrics.ResourceMetrics); ok {
+		r0 = rf(ctx, uid, rng)
 	} else {
 		r0 = ret.Get(0).(metrics.ResourceMetrics)
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = rf(ctx, uid)
+	if rf, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = rf(ctx, uid, rng)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -58,13 +58,14 @@ type MetricsService_GetResourceMetrics_Call struct {
 // GetResourceMetrics is a helper method to define mock.On call
 //   - ctx context.Context
 //   - uid string
-func (_e *MetricsService_Expecter) GetResourceMetrics(ctx interface{}, uid interface{}) *MetricsService_GetResourceMetrics_Call {
-	return &MetricsService_GetResourceMetrics_Call{Call: _e.mock.On("GetResourceMetrics", ctx, uid)}
+//   - rng string
+func (_e *MetricsService_Expecter) GetResourceMetrics(ctx interface{}, uid interface{}, rng interface{}) *MetricsService_GetResourceMetrics_Call {
+	return &MetricsService_GetResourceMetrics_Call{Call: _e.mock.On("GetResourceMetrics", ctx, uid, rng)}
 }
 
-func (_c *MetricsService_GetResourceMetrics_Call) Run(run func(ctx context.Context, uid string)) *MetricsService_GetResourceMetrics_Call {
+func (_c *MetricsService_GetResourceMetrics_Call) Run(run func(ctx context.Context, uid string, rng string)) *MetricsService_GetResourceMetrics_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(string))
+		run(args[0].(context.Context), args[1].(string), args[2].(string))
 	})
 	return _c
 }
@@ -74,7 +75,7 @@ func (_c *MetricsService_GetResourceMetrics_Call) Return(_a0 metrics.ResourceMet
 	return _c
 }
 
-func (_c *MetricsService_GetResourceMetrics_Call) RunAndReturn(run func(context.Context, string) (metrics.ResourceMetrics, error)) *MetricsService_GetResourceMetrics_Call {
+func (_c *MetricsService_GetResourceMetrics_Call) RunAndReturn(run func(context.Context, string, string) (metrics.ResourceMetrics, error)) *MetricsService_GetResourceMetrics_Call {
 	_c.Call.Return(run)
 	return _c
 }

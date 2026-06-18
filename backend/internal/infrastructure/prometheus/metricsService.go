@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 )
 
 const (
-	detailRange    = 24 * time.Hour
 	sparklineRange = 15 * time.Minute
 	sparklineStep  = 30 * time.Second
 )
@@ -42,16 +42,21 @@ func keyOf(labels map[string]string) metrics.PodKey {
 	return metrics.PodKey{Namespace: labels["namespace"], Name: labels["pod"]}
 }
 
-func (s *metricsService) GetResourceMetrics(ctx context.Context, uid string) (metrics.ResourceMetrics, error) {
+func (s *metricsService) GetResourceMetrics(ctx context.Context, uid string, rng string) (metrics.ResourceMetrics, error) {
 	pods, err := metrics.CollectPods(s.store, uid)
 	if err != nil {
 		return metrics.ResourceMetrics{}, err
 	}
 	matcher := BuildPodMatcher(pods)
 
+	window := ParseRange(rng)
+	label := strings.TrimSpace(rng)
+	if label == "" {
+		label = "24h"
+	}
 	end := time.Now()
-	start := end.Add(-detailRange)
-	step := StepForRange(detailRange)
+	start := end.Add(-window)
+	step := StepForRange(window)
 
 	queries := map[string]string{
 		"cpu":       QueryCPUUsage(matcher),
@@ -97,7 +102,7 @@ func (s *metricsService) GetResourceMetrics(ctx context.Context, uid string) (me
 		return metrics.ResourceMetrics{}, err
 	}
 
-	return metrics.ResourceMetrics{Range: "24h", Series: series, Spec: spec}, nil
+	return metrics.ResourceMetrics{Range: label, Series: series, Spec: spec}, nil
 }
 
 // scalarOf runs an instant query expected to return a single scalar series,

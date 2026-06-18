@@ -4,7 +4,13 @@ import { useInjection } from "inversify-react";
 import { Alert, Chip, Tab, Tabs, Tooltip, useDisclosure } from "@heroui/react";
 import { Link } from "react-router-dom";
 import { format, formatDistanceToNowStrict } from "date-fns";
-import { AlertCircle, AlertTriangle, ChevronRight, GitCommitHorizontal, HardDrive } from "lucide-react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  ChevronRight,
+  GitCommitHorizontal,
+  HardDrive,
+} from "lucide-react";
 
 import {
   Container,
@@ -28,7 +34,10 @@ import { WatchMetricsUseCase } from "../../../core/metrics/usecases/watchMetrics
 import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatchMetrics.usecase";
 import { TYPES } from "../../../core/shared/types";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
-import { METRICS_KINDS } from "../../../core/metrics/constants/metrics.const";
+import {
+  METRICS_KINDS,
+  METRICS_DEFAULT_RANGE,
+} from "../../../core/metrics/constants/metrics.const";
 import {
   SeverityCounts,
   TrivySummary,
@@ -108,7 +117,8 @@ const worstStatusSeverity = (statuses: ResourceStatus[]): Severity => {
   let warn = false;
   for (const s of statuses) {
     if (s === ResourceStatus.FAILED) return "danger";
-    if (s === ResourceStatus.WARNING || s === ResourceStatus.PENDING) warn = true;
+    if (s === ResourceStatus.WARNING || s === ResourceStatus.PENDING)
+      warn = true;
   }
   return warn ? "warning" : null;
 };
@@ -135,8 +145,12 @@ const TabTitle = ({
   <div className="flex items-center gap-1.5">
     {label}
     {badge}
-    {severity === "danger" && <AlertCircle className="w-3.5 h-3.5 text-danger" />}
-    {severity === "warning" && <AlertTriangle className="w-3.5 h-3.5 text-warning" />}
+    {severity === "danger" && (
+      <AlertCircle className="w-3.5 h-3.5 text-danger" />
+    )}
+    {severity === "warning" && (
+      <AlertTriangle className="w-3.5 h-3.5 text-warning" />
+    )}
   </div>
 );
 
@@ -147,7 +161,13 @@ const trivyTabSeverity = (summary: TrivySummary): Severity => {
 };
 
 // Horizontal "managed by" lineage: source-most ancestor ▸ … ▸ this resource.
-const Lineage = ({ chain, node }: { chain: KubeResource[]; node: KubeResource }) => (
+const Lineage = ({
+  chain,
+  node,
+}: {
+  chain: KubeResource[];
+  node: KubeResource;
+}) => (
   <div className="flex items-center gap-1.5 flex-wrap">
     {chain.map((res) => (
       <span key={res.uid} className="flex items-center gap-1.5">
@@ -155,14 +175,18 @@ const Lineage = ({ chain, node }: { chain: KubeResource[]; node: KubeResource })
           to={`${ROUTES.RESOURCE}/${res.uid}`}
           className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-content2 transition-colors max-w-[160px]"
         >
-          <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(res.status)}`} />
+          <span
+            className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(res.status)}`}
+          />
           <span className="text-xs truncate">{res.name}</span>
         </Link>
         <ChevronRight className="w-3.5 h-3.5 text-default-300 flex-shrink-0" />
       </span>
     ))}
     <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-content2 border border-default-200 max-w-[180px]">
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(node.status)}`} />
+      <span
+        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(node.status)}`}
+      />
       <span className="text-xs font-semibold truncate">{node.name}</span>
     </span>
   </div>
@@ -179,7 +203,9 @@ const DependsOnPills = ({ deps }: { deps: Kustomization[] }) => (
         variant="flat"
         className="cursor-pointer"
         startContent={
-          <span className={`w-1.5 h-1.5 rounded-full ${statusDotClass(dep.status)}`} />
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${statusDotClass(dep.status)}`}
+          />
         }
       >
         {dep.name}
@@ -217,7 +243,15 @@ type Pill = {
   mono?: boolean;
 };
 
-const InfoPill = ({ label, value, href, external, tooltip, tone, mono }: Pill) => {
+const InfoPill = ({
+  label,
+  value,
+  href,
+  external,
+  tooltip,
+  tone,
+  mono,
+}: Pill) => {
   const body = (
     <>
       <span className="text-default-400 flex-shrink-0">{label}</span>
@@ -234,7 +268,12 @@ const InfoPill = ({ label, value, href, external, tooltip, tone, mono }: Pill) =
     "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-default-200 bg-content1 text-xs max-w-full";
   const el =
     href && external ? (
-      <a href={href} target="_blank" rel="noreferrer" className={`${cls} hover:bg-content2 transition-colors`}>
+      <a
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+        className={`${cls} hover:bg-content2 transition-colors`}
+      >
         {body}
       </a>
     ) : href ? (
@@ -272,8 +311,12 @@ const kindPills = (node: KubeResource, store: FluxTreeStore): Pill[] => {
       });
     if (m?.path) pills.push({ label: "Path", value: m.path, mono: true });
     if (m?.lastAppliedRevision) {
-      const repoUrl = m.sourceRef ? store.findRepositoryByRef(m.sourceRef)?.getURL() : undefined;
-      const sha = m.lastAppliedRevision.slice(m.lastAppliedRevision.indexOf(":") + 1);
+      const repoUrl = m.sourceRef
+        ? store.findRepositoryByRef(m.sourceRef)?.getURL()
+        : undefined;
+      const sha = m.lastAppliedRevision.slice(
+        m.lastAppliedRevision.indexOf(":") + 1,
+      );
       pills.push({
         label: "Revision",
         value: (
@@ -289,8 +332,10 @@ const kindPills = (node: KubeResource, store: FluxTreeStore): Pill[] => {
     }
   } else if (node instanceof HelmRelease) {
     const m = node.metadata;
-    if (m?.chartName) pills.push({ label: "Chart", value: m.chartName, mono: true });
-    if (m?.chartVersion) pills.push({ label: "Version", value: m.chartVersion, mono: true });
+    if (m?.chartName)
+      pills.push({ label: "Chart", value: m.chartName, mono: true });
+    if (m?.chartVersion)
+      pills.push({ label: "Version", value: m.chartVersion, mono: true });
     if (m?.sourceRef)
       pills.push({
         label: "Source",
@@ -301,19 +346,25 @@ const kindPills = (node: KubeResource, store: FluxTreeStore): Pill[] => {
   } else if (node instanceof Deployment) {
     const m = node.metadata;
     if (m) {
-      pills.push({ label: "Ready", value: `${m.readyReplicas ?? 0}/${m.replicas ?? 0}` });
+      pills.push({
+        label: "Ready",
+        value: `${m.readyReplicas ?? 0}/${m.replicas ?? 0}`,
+      });
       if (m.availableReplicas != null)
         pills.push({ label: "Available", value: String(m.availableReplicas) });
     }
   } else if (node instanceof Pod) {
-    if (node.metadata?.phase) pills.push({ label: "Phase", value: String(node.metadata.phase) });
+    if (node.metadata?.phase)
+      pills.push({ label: "Phase", value: String(node.metadata.phase) });
   }
 
   if (node instanceof FluxResource) {
     if (node.lastHandledReconcileAt)
       pills.push({
         label: "Last reconcile",
-        value: formatDistanceToNowStrict(node.lastHandledReconcileAt, { addSuffix: true }),
+        value: formatDistanceToNowStrict(node.lastHandledReconcileAt, {
+          addSuffix: true,
+        }),
         tooltip: format(node.lastHandledReconcileAt, "yyyy-MM-dd HH:mm:ss"),
       });
     if (node.lastSyncAt)
@@ -322,8 +373,10 @@ const kindPills = (node: KubeResource, store: FluxTreeStore): Pill[] => {
         value: formatDistanceToNowStrict(node.lastSyncAt, { addSuffix: true }),
         tooltip: format(node.lastSyncAt, "yyyy-MM-dd HH:mm:ss"),
       });
-    if (node.isReconciling) pills.push({ label: "Reconciling", value: "yes", tone: "warning" });
-    if (node.isSuspended) pills.push({ label: "Suspended", value: "yes", tone: "warning" });
+    if (node.isReconciling)
+      pills.push({ label: "Reconciling", value: "yes", tone: "warning" });
+    if (node.isSuspended)
+      pills.push({ label: "Suspended", value: "yes", tone: "warning" });
   }
 
   return pills;
@@ -339,8 +392,12 @@ const ConditionsSection = ({ resource }: { resource: KubeResource }) => {
           <Tooltip key={c.type} content={c.message} className="dark">
             <div className="flex items-center justify-between gap-2 px-1 py-0.5 rounded hover:bg-default-50">
               <div className="flex items-center gap-2 min-w-0">
-                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${conditionDotClass(c)}`} />
-                <span className="text-xs text-default-400 truncate">{c.type}</span>
+                <div
+                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${conditionDotClass(c)}`}
+                />
+                <span className="text-xs text-default-400 truncate">
+                  {c.type}
+                </span>
               </div>
               <span className="text-xs text-default-500 truncate max-w-[150px] text-right">
                 {c.reason}
@@ -354,9 +411,19 @@ const ConditionsSection = ({ resource }: { resource: KubeResource }) => {
 };
 
 const severityStats = (c: SeverityCounts) => [
-  { label: "Critical", value: c.critical, color: "text-danger", severity: "CRITICAL" },
+  {
+    label: "Critical",
+    value: c.critical,
+    color: "text-danger",
+    severity: "CRITICAL",
+  },
   { label: "High", value: c.high, color: "text-danger-400", severity: "HIGH" },
-  { label: "Medium", value: c.medium, color: "text-warning", severity: "MEDIUM" },
+  {
+    label: "Medium",
+    value: c.medium,
+    color: "text-warning",
+    severity: "MEDIUM",
+  },
   { label: "Low", value: c.low, color: "text-default-400", severity: "LOW" },
 ];
 
@@ -435,15 +502,26 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
   const fluxTreeStore = useInjection(FluxTreeStore);
   const eventsStore = useInjection(EventsStore);
   const metricsStore = useInjection(MetricsStore);
-  const describeNodeUseCase = useInjection<DescribeNodeUseCase>(TYPES.DescribeNodeUseCase);
-  const watchLogsUseCase = useInjection<WatchLogsUseCase>(TYPES.WatchLogsUseCase);
-  const watchMetrics = useInjection<WatchMetricsUseCase>(TYPES.WatchMetricsUseCase);
-  const stopWatchMetrics = useInjection<StopWatchMetricsUseCase>(TYPES.StopWatchMetricsUseCase);
+  const describeNodeUseCase = useInjection<DescribeNodeUseCase>(
+    TYPES.DescribeNodeUseCase,
+  );
+  const watchLogsUseCase = useInjection<WatchLogsUseCase>(
+    TYPES.WatchLogsUseCase,
+  );
+  const watchMetrics = useInjection<WatchMetricsUseCase>(
+    TYPES.WatchMetricsUseCase,
+  );
+  const stopWatchMetrics = useInjection<StopWatchMetricsUseCase>(
+    TYPES.StopWatchMetricsUseCase,
+  );
 
   const [activeTab, setActiveTab] = useState<string>("main");
   const [describe, setDescribe] = useState("");
   const [describeLoading, setDescribeLoading] = useState(false);
   const [eventFilter, setEventFilter] = useState<EventFilter>("all");
+  const [metricsRange, setMetricsRange] = useState<string>(
+    METRICS_DEFAULT_RANGE,
+  );
 
   const uid = node?.uid;
   const isPod = node?.kind === RESOURCE_TYPE.POD;
@@ -474,10 +552,14 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
 
   useEffect(() => {
     if (node && metricsEligible) {
-      watchMetrics.execute({ channel: "detail", uid: node.uid });
+      watchMetrics.execute({
+        channel: "detail",
+        uid: node.uid,
+        range: metricsRange,
+      });
       return () => stopWatchMetrics.execute("detail");
     }
-  }, [node, metricsEligible, watchMetrics, stopWatchMetrics]);
+  }, [node, metricsEligible, watchMetrics, stopWatchMetrics, metricsRange]);
 
   const allEvents = node ? eventsStore.eventsForResource(node.uid) : [];
   const warningCount = allEvents.filter((e) => e.type === "Warning").length;
@@ -490,7 +572,7 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
     () => (node ? collectVolumes(node) : []),
     // Recompute when the tree rebuilds so subtree volumes stay current.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [node, fluxTreeStore.tree]
+    [node, fluxTreeStore.tree],
   );
 
   if (!node) {
@@ -501,7 +583,8 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
     );
   }
 
-  const containers = node instanceof Pod ? node.metadata?.containers ?? [] : [];
+  const containers =
+    node instanceof Pod ? (node.metadata?.containers ?? []) : [];
   const containerSeverity = worstContainerSeverity(containers);
   const volumeSeverity = worstStatusSeverity(volumes.map((v) => v.status));
 
@@ -515,12 +598,19 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
       : [];
 
   const failingCondition =
-    node.status === ResourceStatus.FAILED || node.status === ResourceStatus.WARNING
+    node.status === ResourceStatus.FAILED ||
+    node.status === ResourceStatus.WARNING
       ? node.conditions.find((c) => !c.status)
       : undefined;
 
-  const applied = node instanceof Kustomization ? node.metadata?.lastAppliedRevision : undefined;
-  const attempted = node instanceof Kustomization ? node.metadata?.lastAttemptedRevision : undefined;
+  const applied =
+    node instanceof Kustomization
+      ? node.metadata?.lastAppliedRevision
+      : undefined;
+  const attempted =
+    node instanceof Kustomization
+      ? node.metadata?.lastAttemptedRevision
+      : undefined;
   const drift = !!applied && !!attempted && applied !== attempted;
   const pills = kindPills(node, fluxTreeStore);
 
@@ -540,7 +630,9 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
           <div className="p-4 space-y-5">
             {failingCondition?.message && (
               <Alert
-                color={node.status === ResourceStatus.FAILED ? "danger" : "warning"}
+                color={
+                  node.status === ResourceStatus.FAILED ? "danger" : "warning"
+                }
                 title={failingCondition.reason || "Not ready"}
                 description={failingCondition.message}
               />
@@ -568,7 +660,9 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
                   <div className="space-y-1.5">
                     <p className="text-xs text-default-400 px-1">Depends on</p>
                     {dependsOn.length === 0 ? (
-                      <p className="text-xs text-default-400 px-1">No dependencies</p>
+                      <p className="text-xs text-default-400 px-1">
+                        No dependencies
+                      </p>
                     ) : (
                       <DependsOnPills deps={dependsOn} />
                     )}
@@ -704,7 +798,11 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
         {showMetrics ? (
           <Tab key="metrics" title="Metrics">
             <div className="p-4">
-              <MetricsTab uid={node.uid} />
+              <MetricsTab
+                uid={node.uid}
+                range={metricsRange}
+                onRangeChange={setMetricsRange}
+              />
             </div>
           </Tab>
         ) : null}

@@ -92,7 +92,7 @@ type IntegrationStatus struct {
 // WatchMetricsUseCase. The implementation lives in infrastructure/prometheus
 // (it is PromQL-specific); core only depends on this contract.
 type MetricsService interface {
-	GetResourceMetrics(ctx context.Context, uid string) (ResourceMetrics, error)
+	GetResourceMetrics(ctx context.Context, uid string, rng string) (ResourceMetrics, error)
 	GetCurrentUsage(ctx context.Context, uids []string) (map[string]CurrentUsage, error)
 	GetStorageUsage(ctx context.Context, uids []string) (map[string]StorageUsage, error)
 	GetNodeUsage(ctx context.Context) ([]NodeUsage, error)

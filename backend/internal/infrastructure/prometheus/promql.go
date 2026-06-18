@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -161,4 +162,43 @@ func StepForRange(r time.Duration) time.Duration {
 		return 30 * time.Second
 	}
 	return step.Truncate(time.Second)
+}
+
+const (
+	DefaultDetailRange = 24 * time.Hour
+	minDetailRange     = time.Minute
+	maxDetailRange     = 30 * 24 * time.Hour
+)
+
+// ParseRange converts a detail-range label into a query window.
+func ParseRange(s string) time.Duration {
+	d := parseRangeRaw(strings.TrimSpace(s))
+	if d <= 0 {
+		d = DefaultDetailRange
+	}
+	if d < minDetailRange {
+		d = minDetailRange
+	}
+	if d > maxDetailRange {
+		d = maxDetailRange
+	}
+	return d
+}
+
+func parseRangeRaw(s string) time.Duration {
+	if s == "" {
+		return 0
+	}
+	if num, ok := strings.CutSuffix(s, "d"); ok {
+		days, err := strconv.ParseFloat(num, 64)
+		if err != nil {
+			return 0
+		}
+		return time.Duration(days * float64(24*time.Hour))
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0
+	}
+	return d
 }
