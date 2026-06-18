@@ -4,8 +4,8 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
-import { FluxResource, ResourceStatus } from "../../../core/fluxTree/models/tree";
-import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
+import { FluxResource } from "../../../core/fluxTree/models/tree";
+import { FLUX_KINDS, RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import { Chip, Input } from "@heroui/react";
 import FluxResourceCard from "../../components/flux-resource-card/FluxResourceCard";
 import FluxApplicationsWidget from "../../components/widgets/FluxApplicationsWidget";
@@ -25,77 +25,20 @@ import LonghornVolumesWidget from "../../components/widgets/LonghornVolumesWidge
 import TrivyFindingsWidget from "../../components/widgets/TrivyFindingsWidget";
 import { clusterSummary } from "../../../core/trivy/trivy";
 import EventsPanel, { EventFilter } from "../../components/events/EventsPanel";
+import { STATUS_BUCKETS } from "../../shared/helpers";
 
-const kindsFilter = [
-  {
-    label: "Kustomization",
-    key: RESOURCE_TYPE.KUSTOMIZATION,
-    filter: (r: FluxResource) => r.kind === RESOURCE_TYPE.KUSTOMIZATION,
-  },
-  {
-    label: "HelmRelease",
-    key: RESOURCE_TYPE.HELM_RELEASE,
-    filter: (r: FluxResource) => r.kind === RESOURCE_TYPE.HELM_RELEASE,
-  },
-  {
-    label: "HelmRepository",
-    key: RESOURCE_TYPE.HELM_REPOSITORY,
-    filter: (r: FluxResource) => r.kind === RESOURCE_TYPE.HELM_REPOSITORY,
-  },
-  {
-    label: "HelmChart",
-    key: RESOURCE_TYPE.HELM_CHART,
-    filter: (r: FluxResource) => r.kind === RESOURCE_TYPE.HELM_CHART,
-  },
-  {
-    label: "GitRepository",
-    key: RESOURCE_TYPE.GIT_REPOSITORY,
-    filter: (r: FluxResource) => r.kind === RESOURCE_TYPE.GIT_REPOSITORY,
-  },
-  {
-    label: "OCIRepository",
-    key: RESOURCE_TYPE.OCI_REPOSITORY,
-    filter: (r: FluxResource) => r.kind === RESOURCE_TYPE.OCI_REPOSITORY,
-  },
-  {
-    label: "Bucket",
-    key: RESOURCE_TYPE.BUCKET,
-    filter: (r: FluxResource) => r.kind === RESOURCE_TYPE.BUCKET,
-  },
-];
+const kindsFilter = FLUX_KINDS.map((kind) => ({
+  label: kind,
+  key: kind,
+  filter: (r: FluxResource) => r.kind === kind,
+}));
 
-const statusFilter: {
-  label: string;
-  key: ResourceStatus;
-  color: "success" | "danger" | "warning" | "default";
-  filter: (r: FluxResource) => boolean;
-}[] = [
-  {
-    label: "Ready",
-    key: ResourceStatus.SUCCESS,
-    color: "success",
-    filter: (r) => r.status === ResourceStatus.SUCCESS,
-  },
-  {
-    label: "Not Ready",
-    key: ResourceStatus.FAILED,
-    color: "danger",
-    filter: (r) =>
-      r.status === ResourceStatus.FAILED || r.status === ResourceStatus.WARNING,
-  },
-  {
-    label: "Reconciling",
-    key: ResourceStatus.PENDING,
-    color: "warning",
-    filter: (r) => r.status === ResourceStatus.PENDING,
-  },
-  {
-    label: "Suspended",
-    key: ResourceStatus.SUSPENDED,
-    color: "default",
-    filter: (r) => r.status === ResourceStatus.SUSPENDED,
-  },
-];
+const statusFilter = STATUS_BUCKETS.map((bucket) => ({
+  label: bucket.label,
+  key: bucket.status,
+  color: bucket.color,
+  filter: (r: FluxResource) => bucket.matches(r.status),
+}));
 
 const suspendedFilter = [
   {

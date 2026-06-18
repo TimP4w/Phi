@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -199,12 +198,13 @@ func (k *KubeStoreImpl) removeResourceFromRef(ref, uid string) {
 // generateRef creates a unique reference string for a resource based on its name, namespace, kind, and version.
 // The format is `group/version/Kind:namespace/name`.
 func (k *KubeStoreImpl) generateRef(name, namespace, kind, version, group string) string {
-	if group == "" {
-		group = "core"
-	}
-	parts := strings.Split(version, "/")
-	v := parts[len(parts)-1]
-	return group + "/" + v + "/" + kind + ":" + namespace + "/" + name
+	return ResourceRef{
+		Group:     group,
+		Version:   version,
+		Kind:      kind,
+		Namespace: namespace,
+		Name:      name,
+	}.String()
 }
 
 func (k *KubeStoreImpl) FindChildrenResourcesByRef(ref string) []Resource {

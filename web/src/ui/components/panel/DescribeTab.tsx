@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { COLORS } from "../../shared/colors";
 import { Button } from "@heroui/react";
-import { Check, Copy, Loader2 } from "lucide-react";
+import { Check, Copy, FileText, Loader2 } from "lucide-react";
 
 type DescribeTabProps = {
   describe?: string;
@@ -44,8 +44,9 @@ export const DescribeTab = observer(({ describe, isLoading }: DescribeTabProps) 
 
   if (!describe) {
     return (
-      <div className="flex items-center justify-center py-20 text-default-400 text-sm">
-        No resource definition available.
+      <div className="flex flex-col items-center justify-center h-full gap-2 text-default-400">
+        <FileText className="w-8 h-8 opacity-30" />
+        <span className="text-sm">No resource definition</span>
       </div>
     );
   }

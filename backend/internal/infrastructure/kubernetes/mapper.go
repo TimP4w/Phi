@@ -28,17 +28,8 @@ func NewKubeMapper() *KubeMapper {
 	return &KubeMapper{}
 }
 
-func refGroupAndVersion(apiVersion string) (group, version string) {
-	parts := strings.Split(apiVersion, "/")
-	if len(parts) == 1 {
-		return "core", parts[0]
-	}
-	return parts[0], parts[len(parts)-1]
-}
-
 func makeRef(name, namespace, kind, apiVersion string) string {
-	group, version := refGroupAndVersion(apiVersion)
-	return group + "/" + version + "/" + kind + ":" + namespace + "/" + name
+	return kube.NewRefFromAPIVersion(name, namespace, kind, apiVersion).String()
 }
 
 func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource string) kube.Resource {
@@ -166,17 +157,51 @@ func (mapper *KubeMapper) ToEvent(k8event *v1.Event) kube.Event {
 	}
 }
 
-func mapConditions(el *kube.Resource, conditions []metav1.Condition) []kube.Condition {
-	for _, condition := range conditions {
-		el.Conditions = append(el.Conditions, kube.Condition{
-			Message:            condition.Message,
-			Reason:             condition.Reason,
-			Status:             string(condition.Status),
-			Type:               string(condition.Type),
-			LastTransitionTime: condition.LastTransitionTime.Time,
-		})
+// appendConditions converts each condition via conv and appends it to el.Conditions.
+// It is the single place that grows the resource's condition list, so the various
+// typed condition shapes (metav1, corev1, appsv1, …) all funnel through one loop.
+func appendConditions[C any](el *kube.Resource, conditions []C, conv func(C) kube.Condition) {
+	for _, c := range conditions {
+		el.Conditions = append(el.Conditions, conv(c))
 	}
+}
+
+func conditionFromMeta(c metav1.Condition) kube.Condition {
+	return kube.Condition{
+		Message:            c.Message,
+		Reason:             c.Reason,
+		Status:             string(c.Status),
+		Type:               string(c.Type),
+		LastTransitionTime: c.LastTransitionTime.Time,
+	}
+}
+
+func mapConditions(el *kube.Resource, conditions []metav1.Condition) []kube.Condition {
+	appendConditions(el, conditions, conditionFromMeta)
 	return el.Conditions
+}
+
+// conditionsFromUnstructured parses an unstructured object's status.conditions into
+// []metav1.Condition, so the typed status/metadata mappers can serve unstructured
+// Flux resources too (those whose CRDs aren't imported as typed Go packages).
+func conditionsFromUnstructured(obj unstructured.Unstructured) []metav1.Condition {
+	raw := extractUnstructuredConditions(obj)
+	conditions := make([]metav1.Condition, 0, len(raw))
+	for _, c := range raw {
+		cond := metav1.Condition{
+			Type:    nestedString(c, "type"),
+			Status:  metav1.ConditionStatus(nestedString(c, "status")),
+			Reason:  nestedString(c, "reason"),
+			Message: nestedString(c, "message"),
+		}
+		if ts := nestedString(c, "lastTransitionTime"); ts != "" {
+			if t, err := time.Parse(time.RFC3339, ts); err == nil {
+				cond.LastTransitionTime = metav1.NewTime(t)
+			}
+		}
+		conditions = append(conditions, cond)
+	}
+	return conditions
 }
 
 // nilIfZeroTime returns a pointer to t, or nil when t is the zero value, so that
@@ -236,7 +261,7 @@ func mapHelmChartData(el *kube.Resource, obj unstructured.Unstructured) {
 		logging.Logger().WithError(err).Error("Error converting unstructured to HelmChart")
 		return
 	}
-	el.Status = mapFluxResourceStatusForCondition(&helmChart.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(helmChart.Status.Conditions, false)
 
 	mapConditions(el, helmChart.Status.Conditions)
 	mapFluxMetadata(el, helmChart.GetAnnotations(), helmChart.Status.LastHandledReconcileAt, helmChart.Spec.Suspend, helmChart.Status.Conditions)
@@ -251,7 +276,7 @@ func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	mapConditions(el, gitRepository.Status.Conditions)
-	el.Status = mapFluxResourceStatusForCondition(&gitRepository.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(gitRepository.Status.Conditions, false)
 	mapFluxMetadata(el, gitRepository.GetAnnotations(), gitRepository.Status.LastHandledReconcileAt, gitRepository.Spec.Suspend, gitRepository.Status.Conditions)
 
 	el.GitRepositoryMetadata = kube.GitRepositoryMetadata{
@@ -265,10 +290,13 @@ func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 
 }
 
-func mapFluxResourceStatusForCondition(conditions *[]metav1.Condition) kube.Status {
-	// https://github.com/fluxcd/source-controller/blob/main/api/v1/condition_types.go
-
-	for _, condition := range *conditions {
+// mapFluxResourceStatusForCondition derives a Flux resource's status from its Ready
+// condition. When defaultReadyWhenNoConditions is true and there are no conditions
+// at all, it returns StatusSuccess (used for Alert/Provider, whose valid config
+// emits no conditions in older notification-controller versions).
+// https://github.com/fluxcd/source-controller/blob/main/api/v1/condition_types.go
+func mapFluxResourceStatusForCondition(conditions []metav1.Condition, defaultReadyWhenNoConditions bool) kube.Status {
+	for _, condition := range conditions {
 		if condition.Type == "Ready" {
 			switch condition.Status {
 			case metav1.ConditionTrue:
@@ -284,6 +312,9 @@ func mapFluxResourceStatusForCondition(conditions *[]metav1.Condition) kube.Stat
 			}
 		}
 	}
+	if defaultReadyWhenNoConditions && len(conditions) == 0 {
+		return kube.StatusSuccess
+	}
 	return kube.StatusPending
 }
 
@@ -296,7 +327,7 @@ func mapOciRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	mapConditions(el, ociRepository.Status.Conditions)
-	el.Status = mapFluxResourceStatusForCondition(&ociRepository.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(ociRepository.Status.Conditions, false)
 	mapFluxMetadata(el, ociRepository.GetAnnotations(), ociRepository.Status.LastHandledReconcileAt, ociRepository.Spec.Suspend, ociRepository.Status.Conditions)
 
 	el.OCIRepositoryMetadata = kube.OCIRepositoryMetadata{
@@ -317,7 +348,7 @@ func mapHelmRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 	mapConditions(el, helmRepository.Status.Conditions)
-	el.Status = mapFluxResourceStatusForCondition(&helmRepository.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(helmRepository.Status.Conditions, false)
 
 	// OCI helm repos don't emit conditions -> absence of conditions means valid config
 	if helmRepository.Spec.Type == "oci" && len(helmRepository.Status.Conditions) == 0 {
@@ -335,7 +366,7 @@ func mapBucketData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 	mapConditions(el, bucket.Status.Conditions)
-	el.Status = mapFluxResourceStatusForCondition(&bucket.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(bucket.Status.Conditions, false)
 	mapFluxMetadata(el, bucket.GetAnnotations(), bucket.Status.LastHandledReconcileAt, bucket.Spec.Suspend, bucket.Status.Conditions)
 }
 
@@ -347,15 +378,15 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 
-	for _, condition := range pod.Status.Conditions {
-		el.Conditions = append(el.Conditions, kube.Condition{
-			Message:            condition.Message,
-			Reason:             condition.Reason,
-			Status:             string(condition.Status),
-			Type:               string(condition.Type),
-			LastTransitionTime: condition.LastTransitionTime.Time,
-		})
-	}
+	appendConditions(el, pod.Status.Conditions, func(c v1.PodCondition) kube.Condition {
+		return kube.Condition{
+			Message:            c.Message,
+			Reason:             c.Reason,
+			Status:             string(c.Status),
+			Type:               string(c.Type),
+			LastTransitionTime: c.LastTransitionTime.Time,
+		}
+	})
 
 	mapPodStatus := func(pod *v1.Pod) kube.Status {
 		if pod.DeletionTimestamp != nil {
@@ -593,15 +624,15 @@ func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 
-	for _, condition := range deployment.Status.Conditions {
-		el.Conditions = append(el.Conditions, kube.Condition{
-			Message:            condition.Message,
-			Reason:             condition.Reason,
-			Status:             string(condition.Status),
-			Type:               string(condition.Type),
-			LastTransitionTime: condition.LastTransitionTime.Time,
-		})
-	}
+	appendConditions(el, deployment.Status.Conditions, func(c appsV1.DeploymentCondition) kube.Condition {
+		return kube.Condition{
+			Message:            c.Message,
+			Reason:             c.Reason,
+			Status:             string(c.Status),
+			Type:               string(c.Type),
+			LastTransitionTime: c.LastTransitionTime.Time,
+		}
+	})
 
 	mapDeploymentStatus := func(deploy *appsV1.Deployment) kube.Status {
 		if deploy.DeletionTimestamp != nil {
@@ -662,7 +693,7 @@ func mapKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	mapConditions(el, kustomization.Status.Conditions)
-	el.Status = mapFluxResourceStatusForCondition(&kustomization.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(kustomization.Status.Conditions, false)
 	mapFluxMetadata(el, kustomization.GetAnnotations(), kustomization.Status.LastHandledReconcileAt, kustomization.Spec.Suspend, kustomization.Status.Conditions)
 
 	var dependsOnRefs []string
@@ -693,7 +724,7 @@ func mapHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 	mapConditions(el, helmRelease.Status.Conditions)
-	el.Status = mapFluxResourceStatusForCondition(&helmRelease.Status.Conditions)
+	el.Status = mapFluxResourceStatusForCondition(helmRelease.Status.Conditions, false)
 	mapFluxMetadata(el, helmRelease.GetAnnotations(), helmRelease.Status.LastHandledReconcileAt, helmRelease.Spec.Suspend, helmRelease.Status.Conditions)
 
 	el.HelmReleaseMetadata = kube.HelmReleaseMetadata{
@@ -1120,15 +1151,15 @@ func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
 		return
 	}
 
-	for _, condition := range ss.Status.Conditions {
-		el.Conditions = append(el.Conditions, kube.Condition{
-			Message:            condition.Message,
-			Reason:             condition.Reason,
-			Status:             string(condition.Status),
-			Type:               string(condition.Type),
-			LastTransitionTime: condition.LastTransitionTime.Time,
-		})
-	}
+	appendConditions(el, ss.Status.Conditions, func(c appsV1.StatefulSetCondition) kube.Condition {
+		return kube.Condition{
+			Message:            c.Message,
+			Reason:             c.Reason,
+			Status:             string(c.Status),
+			Type:               string(c.Type),
+			LastTransitionTime: c.LastTransitionTime.Time,
+		}
+	})
 
 	mapStatefulSetStatus := func(ss *appsV1.StatefulSet) kube.Status {
 		if ss.DeletionTimestamp != nil {
@@ -1153,23 +1184,7 @@ func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
 // status.conditions into domain Conditions and appends them to el. Used by
 // providers (e.g. Longhorn) whose CRDs aren't imported as typed Go packages.
 func appendUnstructuredConditions(el *kube.Resource, obj unstructured.Unstructured) {
-	for _, cond := range extractUnstructuredConditions(obj) {
-		condType, _ := cond["type"].(string)
-		condStatus, _ := cond["status"].(string)
-		reason, _ := cond["reason"].(string)
-		message, _ := cond["message"].(string)
-		var lastTransition time.Time
-		if ts, ok := cond["lastTransitionTime"].(string); ok {
-			lastTransition, _ = time.Parse(time.RFC3339, ts)
-		}
-		el.Conditions = append(el.Conditions, kube.Condition{
-			Type:               condType,
-			Status:             condStatus,
-			Reason:             reason,
-			Message:            message,
-			LastTransitionTime: lastTransition,
-		})
-	}
+	appendConditions(el, conditionsFromUnstructured(obj), conditionFromMeta)
 }
 
 // extractUnstructuredConditions pulls status.conditions from an unstructured object.
@@ -1273,89 +1288,18 @@ func extractUnstructuredConditions(obj unstructured.Unstructured) []map[string]a
 	return conditions
 }
 
-// mapFluxResourceStatusFromUnstructured applies the same Ready-condition logic as
-// mapFluxResourceStatusForCondition but works on raw unstructured conditions.
-// When defaultReady is true and no conditions exist, StatusSuccess is returned
-// (used for Alert/Provider which omit conditions when valid).
-func mapFluxResourceStatusFromUnstructured(conditions []map[string]any, defaultReady bool) kube.Status {
-	for _, cond := range conditions {
-		if cond["type"] != "Ready" {
-			continue
-		}
-		reason, _ := cond["reason"].(string)
-		switch cond["status"] {
-		case "True":
-			return kube.StatusSuccess
-		case "False":
-			if reason == "DependencyNotReady" {
-				return kube.StatusPending
-			}
-			return kube.StatusFailed
-		case "Unknown":
-			return kube.StatusPending
-		}
-	}
-	if defaultReady && len(conditions) == 0 {
-		return kube.StatusSuccess
-	}
-	return kube.StatusPending
-}
-
-// mapFluxMetadataFromUnstructured is the unstructured equivalent of mapFluxMetadata,
-// used for Flux resource types not imported as typed Go packages.
-func mapFluxMetadataFromUnstructured(el *kube.Resource, annotations map[string]string, lastReconcileTimeStr string, isSuspended bool, conditions []map[string]any) {
-	isReconciling := false
-	didManuallyReconcile, exists := annotations["reconcile.fluxcd.io/requestedAt"]
-	didManuallyReconcileTime, err := time.Parse(time.RFC3339Nano, didManuallyReconcile)
-	var lastReconcileTime time.Time
-	if err == nil {
-		lastReconcileTime, err = time.Parse(time.RFC3339Nano, lastReconcileTimeStr)
-		if err == nil {
-			isReconciling = exists && lastReconcileTime.Before(didManuallyReconcileTime)
-		}
-	}
-
-	if !isReconciling {
-		for _, cond := range conditions {
-			if cond["type"] == "Reconciling" && cond["status"] == "True" {
-				isReconciling = true
-				break
-			}
-		}
-	}
-
-	var lastSyncAt time.Time
-	for _, cond := range conditions {
-		if cond["type"] == "Ready" {
-			if ts, ok := cond["lastTransitionTime"].(string); ok {
-				if t, err := time.Parse(time.RFC3339, ts); err == nil {
-					lastSyncAt = t
-				}
-			}
-			break
-		}
-	}
-
-	el.FluxMetadata = kube.FluxMetadata{
-		IsReconciling:          isReconciling,
-		IsSuspended:            isSuspended,
-		LastHandledReconcileAt: nilIfZeroTime(lastReconcileTime),
-		LastSyncAt:             nilIfZeroTime(lastSyncAt),
-	}
-
-	if isSuspended {
-		el.Status = kube.StatusSuspended
-	}
-}
-
 // mapGenericFluxData handles Flux resource types that carry no type-specific metadata
 // beyond status/suspend/reconcile. Used for notification and image automation resources.
 // Set defaultReadyWhenNoConditions=true for Alert/Provider (valid config emits no conditions
 // in older notification-controller versions).
+//
+// It converts the unstructured conditions once and then reuses the same typed
+// status/metadata mappers as the typed Flux resources, so the reconcile/suspend/Ready
+// logic lives in a single place.
 func mapGenericFluxData(el *kube.Resource, obj unstructured.Unstructured, defaultReadyWhenNoConditions bool) {
-	conditions := extractUnstructuredConditions(obj)
+	conditions := conditionsFromUnstructured(obj)
 
-	el.Status = mapFluxResourceStatusFromUnstructured(conditions, defaultReadyWhenNoConditions)
+	el.Status = mapFluxResourceStatusForCondition(conditions, defaultReadyWhenNoConditions)
 
 	isSuspended := false
 	if s, found, err := unstructured.NestedBool(obj.Object, "spec", "suspend"); found && err == nil {
@@ -1367,5 +1311,5 @@ func mapGenericFluxData(el *kube.Resource, obj unstructured.Unstructured, defaul
 		lastHandledReconcileAt = t
 	}
 
-	mapFluxMetadataFromUnstructured(el, obj.GetAnnotations(), lastHandledReconcileAt, isSuspended, conditions)
+	mapFluxMetadata(el, obj.GetAnnotations(), lastHandledReconcileAt, isSuspended, conditions)
 }

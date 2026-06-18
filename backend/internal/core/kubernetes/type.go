@@ -5,7 +5,6 @@ import (
 	"maps"
 	"reflect"
 	"slices"
-	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
@@ -83,19 +82,18 @@ func (e Resource) Clone() Resource {
 }
 
 func (e *Resource) GetRef() string {
-	group := e.Group
-	if group == "" {
-		group = "core"
-	}
-	return group + "/" + e.GetRefVersion() + "/" + e.Kind + ":" + e.Namespace + "/" + e.Name
+	return ResourceRef{
+		Group:     e.Group,
+		Version:   e.Version,
+		Kind:      e.Kind,
+		Namespace: e.Namespace,
+		Name:      e.Name,
+	}.String()
 }
 
 func (e *Resource) GetRefVersion() string {
-	versionParts := strings.Split(e.Version, "/")
-	if len(versionParts) > 1 {
-		return versionParts[1]
-	}
-	return e.Version
+	_, version := SplitAPIVersion(e.Version)
+	return version
 }
 
 func (e *Resource) IsDeepEqual(other Resource) bool {

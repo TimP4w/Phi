@@ -1,4 +1,5 @@
 import { observer } from "mobx-react-lite";
+import { useInjection } from "inversify-react";
 
 import {
   KubeResource,
@@ -6,7 +7,6 @@ import {
   Tree,
 } from "../../../core/fluxTree/models/tree";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
-import { container } from "../../../core/shared/inversify.config";
 import Widget from "./Widget";
 import {
   Chip,
@@ -65,7 +65,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     compact,
     bare,
   }: ResourceCountWidgetProps) => {
-    const store = container.get<FluxTreeStore>(FluxTreeStore);
+    const store = useInjection(FluxTreeStore);
     const tree: Tree = store.tree;
 
     const { isOpen, onOpen, onOpenChange } = useDisclosure();

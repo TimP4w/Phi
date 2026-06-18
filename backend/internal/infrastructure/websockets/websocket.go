@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/realtime"
+	"github.com/timp4w/phi/internal/core/shared"
 )
 
 const (
@@ -34,7 +35,7 @@ type WebSocketManagerImpl struct {
 }
 
 func allowedOrigin(r *http.Request) bool {
-	if os.Getenv("PHI_DEV") == "true" {
+	if os.Getenv(shared.ENV_PHI_DEV) == "true" {
 		return true
 	}
 	origin := r.Header.Get("Origin")

@@ -79,7 +79,7 @@ func main() {
 
 			// Usecase providers
 			kubernetesusecases.NewWatchLogsUseCase,
-			kubernetesusecases.NewGetResourceYAMlUseCase,
+			kubernetesusecases.NewGetResourceYAMLUseCase,
 			realtimeusecases.NewUpgradeConnectionUseCase,
 			kubernetesusecases.NewReconcileUseCase,
 			kubernetesusecases.NewSuspendUseCase,
@@ -147,7 +147,7 @@ func createRouter(uc UseCases, realtimeService realtime.RealtimeService, mcpSrv 
 
 // same-origin by default, override with PHI_ALLOWED_ORIGIN
 func corsMiddleware(next http.Handler) http.Handler {
-	allowedOrigin := os.Getenv("PHI_ALLOWED_ORIGIN")
+	allowedOrigin := os.Getenv(shared.ENV_PHI_ALLOWED_ORIGIN)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if allowedOrigin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)

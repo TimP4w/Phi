@@ -1504,16 +1504,16 @@ func TestToEvent(t *testing.T) {
 	assert.Equal(t, int32(5), event.Count)
 }
 
-// ── refGroupAndVersion / makeRef / GetRefVersion ─────────────────────────────
+// ── SplitAPIVersion / makeRef ────────────────────────────────────────────────
 
 func TestRefGroupAndVersion_CoreGroup(t *testing.T) {
-	group, version := refGroupAndVersion("v1")
+	group, version := kube.SplitAPIVersion("v1")
 	assert.Equal(t, "core", group)
 	assert.Equal(t, "v1", version)
 }
 
 func TestRefGroupAndVersion_CustomGroup(t *testing.T) {
-	group, version := refGroupAndVersion("apps/v1")
+	group, version := kube.SplitAPIVersion("apps/v1")
 	assert.Equal(t, "apps", group)
 	assert.Equal(t, "v1", version)
 }
