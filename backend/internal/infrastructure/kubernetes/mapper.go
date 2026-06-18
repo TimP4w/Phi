@@ -130,6 +130,7 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 	case "StatefulSet":
 		mapStatefulSetData(&el, obj)
 	case "DaemonSet":
+		mapDaemonSetData(&el, obj)
 		// Proxy workloads (e.g. Traefik) are often DaemonSets; the provider
 		// no-ops for non-proxy workloads.
 		traefikProxyData(&el, obj)
@@ -137,7 +138,12 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		if el.Group == trivyGroup {
 			mapTrivyReport(&el, obj, trivyReportTypes[el.Kind])
 		}
+	case "ReplicaSet":
+		mapReplicaSetStatus(&el, obj)
+	case "Namespace":
+		mapNamespaceStatus(&el, obj)
 	default:
+		mapGenericData(&el, obj)
 	}
 
 	return el
@@ -856,6 +862,7 @@ func mapNetworkPolicyData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	el.NetworkPolicyMetadata = meta
+	el.Status = kube.StatusSuccess
 }
 
 func mapEndpointSliceData(el *kube.Resource, obj unstructured.Unstructured) {
@@ -883,6 +890,7 @@ func mapEndpointSliceData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	el.EndpointSliceMetadata = meta
+	el.Status = kube.StatusSuccess
 }
 
 func nestedString(m map[string]any, key string) string {
@@ -1076,6 +1084,30 @@ func mapGatewayRouteData(el *kube.Resource, obj unstructured.Unstructured) {
 	el.RouteMetadata = route
 }
 
+func mapDaemonSetData(el *kube.Resource, obj unstructured.Unstructured) {
+	ds := &appsV1.DaemonSet{}
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), ds)
+	if err != nil {
+		logging.Logger().WithError(err).Error("Error converting unstructured to DaemonSet")
+		return
+	}
+
+	mapDaemonSetStatus := func(ds *appsV1.DaemonSet) kube.Status {
+		if ds.DeletionTimestamp != nil {
+			return kube.StatusPending
+		}
+		if ds.Status.ObservedGeneration < ds.Generation {
+			return kube.StatusPending
+		}
+		if ds.Status.NumberReady >= ds.Status.DesiredNumberScheduled {
+			return kube.StatusSuccess
+		}
+		return kube.StatusPending
+	}
+
+	el.Status = mapDaemonSetStatus(ds)
+}
+
 func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
 	ss := &appsV1.StatefulSet{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), ss)
@@ -1137,6 +1169,92 @@ func appendUnstructuredConditions(el *kube.Resource, obj unstructured.Unstructur
 }
 
 // extractUnstructuredConditions pulls status.conditions from an unstructured object.
+// staticSuccessKinds are config/identity objects that carry no runtime health.
+// Their mere existence is "healthy", so they map to success rather than unknown.
+var staticSuccessKinds = map[string]bool{
+	"ConfigMap":                      true,
+	"Secret":                         true,
+	"ServiceAccount":                 true,
+	"ClusterRole":                    true,
+	"ClusterRoleBinding":             true,
+	"Role":                           true,
+	"RoleBinding":                    true,
+	"CustomResourceDefinition":       true,
+	"ControllerRevision":             true,
+	"PriorityClass":                  true,
+	"RuntimeClass":                   true,
+	"StorageClass":                   true,
+	"IngressClass":                   true,
+	"Lease":                          true,
+	"ValidatingWebhookConfiguration": true,
+	"MutatingWebhookConfiguration":   true,
+	"CSIDriver":                      true,
+}
+
+// mapStatusFromGenericConditions derives a status from a resource's
+// status.conditions, recognizing the Ready/Available/Healthy condition types
+// commonly used by core and third-party CRDs. Returns ("", false) when no such
+// condition is present so callers can fall back to other heuristics.
+func mapStatusFromGenericConditions(conditions []map[string]any) (kube.Status, bool) {
+	for _, cond := range conditions {
+		switch cond["type"] {
+		case "Ready", "Available", "Healthy":
+		default:
+			continue
+		}
+		switch cond["status"] {
+		case "True":
+			return kube.StatusSuccess, true
+		case "False":
+			if reason, _ := cond["reason"].(string); reason == "DependencyNotReady" {
+				return kube.StatusPending, true
+			}
+			return kube.StatusFailed, true
+		case "Unknown":
+			return kube.StatusPending, true
+		}
+	}
+	return "", false
+}
+
+// mapGenericData assigns a status to kinds that have no dedicated mapper. It
+// prefers a Ready/Available/Healthy condition when present, then treats static
+// config/identity objects as success, otherwise leaves the status unknown.
+func mapGenericData(el *kube.Resource, obj unstructured.Unstructured) {
+	if conditions := extractUnstructuredConditions(obj); len(conditions) > 0 {
+		if status, ok := mapStatusFromGenericConditions(conditions); ok {
+			el.Status = status
+			return
+		}
+	}
+	if staticSuccessKinds[el.Kind] {
+		el.Status = kube.StatusSuccess
+	}
+}
+
+// mapReplicaSetStatus is success when all desired replicas are ready (including
+// when scaled to zero), otherwise pending while replicas come up.
+func mapReplicaSetStatus(el *kube.Resource, obj unstructured.Unstructured) {
+	desired, _, _ := unstructured.NestedInt64(obj.Object, "spec", "replicas")
+	ready, _, _ := unstructured.NestedInt64(obj.Object, "status", "readyReplicas")
+	if ready >= desired {
+		el.Status = kube.StatusSuccess
+		return
+	}
+	el.Status = kube.StatusPending
+}
+
+// mapNamespaceStatus maps an Active namespace to success and a Terminating one
+// to pending.
+func mapNamespaceStatus(el *kube.Resource, obj unstructured.Unstructured) {
+	phase, _, _ := unstructured.NestedString(obj.Object, "status", "phase")
+	if phase == "" || phase == "Active" {
+		el.Status = kube.StatusSuccess
+		return
+	}
+	el.Status = kube.StatusPending
+}
+
 func extractUnstructuredConditions(obj unstructured.Unstructured) []map[string]any {
 	raw, found, err := unstructured.NestedSlice(obj.Object, "status", "conditions")
 	if !found || err != nil {

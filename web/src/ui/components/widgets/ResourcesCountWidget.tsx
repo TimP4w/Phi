@@ -1,6 +1,10 @@
 import { observer } from "mobx-react-lite";
 
-import { KubeResource, ResourceStatus, Tree } from "../../../core/fluxTree/models/tree";
+import {
+  KubeResource,
+  ResourceStatus,
+  Tree,
+} from "../../../core/fluxTree/models/tree";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { container } from "../../../core/shared/inversify.config";
 import Widget from "./Widget";
@@ -67,9 +71,13 @@ function statusChipColor(
 }
 
 const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
-  ({ resource, skipGrandChildren = false, compact }: ResourceCountWidgetProps) => {
+  ({
+    resource,
+    skipGrandChildren = false,
+    compact,
+  }: ResourceCountWidgetProps) => {
     const store = container.get<FluxTreeStore>(FluxTreeStore);
-    const tree: Tree = store.tree; 
+    const tree: Tree = store.tree;
 
     const { isOpen, onOpen, onOpenChange } = useDisclosure();
     const [allResources, setAllResources] = useState<KubeResource[]>([]);
@@ -85,6 +93,10 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       unknown: 0,
     });
 
+    const allResourcesRef = useRef<KubeResource[]>([]);
+    allResourcesRef.current = allResources;
+    const [frozenResources, setFrozenResources] = useState<KubeResource[]>([]);
+
     useEffect(() => {
       if (!resource) return;
 
@@ -93,9 +105,16 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
 
       const countResources = (
         node: KubeResource | null,
-        depth = 0
-      ): { total: number; ready: number; notReady: number; suspended: number; unknown: number } => {
-        if (!node || visited.has(node.uid)) return { total: 0, ready: 0, notReady: 0, suspended: 0, unknown: 0 };
+        depth = 0,
+      ): {
+        total: number;
+        ready: number;
+        notReady: number;
+        suspended: number;
+        unknown: number;
+      } => {
+        if (!node || visited.has(node.uid))
+          return { total: 0, ready: 0, notReady: 0, suspended: 0, unknown: 0 };
         visited.add(node.uid);
         collected.push(node);
 
@@ -137,26 +156,25 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
 
     const sortedResources = useMemo(
       () =>
-        [...allResources].sort(
+        [...frozenResources].sort(
           (a, b) =>
             (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9),
         ),
-      [allResources],
+      [frozenResources],
     );
 
     // Only show status chips for statuses actually present.
     const presentStatuses = useMemo(
       () =>
-        ALL_STATUSES.filter((s) =>
-          sortedResources.some((r) => r.status === s),
-        ),
+        ALL_STATUSES.filter((s) => sortedResources.some((r) => r.status === s)),
       [sortedResources],
     );
 
     const filteredResources = useMemo(() => {
       const q = query.trim().toLowerCase();
       return sortedResources.filter((r) => {
-        if (activeStatuses.size > 0 && !activeStatuses.has(r.status)) return false;
+        if (activeStatuses.size > 0 && !activeStatuses.has(r.status))
+          return false;
         if (
           q &&
           !r.name.toLowerCase().includes(q) &&
@@ -208,10 +226,12 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       );
     }
 
-    const failedCount = sortedResources.filter(
+    // Card health is driven by the live resource set, not the modal snapshot,
+    // so the badge keeps reflecting the current cluster state.
+    const failedCount = allResources.filter(
       (r) => r.status === ResourceStatus.FAILED,
     ).length;
-    const pendingCount = sortedResources.filter(
+    const pendingCount = allResources.filter(
       (r) =>
         r.status === ResourceStatus.PENDING ||
         r.status === ResourceStatus.WARNING,
@@ -258,33 +278,49 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
           : pendingCount > 0
             ? new Set([ResourceStatus.PENDING, ResourceStatus.WARNING])
             : new Set<string>();
+      setFrozenResources(allResourcesRef.current);
       setActiveStatuses(seed);
       setQuery("");
       onOpen();
     };
 
     return (
-      <Widget span={1} title="Resources" subtitle="Status of all resources" compact={compact}>
+      <Widget
+        span={1}
+        title="Resources"
+        subtitle="Status of all resources"
+        compact={compact}
+      >
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between items-center">
             <span className="text-default-400">Total</span>
-            <span className="text-foreground font-medium">{resourceCounts.total}</span>
+            <span className="text-foreground font-medium">
+              {resourceCounts.total}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-default-400">Ready</span>
-            <span className="text-success font-medium">{resourceCounts.ready}</span>
+            <span className="text-success font-medium">
+              {resourceCounts.ready}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-default-400">Not Ready</span>
-            <span className="text-danger font-medium">{resourceCounts.notReady}</span>
+            <span className="text-danger font-medium">
+              {resourceCounts.notReady}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-default-400">Suspended</span>
-            <span className="text-default-400 font-medium">{resourceCounts.suspended}</span>
+            <span className="text-default-400 font-medium">
+              {resourceCounts.suspended}
+            </span>
           </div>
           <div className="flex justify-between items-center">
             <span className="text-default-400">Unknown</span>
-            <span className="text-default-500 font-medium">{resourceCounts.unknown}</span>
+            <span className="text-default-500 font-medium">
+              {resourceCounts.unknown}
+            </span>
           </div>
         </div>
 
@@ -294,11 +330,17 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
             className={`mt-3 w-full flex items-center gap-2 px-3 py-2 rounded-lg border ${HEALTH_STYLES.border} ${HEALTH_STYLES.bg} transition-colors text-left`}
           >
             {health === "success" ? (
-              <CheckCircle2 className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`} />
+              <CheckCircle2
+                className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`}
+              />
             ) : (
-              <AlertTriangle className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`} />
+              <AlertTriangle
+                className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`}
+              />
             )}
-            <span className={`text-xs flex-1 ${HEALTH_STYLES.text}`}>{healthLabel}</span>
+            <span className={`text-xs flex-1 ${HEALTH_STYLES.text}`}>
+              {healthLabel}
+            </span>
             <span className={`text-xs ${HEALTH_STYLES.muted}`}>View →</span>
           </button>
         )}
@@ -403,7 +445,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
         </Modal>
       </Widget>
     );
-  }
+  },
 );
 
 export default ResourceCountWidget;

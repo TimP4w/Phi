@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useNavigate } from "react-router-dom";
 import {
@@ -48,11 +48,18 @@ const LonghornVolumesModal: React.FC<Props> = observer(
     );
     const [query, setQuery] = useState("");
 
+    const volumesRef = useRef(volumes);
+    volumesRef.current = volumes;
+    const [frozenVolumes, setFrozenVolumes] = useState<LonghornVolume[]>([]);
+
     // Reset filters each time the modal opens, seeding the robustness filter
     // from the count the user clicked.
     useEffect(() => {
       if (isOpen) {
-        setActiveRobustness(initialFilter ? new Set([initialFilter]) : new Set());
+        setFrozenVolumes(volumesRef.current);
+        setActiveRobustness(
+          initialFilter ? new Set([initialFilter]) : new Set(),
+        );
         setQuery("");
       }
     }, [isOpen, initialFilter]);
@@ -64,7 +71,7 @@ const LonghornVolumesModal: React.FC<Props> = observer(
         degraded: 1,
         healthy: 2,
       };
-      return volumes
+      return frozenVolumes
         .filter((v) => {
           const robustness = v.metadata?.robustness ?? "";
           if (activeRobustness.size > 0 && !activeRobustness.has(robustness))
@@ -82,7 +89,7 @@ const LonghornVolumesModal: React.FC<Props> = observer(
             (order[a.metadata?.robustness ?? ""] ?? 9) -
             (order[b.metadata?.robustness ?? ""] ?? 9),
         );
-    }, [volumes, activeRobustness, query]);
+    }, [frozenVolumes, activeRobustness, query]);
 
     const toggleRobustness = (robustness: string) =>
       setActiveRobustness((prev) => {
@@ -98,7 +105,12 @@ const LonghornVolumesModal: React.FC<Props> = observer(
     };
 
     return (
-      <Modal isOpen={isOpen} onOpenChange={onOpenChange} size="2xl" className="dark">
+      <Modal
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        size="2xl"
+        className="dark"
+      >
         <ModalContent>
           {() => (
             <>
@@ -106,8 +118,8 @@ const LonghornVolumesModal: React.FC<Props> = observer(
                 Longhorn Volumes
                 <span className="text-sm font-normal text-default-400 ml-1">
                   ({filteredVolumes.length}
-                  {filteredVolumes.length !== volumes.length
-                    ? ` / ${volumes.length}`
+                  {filteredVolumes.length !== frozenVolumes.length
+                    ? ` / ${frozenVolumes.length}`
                     : ""}
                   )
                 </span>
@@ -151,7 +163,10 @@ const LonghornVolumesModal: React.FC<Props> = observer(
                     No volumes.
                   </div>
                 ) : (
-                  <div className="overflow-y-auto" style={{ maxHeight: "60vh" }}>
+                  <div
+                    className="overflow-y-auto"
+                    style={{ maxHeight: "60vh" }}
+                  >
                     {filteredVolumes.map((v) => {
                       const robustness = v.metadata?.robustness ?? "";
                       return (

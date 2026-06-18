@@ -29,7 +29,7 @@ const dotClass = (status: ResourceStatus): string => {
   switch (status) {
     case ResourceStatus.SUCCESS: return "bg-success";
     case ResourceStatus.FAILED: return "bg-danger";
-    case ResourceStatus.PENDING:
+    case ResourceStatus.PENDING: return "bg-primary";
     case ResourceStatus.WARNING: return "bg-warning";
     default: return "bg-default-400";
   }
