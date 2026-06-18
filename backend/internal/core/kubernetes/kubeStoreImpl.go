@@ -19,6 +19,7 @@ const (
 type KubeStoreImpl struct {
 	resources     map[string]*Resource
 	resourcesRefs map[string][]*Resource
+	ownersByRef   map[string][]string
 	events        map[string][]Event
 	mu            sync.RWMutex
 }
@@ -32,10 +33,37 @@ func NewKubeStoreImpl() KubeStore {
 	service := &KubeStoreImpl{
 		resources:     make(map[string]*Resource),
 		resourcesRefs: make(map[string][]*Resource),
+		ownersByRef:   make(map[string][]string),
 		events:        make(map[string][]Event),
 	}
 
 	return service
+}
+
+// addOwnerRef records that the resource owns its self-ref, so it can be found as
+// a parent of resources registered under that ref.
+func (k *KubeStoreImpl) addOwnerRef(res *Resource) {
+	ref := res.GetRef()
+	k.ownersByRef[ref] = appendUIDIfMissing(k.ownersByRef[ref], res.UID)
+}
+
+// removeOwnerRef drops a UID from the owner index for the given ref.
+func (k *KubeStoreImpl) removeOwnerRef(ref, uid string) {
+	owners, exists := k.ownersByRef[ref]
+	if !exists {
+		return
+	}
+	for i, ownerUID := range owners {
+		if ownerUID == uid {
+			owners = append(owners[:i], owners[i+1:]...)
+			break
+		}
+	}
+	if len(owners) == 0 {
+		delete(k.ownersByRef, ref)
+	} else {
+		k.ownersByRef[ref] = owners
+	}
 }
 
 // parentRefsForResource returns the parent ref strings for a resource, along with
@@ -76,10 +104,8 @@ func (k *KubeStoreImpl) addResourceToRef(ref string, resource *Resource) {
 
 	// Merge any parents found in the store into ParentIDs without discarding the
 	// owner-reference UIDs the mapper already extracted, or parents from other refs.
-	for _, parentRes := range k.resources {
-		if parentRes.GetRef() == ref {
-			resource.ParentIDs = appendUIDIfMissing(resource.ParentIDs, parentRes.UID)
-		}
+	for _, parentUID := range k.ownersByRef[ref] {
+		resource.ParentIDs = appendUIDIfMissing(resource.ParentIDs, parentUID)
 	}
 
 	k.resourcesRefs[ref] = append(k.resourcesRefs[ref], resource)
@@ -115,12 +141,14 @@ func (k *KubeStoreImpl) removeOwnedResourceRefs(res *Resource) {
 	logger := logging.Logger().WithResource(res.Kind, res.Name, res.Namespace, res.UID)
 
 	ref := res.GetRef()
+	k.removeOwnerRef(ref, res.UID)
+
 	refResources, exists := k.resourcesRefs[ref]
 	if !exists {
 		return
 	}
 
-	if k.isOnlyOwnerOfRef(res, ref) {
+	if k.isOnlyOwnerOfRef(ref) {
 		delete(k.resourcesRefs, ref)
 		logger.WithField("ref", ref).Debug("Removed owned resourcesRefs entry")
 	} else {
@@ -129,14 +157,10 @@ func (k *KubeStoreImpl) removeOwnedResourceRefs(res *Resource) {
 	}
 }
 
-// isOnlyOwnerOfRef checks if this resource is the only one with the given ref
-func (k *KubeStoreImpl) isOnlyOwnerOfRef(res *Resource, ref string) bool {
-	for otherUID, otherResource := range k.resources {
-		if otherUID != res.UID && otherResource.GetRef() == ref {
-			return false
-		}
-	}
-	return true
+// isOnlyOwnerOfRef reports whether no resource (other than one already dropped
+// from the owner index) still owns the given ref.
+func (k *KubeStoreImpl) isOnlyOwnerOfRef(ref string) bool {
+	return len(k.ownersByRef[ref]) == 0
 }
 
 // filterChildrenFromRef removes this resource's children from the ref
@@ -234,6 +258,7 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 		if _, ok := k.resourcesRefs[selfRef]; !ok {
 			k.resourcesRefs[selfRef] = []*Resource{}
 		}
+		k.addOwnerRef(&newResource)
 		k.registerParentRefs(&newResource)
 		k.backfillChildrenParentIDs(&newResource)
 		snapshot := Resource{}
@@ -256,6 +281,8 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 		k.removeFromParentRefs(updated, updated.UID)
 	}
 	if oldSelfRef != newSelfRef {
+		k.removeOwnerRef(oldSelfRef, updated.UID)
+		k.addOwnerRef(updated)
 		if children, ok := k.resourcesRefs[oldSelfRef]; ok {
 			k.resourcesRefs[newSelfRef] = children
 			delete(k.resourcesRefs, oldSelfRef)
