@@ -4,6 +4,7 @@ import { useNavigate, useHref, Routes, Route } from "react-router-dom";
 import { ROUTES } from "./routes/routes.enum";
 import ResourceView from "./views/resource/Resource.view";
 import DashboardView from "./views/dashboard/Dashboard.view";
+import CommandPalette from "./components/command-palette/CommandPalette";
 
 export default function Phi() {
   const navigate = useNavigate();
@@ -25,6 +26,7 @@ export default function Phi() {
         }}
       />
       <ReactFlowProvider>
+        <CommandPalette />
         <Routes>
           <Route path={ROUTES.DASHBOARD} element={<DashboardView />} />
           <Route
