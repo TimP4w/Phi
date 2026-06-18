@@ -1,5 +1,4 @@
 import { KubeResource } from "../fluxTree/models/tree";
-import { TRIVY_REPORT_KINDS } from "../fluxTree/constants/resources.const";
 
 // Client-side aggregation of Trivy Operator findings. The report resources are
 // already in the FluxTreeStore (streamed like any other resource); these pure
@@ -132,6 +131,8 @@ function addReport(target: TrivySummary, report: KubeResource): void {
   }
 }
 
+// Report→target key. Trivy's target labels carry no group, so neither can this
+// key — a tolerable collision risk for the workload kinds Trivy scans.
 function targetKey(kind: string, namespace: string, name: string): string {
   return `${kind}/${namespace}/${name}`;
 }
@@ -142,7 +143,7 @@ export function collectReports(
 ): KubeResource[] {
   const reports: KubeResource[] = [];
   for (const r of resources) {
-    if (TRIVY_REPORT_KINDS.has(r.kind) && r.trivyMetadata) reports.push(r);
+    if (r.trivyMetadata) reports.push(r);
   }
   return reports;
 }

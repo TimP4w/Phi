@@ -18,7 +18,7 @@ const ResourceCard: React.FC<ResourceCardProps> = observer(({ resource }) => {
     >
       <div className="flex w-full flex-col p-2 border-default-200 gap-2">
         <div className="flex flex-row gap-3 items-center">
-          <AppLogo kind={resource?.kind} />
+          <AppLogo groupKind={resource?.groupKind} />
           <span className="text-sm font-bold">{resource?.name}</span>
           <StatusChip resource={resource} />
           <div className="w-full flex justify-end"></div>

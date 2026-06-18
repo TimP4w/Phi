@@ -4,7 +4,7 @@ import { Handle, NodeProps, Position, Node } from "@xyflow/react";
 import { Lock } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@heroui/react";
 import { KubeResource } from "../../../core/fluxTree/models/tree";
-import { RESOURCE_TYPE, ROUTE_KINDS } from "../../../core/fluxTree/constants/resources.const";
+import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import { NetworkNodeData, NetworkTLSInfo } from "../../../core/network/usecases/NetworkTopology.usecase";
 import AppLogo from "../resource-icon/ResourceIcon";
 import StatusChip from "../status-chip/StatusChip";
@@ -39,7 +39,7 @@ function networkDetail(node: KubeResource): string | null {
     const addr = node.gatewayMetadata.addresses?.join(", ") ?? "";
     return [className, addr].filter(Boolean).join(" · ") || null;
   }
-  if (ROUTE_KINDS.has(node.kind) && node.routeMetadata) {
+  if (node.routeMetadata) {
     return node.routeMetadata.hostnames?.join(", ") || null;
   }
   if (node.kind === RESOURCE_TYPE.CERTIFICATE && node.certificateMetadata) {
@@ -135,7 +135,7 @@ function NetworkResourceNode({ data }: NetworkResourceNodeProps) {
       <div className="w-[240px] bg-content1 border border-default-200 rounded-lg shadow-sm">
         <div className="flex items-center gap-2.5 px-3 py-2.5">
           <div className="flex-shrink-0">
-            <AppLogo kind={treeNode.kind} />
+            <AppLogo groupKind={treeNode.groupKind} />
           </div>
           <div className="flex-1 min-w-0">
             <Link

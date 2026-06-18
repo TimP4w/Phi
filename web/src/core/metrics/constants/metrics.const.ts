@@ -1,13 +1,3 @@
-/** Kinds that show metrics chips/tabs (spec: tree sparkline whitelist). */
-export const METRICS_KINDS = new Set([
-  "Pod",
-  "Deployment",
-  "StatefulSet",
-  "DaemonSet",
-  "Kustomization",
-  "HelmRelease",
-]);
-
 /** Preset windows for the metrics-tab time range selector. */
 export const METRICS_RANGE_PRESETS = ["15m", "1h", "6h", "24h", "3d", "7d", "14d"] as const;
 

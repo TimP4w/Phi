@@ -16,18 +16,9 @@ import {
   Kustomization,
   Node,
 } from "../models/tree";
-import {
-  RESOURCE_TYPE,
-  FLUX_NAMESPACE,
-  TRIVY_REPORT_KINDS,
-  FLUX_APPLICATION_KINDS,
-  FLUX_REPOSITORY_KINDS,
-} from "../constants/resources.const";
+import { RESOURCE_TYPE, FLUX_NAMESPACE } from "../constants/resources.const";
 import { indexFindingsByTarget, TrivySummary } from "../../trivy/trivy";
 import { TreeNodeDto } from "../models/dtos/treeDto";
-
-const APPLICATION_KINDS = new Set<RESOURCE_TYPE>(FLUX_APPLICATION_KINDS);
-const REPOSITORY_KINDS = new Set<RESOURCE_TYPE>(FLUX_REPOSITORY_KINDS);
 
 function buildTree(resources: Map<string, KubeResource>): Tree {
   resources.forEach((resource) => {
@@ -39,7 +30,7 @@ function buildTree(resources: Map<string, KubeResource>): Tree {
   resources.forEach((resource) => {
     // Trivy report CRDs are a findings overlay, not graph nodes — keep them in
     // the resource map (for the findings index) but never attach them as children.
-    if (TRIVY_REPORT_KINDS.has(resource.kind)) return;
+    if (resource.trivyMetadata) return;
     const parentId = resource.parentIDs[0];
     // Skip self-references and back-edges that would create cycles
     if (parentId && parentId !== resource.uid && resources.has(parentId)) {
@@ -165,8 +156,7 @@ class FluxTreeStore {
   get applications(): FluxResource[] {
     const result: FluxResource[] = [];
     this.resources.forEach((r) => {
-      if (APPLICATION_KINDS.has(r.kind as RESOURCE_TYPE))
-        result.push(r as FluxResource);
+      if (r.fluxRole === "application") result.push(r as FluxResource);
     });
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -174,8 +164,7 @@ class FluxTreeStore {
   get repositories(): Repository[] {
     const result: Repository[] = [];
     this.resources.forEach((r) => {
-      if (REPOSITORY_KINDS.has(r.kind as RESOURCE_TYPE))
-        result.push(r as Repository);
+      if (r.fluxRole === "repository") result.push(r as Repository);
     });
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }

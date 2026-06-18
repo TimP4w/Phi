@@ -1,3 +1,5 @@
+import { FluxRole } from "../../constants/resources.const";
+
 export type TreeDto = {
   root: TreeNodeDto;
 };
@@ -17,6 +19,10 @@ export type TreeNodeDto = {
   conditions: ConditionDto[];
   status: "unknown" | "success" | "failed" | "pending" | "warning" | "suspended";
   isFluxManaged: boolean;
+  // Classification facts owned by the backend GroupKind registry.
+  isReconcilable: boolean;
+  fluxRole?: FluxRole;
+  hasMetrics: boolean;
   // Timestamps arrive as JSON strings; the model constructors convert to Date.
   createdAt: string;
   deletedAt?: string;

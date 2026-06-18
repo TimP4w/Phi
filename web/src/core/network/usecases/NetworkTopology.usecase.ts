@@ -4,7 +4,7 @@ import UseCase from "../../shared/usecase";
 import { FluxTreeStore } from "../../fluxTree/stores/fluxTree.store";
 import ELK, { ElkExtendedEdge, ElkNode } from "elkjs/lib/elk.bundled.js";
 import { KubeResource } from "../../fluxTree/models/tree";
-import { RESOURCE_TYPE, ROUTE_KINDS } from "../../fluxTree/constants/resources.const";
+import { RESOURCE_TYPE } from "../../fluxTree/constants/resources.const";
 import { NetworkProvider } from "../providers/networkProvider";
 import { TraefikProvider } from "../providers/traefik.provider";
 
@@ -308,7 +308,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
       // Routes: attached to a Gateway (Gateway API), fronted by the ingress
       // controller's LoadBalancer Service (matched on external address), or — as
       // a last resort — drawn straight from the internet.
-      if (ROUTE_KINDS.has(r.kind) && r.routeMetadata) {
+      if (r.routeMetadata) {
         const parentRefs = r.routeMetadata.routeParentRefs ?? [];
         // Controller-agnostic "which door" label: the route's named entrypoints
         // (Traefik), else its ingressClass (how nginx/caddy split internal vs

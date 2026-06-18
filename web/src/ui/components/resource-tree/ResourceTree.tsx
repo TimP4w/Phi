@@ -121,7 +121,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
 
           {/* Kind icon */}
           <div className="flex-shrink-0">
-            <AppLogo kind={resource.kind} />
+            <AppLogo groupKind={resource.groupKind} />
           </div>
 
           {/* Identity */}
