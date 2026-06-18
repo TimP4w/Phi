@@ -445,20 +445,15 @@ export type LonghornVolumeMetadata = {
 type HelmReleaseMetadata = {
   chartName: string;
   chartVersion: string;
-  isReconciling: boolean;
-  isSuspended: boolean;
   sourceRef: SourceRef; // HelmRepository
   // TODO: chartRef: OCIRepository or HelmChart
 };
 
 type KustomizationMetadata = {
   path: string;
-  isReconciling: boolean;
-  isSuspended: boolean;
   sourceRef: SourceRef; // GitRepository, OCIRepository or Bucket
   lastAppliedRevision: string;
   lastAttemptedRevision: string;
-  lastHandledReconcileAt: Date;
   dependsOn: string[];
 };
 

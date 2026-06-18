@@ -159,8 +159,8 @@ const renderKindFields = (resource: KubeResource) => {
                 : undefined
             }
           />
-          <InfoRow label="Reconciling" value={n.metadata?.isReconciling?.toString()} />
-          <InfoRow label="Suspended" value={n.metadata?.isSuspended?.toString()} />
+          <InfoRow label="Reconciling" value={n.isReconciling.toString()} />
+          <InfoRow label="Suspended" value={n.isSuspended.toString()} />
         </Section>
       );
     }

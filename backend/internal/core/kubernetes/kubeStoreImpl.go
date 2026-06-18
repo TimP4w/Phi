@@ -261,15 +261,14 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 		k.addOwnerRef(&newResource)
 		k.registerParentRefs(&newResource)
 		k.backfillChildrenParentIDs(&newResource)
-		snapshot := Resource{}
-		snapshot.Copy(newResource)
+		snapshot := newResource.Clone()
 		return &snapshot
 	}
 
 	logger.Debug("Resource found, updated existing resource")
 	oldSelfRef := existing.GetRef()
 	oldParentRefs := append([]string(nil), existing.ParentRefs...)
-	existing.Copy(newResource)
+	*existing = newResource.Clone()
 	updated := existing
 	newSelfRef := updated.GetRef()
 
@@ -293,8 +292,7 @@ func (k *KubeStoreImpl) UpdateResource(newResource Resource) *Resource {
 
 	k.registerParentRefs(updated)
 	k.backfillChildrenParentIDs(updated)
-	snapshot := Resource{}
-	snapshot.Copy(*updated)
+	snapshot := updated.Clone()
 	return &snapshot
 }
 

@@ -662,19 +662,16 @@ func mapKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 
 	el.KustomizationMetadata = kube.KustomizationMetadata{
-		Path:          kustomization.Spec.Path,
-		IsReconciling: el.FluxMetadata.IsReconciling, // deprecated
-		IsSuspended:   el.FluxMetadata.IsSuspended,   // deprecated
-		DependsOn:     dependsOnRefs,
+		Path:      kustomization.Spec.Path,
+		DependsOn: dependsOnRefs,
 
 		SourceRef: kube.SourceRef{
 			Kind:      kustomization.Spec.SourceRef.Kind,
 			Name:      kustomization.Spec.SourceRef.Name,
 			Namespace: kustomization.Spec.SourceRef.Namespace,
 		},
-		LastAppliedRevision:    kustomization.Status.LastAppliedRevision,
-		LastAttemptedRevision:  kustomization.Status.LastAttemptedRevision,
-		LastHandledReconcileAt: el.FluxMetadata.LastHandledReconcileAt, // deprecated
+		LastAppliedRevision:   kustomization.Status.LastAppliedRevision,
+		LastAttemptedRevision: kustomization.Status.LastAttemptedRevision,
 	}
 
 }
@@ -691,9 +688,7 @@ func mapHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 	mapFluxMetadata(el, helmRelease.GetAnnotations(), helmRelease.Status.LastHandledReconcileAt, helmRelease.Spec.Suspend, helmRelease.Status.Conditions)
 
 	el.HelmReleaseMetadata = kube.HelmReleaseMetadata{
-		ChartName:     helmRelease.GetHelmChartName(),
-		IsReconciling: el.FluxMetadata.IsReconciling, // deprecated
-		IsSuspended:   el.FluxMetadata.IsSuspended,   // deprecated
+		ChartName: helmRelease.GetHelmChartName(),
 		SourceRef: kube.SourceRef{
 			Kind:      helmRelease.Spec.Chart.Spec.SourceRef.Kind,
 			Name:      helmRelease.Spec.Chart.Spec.SourceRef.Name,

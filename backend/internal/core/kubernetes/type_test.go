@@ -41,14 +41,74 @@ func createSampleResource() Resource {
 	}
 }
 
-func TestCopy(t *testing.T) {
+func TestClone(t *testing.T) {
 	original := createSampleResource()
-	dst := Resource{}
 
-	dst.Copy(original)
+	clone := original.Clone()
 
-	if !reflect.DeepEqual(dst, original) {
-		t.Errorf("Copy() failed, expected %v, got %v", original, dst)
+	if !reflect.DeepEqual(clone, original) {
+		t.Errorf("Clone() failed, expected %v, got %v", original, clone)
+	}
+}
+
+// TestCloneIndependence guards that Clone() copies every reference-typed field
+// (slices, maps, and the slices/maps nested in the metadata structs) rather than
+// sharing backing storage. A field added to Resource but not to Clone() will
+// show up here as a mutation leaking back into the original.
+func TestCloneIndependence(t *testing.T) {
+	original := Resource{
+		ParentIDs:   []string{"p1"},
+		ParentRefs:  []string{"r1"},
+		Labels:      map[string]string{"k": "v"},
+		Annotations: map[string]string{"a": "v"},
+		Conditions:  []Condition{{Type: "Ready", Status: "True"}},
+		PodMetadata: PodMetadata{Containers: []Container{{Name: "c1"}}},
+		DeploymentMetadata: DeploymentMetadata{
+			Images: []string{"img:1"},
+		},
+		KustomizationMetadata: KustomizationMetadata{
+			DependsOn: []string{"dep1"},
+		},
+		PVCMetadata: PVCMetadata{
+			AccessModes: []string{"ReadWriteOnce"},
+			Capacity:    map[string]string{"storage": "1Gi"},
+		},
+		PVMetadata:            PVMetadata{AccessModes: []string{"ReadWriteOnce"}},
+		ServiceMetadata:       ServiceMetadata{ClusterIPs: []string{"10.0.0.1"}, Selector: map[string]string{"app": "x"}},
+		RouteMetadata:         RouteMetadata{Hostnames: []string{"example.com"}},
+		EndpointSliceMetadata: EndpointSliceMetadata{Endpoints: []EndpointTarget{{TargetName: "pod1"}}},
+		GatewayMetadata:       GatewayMetadata{Addresses: []string{"1.2.3.4"}},
+		CertificateMetadata:   CertificateMetadata{DNSNames: []string{"example.com"}},
+		NetworkPolicyMetadata: NetworkPolicyMetadata{PodSelector: map[string]string{"app": "x"}, PolicyTypes: []string{"Ingress"}},
+		ProxyMetadata:         ProxyMetadata{EntrypointMiddlewares: map[string][]string{"web": {"mw1"}}},
+	}
+	snapshot := original.Clone()
+
+	clone := original.Clone()
+	// Mutate every reference-typed field of the original.
+	clone.ParentIDs[0] = "mut"
+	clone.ParentRefs[0] = "mut"
+	clone.Labels["k"] = "mut"
+	clone.Annotations["a"] = "mut"
+	clone.Conditions[0].Status = "mut"
+	clone.PodMetadata.Containers[0].Name = "mut"
+	clone.DeploymentMetadata.Images[0] = "mut"
+	clone.KustomizationMetadata.DependsOn[0] = "mut"
+	clone.PVCMetadata.AccessModes[0] = "mut"
+	clone.PVCMetadata.Capacity["storage"] = "mut"
+	clone.PVMetadata.AccessModes[0] = "mut"
+	clone.ServiceMetadata.ClusterIPs[0] = "mut"
+	clone.ServiceMetadata.Selector["app"] = "mut"
+	clone.RouteMetadata.Hostnames[0] = "mut"
+	clone.EndpointSliceMetadata.Endpoints[0].TargetName = "mut"
+	clone.GatewayMetadata.Addresses[0] = "mut"
+	clone.CertificateMetadata.DNSNames[0] = "mut"
+	clone.NetworkPolicyMetadata.PodSelector["app"] = "mut"
+	clone.NetworkPolicyMetadata.PolicyTypes[0] = "mut"
+	clone.ProxyMetadata.EntrypointMiddlewares["web"][0] = "mut"
+
+	if !reflect.DeepEqual(original, snapshot) {
+		t.Errorf("Clone() shares backing storage with the original; mutating the clone changed the original.\nexpected %#v\ngot      %#v", snapshot, original)
 	}
 }
 

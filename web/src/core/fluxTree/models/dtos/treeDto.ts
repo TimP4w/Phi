@@ -177,19 +177,14 @@ export type PodMetadataDto = {
 type HelmReleaseMetadataDto = {
   chartName: string;
   chartVersion: string;
-  isReconciling: boolean;
-  isSuspended: boolean;
   sourceRef: SourceRefDto;
 };
 
 type KustomizationMetadataDto = {
   path: string;
-  isReconciling: boolean;
-  isSuspended: boolean;
   sourceRef: SourceRefDto;
   lastAppliedRevision: string;
   lastAttemptedRevision: string;
-  lastHandledReconcileAt: Date;
   dependsOn: string[];
 };
 
