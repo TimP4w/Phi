@@ -23,11 +23,15 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { AlertTriangle, CheckCircle2, Search } from "lucide-react";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import ResourceRow from "../resource-row/ResourceRow";
+import { statusChipColor } from "../../shared/helpers";
 
 type ResourceCountWidgetProps = {
   resource?: KubeResource;
   skipGrandChildren?: boolean;
   compact?: boolean;
+  // Flat mode for the detail panel: renders just a subresource-count pill and
+  // the health button (which opens the modal), without the Widget card.
+  bare?: boolean;
 };
 
 // All statuses a resource can carry, in the order they should surface (worst
@@ -54,27 +58,12 @@ const STATUS_LABEL: Record<string, string> = {
   [ResourceStatus.SUCCESS]: "Ready",
 };
 
-function statusChipColor(
-  status: ResourceStatus,
-): "danger" | "warning" | "success" | "default" {
-  switch (status) {
-    case ResourceStatus.FAILED:
-      return "danger";
-    case ResourceStatus.WARNING:
-    case ResourceStatus.PENDING:
-      return "warning";
-    case ResourceStatus.SUCCESS:
-      return "success";
-    default:
-      return "default";
-  }
-}
-
 const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
   ({
     resource,
     skipGrandChildren = false,
     compact,
+    bare,
   }: ResourceCountWidgetProps) => {
     const store = container.get<FluxTreeStore>(FluxTreeStore);
     const tree: Tree = store.tree;
@@ -284,68 +273,23 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       onOpen();
     };
 
-    return (
-      <Widget
-        span={1}
-        title="Resources"
-        subtitle="Status of all resources"
-        compact={compact}
+    const healthButton = (
+      <button
+        onClick={openModal}
+        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border ${HEALTH_STYLES.border} ${HEALTH_STYLES.bg} transition-colors text-left`}
       >
-        <div className="space-y-1.5 text-sm">
-          <div className="flex justify-between items-center">
-            <span className="text-default-400">Total</span>
-            <span className="text-foreground font-medium">
-              {resourceCounts.total}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-default-400">Ready</span>
-            <span className="text-success font-medium">
-              {resourceCounts.ready}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-default-400">Not Ready</span>
-            <span className="text-danger font-medium">
-              {resourceCounts.notReady}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-default-400">Suspended</span>
-            <span className="text-default-400 font-medium">
-              {resourceCounts.suspended}
-            </span>
-          </div>
-          <div className="flex justify-between items-center">
-            <span className="text-default-400">Unknown</span>
-            <span className="text-default-500 font-medium">
-              {resourceCounts.unknown}
-            </span>
-          </div>
-        </div>
-
-        {!compact && (
-          <button
-            onClick={openModal}
-            className={`mt-3 w-full flex items-center gap-2 px-3 py-2 rounded-lg border ${HEALTH_STYLES.border} ${HEALTH_STYLES.bg} transition-colors text-left`}
-          >
-            {health === "success" ? (
-              <CheckCircle2
-                className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`}
-              />
-            ) : (
-              <AlertTriangle
-                className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`}
-              />
-            )}
-            <span className={`text-xs flex-1 ${HEALTH_STYLES.text}`}>
-              {healthLabel}
-            </span>
-            <span className={`text-xs ${HEALTH_STYLES.muted}`}>View →</span>
-          </button>
+        {health === "success" ? (
+          <CheckCircle2 className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`} />
+        ) : (
+          <AlertTriangle className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`} />
         )}
+        <span className={`text-xs flex-1 ${HEALTH_STYLES.text}`}>{healthLabel}</span>
+        <span className={`text-xs ${HEALTH_STYLES.muted}`}>View →</span>
+      </button>
+    );
 
-        <Modal
+    const modal = (
+      <Modal
           isOpen={isOpen}
           onOpenChange={handleOpenChange}
           size="2xl"
@@ -443,6 +387,48 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
             )}
           </ModalContent>
         </Modal>
+    );
+
+    if (bare) {
+      return (
+        <div className="space-y-2">
+          <Chip size="sm" variant="flat">
+            {resourceCounts.total} subresources
+          </Chip>
+          {healthButton}
+          {modal}
+        </div>
+      );
+    }
+
+    return (
+      <Widget span={1} title="Resources" subtitle="Status of all resources" compact={compact}>
+        <div className="space-y-1.5 text-sm">
+          <div className="flex justify-between items-center">
+            <span className="text-default-400">Total</span>
+            <span className="text-foreground font-medium">{resourceCounts.total}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-default-400">Ready</span>
+            <span className="text-success font-medium">{resourceCounts.ready}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-default-400">Not Ready</span>
+            <span className="text-danger font-medium">{resourceCounts.notReady}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-default-400">Suspended</span>
+            <span className="text-default-400 font-medium">{resourceCounts.suspended}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-default-400">Unknown</span>
+            <span className="text-default-500 font-medium">{resourceCounts.unknown}</span>
+          </div>
+        </div>
+
+        {!compact && <div className="mt-3">{healthButton}</div>}
+
+        {modal}
       </Widget>
     );
   },

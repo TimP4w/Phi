@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@heroui/react";
 import { ArrowUp, Terminal } from "lucide-react";
+import { COLORS } from "../../shared/colors";
 
 const ansiToHtml = new AnsiToHtml({ escapeXML: true });
 
@@ -72,7 +73,10 @@ export const LogsTab = observer(() => {
   }
 
   return (
-    <div className="relative h-full flex flex-col bg-[#0d1117] font-mono text-xs">
+    <div
+      className="relative h-full flex flex-col font-mono text-xs"
+      style={{ backgroundColor: COLORS.MAIN }}
+    >
       {/* Log lines */}
       <div
         ref={scrollRef}

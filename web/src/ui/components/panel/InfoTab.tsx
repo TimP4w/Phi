@@ -18,10 +18,11 @@ import { EventsStore } from "../../../core/fluxTree/stores/events.store";
 import { MetricsStore } from "../../../core/metrics/stores/metrics.store";
 import { formatBytes, usageColor, usagePercent } from "../../shared/format";
 import { robustnessColor } from "../../../core/fluxTree/constants/resources.const";
-import { isContainerErrorReason } from "../../../core/fluxTree/constants/conditions.const";
+import { containerStateColor } from "./containerStatus";
 
 type InfoTabProps = {
   resource: KubeResource | null;
+  hideStorage?: boolean;
 };
 
 const Section = ({
@@ -70,17 +71,7 @@ const KVChips = ({ entries }: { entries: Map<string, string> }) => (
   </div>
 );
 
-const containerStateColor = (
-  c: Container
-): "success" | "danger" | "warning" | "default" => {
-  if (isContainerErrorReason(c.reason)) return "danger";
-  if (c.state === "Terminated" && (c.exitCode ?? 0) !== 0) return "danger";
-  if (c.state === "Running" && c.ready) return "success";
-  if (c.state === "Waiting") return "warning";
-  return "default";
-};
-
-const ContainerRow = ({ container }: { container: Container }) => {
+export const ContainerRow = ({ container }: { container: Container }) => {
   const color = containerStateColor(container);
   const status = container.reason || container.state || "Unknown";
   return (
@@ -207,28 +198,18 @@ const renderKindFields = (resource: KubeResource) => {
     }
     case "Pod": {
       const n = resource as Pod;
-      const containers = n.metadata?.containers ?? [];
       return (
-        <>
-          <Section title="Pod">
-            <InfoRow label="Phase" value={n.metadata?.phase?.toString()} />
-            <InfoRow
-              label="Image"
-              value={
-                <Chip size="sm" variant="flat" className="font-mono text-xs">
-                  {n.metadata?.image}
-                </Chip>
-              }
-            />
-          </Section>
-          {containers.length > 0 && (
-            <Section title={`Containers (${containers.length})`}>
-              {containers.map((c) => (
-                <ContainerRow key={`${c.isInit ? "init/" : ""}${c.name}`} container={c} />
-              ))}
-            </Section>
-          )}
-        </>
+        <Section title="Pod">
+          <InfoRow label="Phase" value={n.metadata?.phase?.toString()} />
+          <InfoRow
+            label="Image"
+            value={
+              <Chip size="sm" variant="flat" className="font-mono text-xs">
+                {n.metadata?.image}
+              </Chip>
+            }
+          />
+        </Section>
       );
     }
     case "PersistentVolumeClaim": {
@@ -324,7 +305,7 @@ const renderKindFields = (resource: KubeResource) => {
 // StorageRollup totals the storage requested by every PVC in a resource's
 // subtree (e.g. a Kustomization) and pairs it with measured usage from
 // Prometheus when available. Hidden for resources that own no PVCs.
-const StorageRollup = observer(({ resource }: { resource: KubeResource }) => {
+export const StorageRollup = observer(({ resource }: { resource: KubeResource }) => {
   const metricsStore = useInjection(MetricsStore);
   const { requested, pvcCount } = sumRequestedStorage(resource);
   if (pvcCount === 0) return null;
@@ -376,7 +357,7 @@ const StorageRollup = observer(({ resource }: { resource: KubeResource }) => {
   );
 });
 
-export const InfoTab = observer(({ resource }: InfoTabProps) => {
+export const InfoTab = observer(({ resource, hideStorage }: InfoTabProps) => {
   const eventsStore = useInjection(EventsStore);
 
   if (!resource) {
@@ -441,7 +422,7 @@ export const InfoTab = observer(({ resource }: InfoTabProps) => {
 
       {renderKindFields(resource)}
 
-      <StorageRollup resource={resource} />
+      {!hideStorage && <StorageRollup resource={resource} />}
     </div>
   );
 });

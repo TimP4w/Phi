@@ -1,23 +1,17 @@
-import { Button, Chip } from "@heroui/react";
+import { Chip } from "@heroui/react";
 import { Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
 import { observer } from "mobx-react-lite";
 import { env } from "../../../core/shared/env";
 import { ReactNode } from "react";
 import { SiGithub } from "@icons-pack/react-simple-icons";
-import { ROUTES } from "../../routes/routes.enum";
-import { useNavigate } from "react-router-dom";
 import FluxControllersHeader from "./FluxControllersHeader";
 
 type HeaderProps = {
   children?: ReactNode;
-  showBackButton?: boolean;
 };
 
 const Header: React.FC<HeaderProps> = observer(
-  ({ children, showBackButton = false }: HeaderProps) => {
-    const navigate = useNavigate();
-
+  ({ children }: HeaderProps) => {
     return (
       <header className="backdrop-blur-sm">
         <div className="relative py-3 px-8 flex h-14 items-center">
@@ -39,18 +33,6 @@ const Header: React.FC<HeaderProps> = observer(
           </div>
           <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
             {children}
-            {showBackButton && (
-              <Button
-                size="sm"
-                variant="flat"
-                onPress={() => {
-                  navigate(ROUTES.DASHBOARD);
-                }}
-              >
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                Back
-              </Button>
-            )}
           </div>
         </div>
       </header>
