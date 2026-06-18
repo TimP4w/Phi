@@ -28,6 +28,7 @@ export type TreeNodeDto = {
   pvMetadata?: PersistentVolumeMetadataDto;
   longhornVolumeMetadata?: LonghornVolumeMetadataDto;
   longhornNodeMetadata?: LonghornNodeMetadataDto;
+  nodeMetadata?: NodeMetadataDto;
   gitRepositoryMetadata?: GitRepositoryMetadataDto;
   helmChartMetadata?: HelmChartMetadataDto;
   helmRepositoryMetadata?: HelmRepositoryMetadataDto;
@@ -235,6 +236,18 @@ type LonghornNodeMetadataDto = {
   storageReserved: number;
   storageSchedulable: number;
   storageDisabled: number;
+};
+
+type NodeMetadataDto = {
+  internalIP?: string;
+  os?: string;
+  architecture?: string;
+  kernelVersion?: string;
+  osImage?: string;
+  kubeletVersion?: string;
+  containerRuntime?: string;
+  roles?: string[];
+  unschedulable?: boolean;
 };
 
 type DeploymentMetadataDto = {

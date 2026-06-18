@@ -16,7 +16,7 @@ export const colorByStatus = (status: ResourceStatus) => {
     case ResourceStatus.FAILED:
       return "danger";
     case ResourceStatus.PENDING:
-      return "primary";
+      return "warning";
     case ResourceStatus.WARNING:
       return "warning";
     case ResourceStatus.SUSPENDED:
@@ -62,7 +62,7 @@ export const statusDotClass = (status: ResourceStatus): string => {
     case ResourceStatus.FAILED:
       return "bg-danger";
     case ResourceStatus.PENDING:
-      return "bg-primary";
+      return "bg-warning";
     case ResourceStatus.WARNING:
       return "bg-warning";
     default:

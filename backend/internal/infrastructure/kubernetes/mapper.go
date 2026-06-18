@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"slices"
 	"strings"
 	"time"
 
@@ -93,6 +94,8 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 	case "Node":
 		if el.Group == "longhorn.io" {
 			mapLonghornNode(&el, obj)
+		} else {
+			mapNodeData(&el, obj)
 		}
 	case "Service":
 		mapServiceData(&el, obj)
@@ -614,6 +617,72 @@ func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 			pv.Spec.ClaimRef.APIVersion,
 		))
 	}
+}
+
+// mapNodeData extracts the host-level facts of a core/v1 Node
+func mapNodeData(el *kube.Resource, obj unstructured.Unstructured) {
+	node := &v1.Node{}
+	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), node)
+	if err != nil {
+		logging.Logger().WithError(err).Error("Error converting unstructured to Node")
+		return
+	}
+
+	appendConditions(el, node.Status.Conditions, func(c v1.NodeCondition) kube.Condition {
+		return kube.Condition{
+			Type:               string(c.Type),
+			Status:             string(c.Status),
+			Reason:             c.Reason,
+			Message:            c.Message,
+			LastTransitionTime: c.LastTransitionTime.Time,
+		}
+	})
+
+	// Ready=True is healthy; an explicit Ready=False is a failure, anything else
+	// (Unknown / missing) is unsettled.
+	el.Status = kube.StatusPending
+	for _, c := range node.Status.Conditions {
+		if c.Type == v1.NodeReady {
+			switch c.Status {
+			case v1.ConditionTrue:
+				el.Status = kube.StatusSuccess
+			case v1.ConditionFalse:
+				el.Status = kube.StatusFailed
+			}
+			break
+		}
+	}
+
+	info := node.Status.NodeInfo
+	meta := kube.NodeMetadata{
+		OS:               info.OperatingSystem,
+		Architecture:     info.Architecture,
+		KernelVersion:    info.KernelVersion,
+		OSImage:          info.OSImage,
+		KubeletVersion:   info.KubeletVersion,
+		ContainerRuntime: info.ContainerRuntimeVersion,
+		Unschedulable:    node.Spec.Unschedulable,
+	}
+
+	for _, addr := range node.Status.Addresses {
+		if addr.Type == v1.NodeInternalIP {
+			meta.InternalIP = addr.Address
+			break
+		}
+	}
+
+	// Roles are encoded as labels: node-role.kubernetes.io/<role> (the value is
+	// conventionally empty). A bare "node-role.kubernetes.io/" prefix with no
+	// suffix carries no role name and is skipped.
+	const rolePrefix = "node-role.kubernetes.io/"
+	for label := range node.Labels {
+		if role, ok := strings.CutPrefix(label, rolePrefix); ok && role != "" {
+			meta.Roles = append(meta.Roles, role)
+		}
+	}
+	slices.Sort(meta.Roles)
+
+	el.NodeMetadata = meta
 }
 
 func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {

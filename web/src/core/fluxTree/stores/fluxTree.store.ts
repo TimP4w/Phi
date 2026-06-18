@@ -14,6 +14,7 @@ import {
   Tree,
   KubeResource,
   Kustomization,
+  Node,
 } from "../models/tree";
 import {
   RESOURCE_TYPE,
@@ -85,6 +86,7 @@ class FluxTreeStore {
       tree: computed,
       applications: computed,
       repositories: computed,
+      nodes: computed,
       resourceCount: computed,
       trivyIndex: computed,
       upsertResource: action,
@@ -174,6 +176,15 @@ class FluxTreeStore {
     this.resources.forEach((r) => {
       if (REPOSITORY_KINDS.has(r.kind as RESOURCE_TYPE))
         result.push(r as Repository);
+    });
+    return result.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  /** Core v1 Nodes (the Longhorn Node CRD is modelled separately). */
+  get nodes(): Node[] {
+    const result: Node[] = [];
+    this.resources.forEach((r) => {
+      if (r instanceof Node) result.push(r);
     });
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }

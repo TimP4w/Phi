@@ -43,6 +43,7 @@ type Resource struct {
 	PVMetadata             PVMetadata             `json:"pvMetadata,omitempty"`
 	LonghornVolumeMetadata LonghornVolumeMetadata `json:"longhornVolumeMetadata,omitempty"`
 	LonghornNodeMetadata   LonghornNodeMetadata   `json:"longhornNodeMetadata,omitempty"`
+	NodeMetadata           NodeMetadata           `json:"nodeMetadata,omitempty"`
 	GitRepositoryMetadata  GitRepositoryMetadata  `json:"gitRepositoryMetadata,omitempty"`
 	OCIRepositoryMetadata  OCIRepositoryMetadata  `json:"ociRepositoryMetadata,omitempty"`
 	ServiceMetadata        ServiceMetadata        `json:"serviceMetadata,omitempty"`
@@ -78,6 +79,7 @@ func (e Resource) Clone() Resource {
 	out.CertificateMetadata = e.CertificateMetadata.clone()
 	out.NetworkPolicyMetadata = e.NetworkPolicyMetadata.clone()
 	out.ProxyMetadata = e.ProxyMetadata.clone()
+	out.NodeMetadata = e.NodeMetadata.clone()
 	return out
 }
 
@@ -469,6 +471,25 @@ type LonghornNodeMetadata struct {
 	StorageReserved    int64 `json:"storageReserved,omitempty"`    // admin reserved
 	StorageSchedulable int64 `json:"storageSchedulable,omitempty"` // max - reserved - scheduled
 	StorageDisabled    int64 `json:"storageDisabled,omitempty"`    // capacity of unschedulable disks
+}
+
+// NodeMetadata carries the host-level facts of a core/v1 Node
+type NodeMetadata struct {
+	InternalIP       string   `json:"internalIP,omitempty"`       // status.addresses InternalIP
+	OS               string   `json:"os,omitempty"`               // status.nodeInfo.operatingSystem
+	Architecture     string   `json:"architecture,omitempty"`     // status.nodeInfo.architecture
+	KernelVersion    string   `json:"kernelVersion,omitempty"`    // status.nodeInfo.kernelVersion
+	OSImage          string   `json:"osImage,omitempty"`          // status.nodeInfo.osImage
+	KubeletVersion   string   `json:"kubeletVersion,omitempty"`   // status.nodeInfo.kubeletVersion
+	ContainerRuntime string   `json:"containerRuntime,omitempty"` // status.nodeInfo.containerRuntimeVersion
+	Roles            []string `json:"roles,omitempty"`            // from node-role.kubernetes.io/* labels
+	Unschedulable    bool     `json:"unschedulable,omitempty"`    // spec.unschedulable (cordoned)
+}
+
+func (n NodeMetadata) clone() NodeMetadata {
+	out := n
+	out.Roles = slices.Clone(n.Roles)
+	return out
 }
 
 // LonghornVolumeMetadata carries the Longhorn-specific status of a

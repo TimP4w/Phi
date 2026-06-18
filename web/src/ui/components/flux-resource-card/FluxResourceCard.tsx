@@ -149,9 +149,9 @@ const App: React.FC<AppProps> = observer(({ node }) => {
         </div>
       </div>
 
-      {/* Condition indicators */}
-      {node.conditions.length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 px-4 pb-3">
+      {/* Condition indicators + actions */}
+      <div className="flex items-center justify-between gap-2 px-4 pb-3">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 min-w-0">
           {node.conditions.slice(0, 4).map((c) => (
             <Tooltip key={c.type} content={c.message} className="dark">
               <div className="flex items-center gap-1.5 cursor-default">
@@ -168,7 +168,11 @@ const App: React.FC<AppProps> = observer(({ node }) => {
             </span>
           )}
         </div>
-      )}
+        {/* Actions — stop propagation so click doesn't navigate */}
+        <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          <ReconcileSuspendButtonGroup resource={node} compact />
+        </div>
+      </div>
 
       <Divider />
 
@@ -246,11 +250,6 @@ const App: React.FC<AppProps> = observer(({ node }) => {
             </span>
           </div>
         )}
-      </div>
-
-      {/* Actions — stop propagation so click doesn't navigate */}
-      <div className="px-4 pb-4" onClick={(e) => e.stopPropagation()}>
-        <ReconcileSuspendButtonGroup resource={node} compact />
       </div>
     </div>
   );
