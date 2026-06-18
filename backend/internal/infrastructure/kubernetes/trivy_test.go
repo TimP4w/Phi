@@ -65,5 +65,5 @@ func TestToResource_NonTrivyGroup_Ignored(t *testing.T) {
 
 	res := mapper.ToResource(*obj, "vulnerabilityreports")
 
-	assert.Equal(t, kube.TrivyMetadata{}, res.TrivyMetadata)
+	assert.Nil(t, res.TrivyMetadata)
 }

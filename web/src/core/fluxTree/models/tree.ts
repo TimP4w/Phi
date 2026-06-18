@@ -11,7 +11,9 @@ import {
   ProxyMetadataDto,
   TrivyMetadataDto,
 } from "./dtos/treeDto";
-import { FLUX_NAMESPACE, RESOURCE_TYPE } from "../constants/resources.const";
+import { FLUX_NAMESPACE, RESOURCE_TYPE, FluxRole } from "../constants/resources.const";
+import { GroupKind } from "./groupKind";
+import { lookupCtor } from "../registry";
 
 export class Tree {
   root: KubeResource;
@@ -78,6 +80,9 @@ export class KubeResource {
   logs: PodLog[] = [];
   isFluxManaged: boolean = false;
   isReconcilable: boolean = false;
+  // Classification facts from the backend GroupKind registry (see treeDto).
+  fluxRole?: FluxRole;
+  hasMetrics: boolean = false;
   // Networking metadata — present only on the relevant kinds, used by the
   // network topology view to resolve traffic edges.
   serviceMetadata?: ServiceMetadataDto;
@@ -120,6 +125,9 @@ export class KubeResource {
         ? stringToResourceStatus(dto.status)
         : ResourceStatus.UNKNOWN;
       this.isFluxManaged = dto.isFluxManaged;
+      this.isReconcilable = dto.isReconcilable ?? false;
+      this.fluxRole = dto.fluxRole;
+      this.hasMetrics = dto.hasMetrics ?? false;
       this.serviceMetadata = dto.serviceMetadata;
       this.routeMetadata = dto.routeMetadata;
       this.endpointSliceMetadata = dto.endpointSliceMetadata;
@@ -144,46 +152,19 @@ export class KubeResource {
     }
   }
 
+  get groupKind(): GroupKind {
+    return { group: this.group, kind: this.kind };
+  }
+
   static fromDto(dto: TreeNodeDto): KubeResource {
-    switch (dto.kind) {
-      case RESOURCE_TYPE.KUSTOMIZATION:
-        return new Kustomization(dto);
-      case RESOURCE_TYPE.HELM_RELEASE:
-        return new HelmRelease(dto);
-      case RESOURCE_TYPE.POD:
-        return new Pod(dto);
-      case RESOURCE_TYPE.DEPLOYMENT:
-        return new Deployment(dto);
-      case RESOURCE_TYPE.GIT_REPOSITORY:
-        return new GitRepository(dto);
-      case RESOURCE_TYPE.HELM_CHART:
-        return new HelmChart(dto);
-      case RESOURCE_TYPE.HELM_REPOSITORY:
-        return new HelmRepository(dto);
-      case RESOURCE_TYPE.PVC:
-        return new PersistentVolumeClaim(dto);
-      case RESOURCE_TYPE.PV:
-        return new PersistentVolume(dto);
-      case RESOURCE_TYPE.VOLUME:
-        if (dto.group === "longhorn.io") {
-          return new LonghornVolume(dto);
-        }
-        return new KubeResource(dto);
-      case RESOURCE_TYPE.NODE:
-        if (dto.group === "longhorn.io") {
-          return new LonghornNode(dto);
-        }
-        return new Node(dto);
-      case RESOURCE_TYPE.OCI_REPOSITORY:
-        return new OCIRepository(dto);
-      default:
-        return new KubeResource(dto);
-    }
+    // Subclass from the registry; unknown types fall back to base KubeResource.
+    const ctor = lookupCtor({ group: dto.group, kind: dto.kind });
+    return ctor ? ctor(dto) : new KubeResource(dto);
   }
 }
 
 export abstract class FluxResource extends KubeResource {
-  isReconcilable: boolean = true;
+  // isReconcilable comes from the DTO (backend registry), set in the base ctor.
   lastHandledReconcileAt?: Date;
   isReconciling: boolean;
   isSuspended: boolean;

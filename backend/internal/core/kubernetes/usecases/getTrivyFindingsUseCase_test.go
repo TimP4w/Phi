@@ -32,7 +32,7 @@ func TestGetTrivyFindingsUseCase_ParsesVulnerabilities(t *testing.T) {
 	store := mocks.NewKubeStore(t)
 	kubeSvc := mocks.NewKubeService(t)
 
-	res := &kube.Resource{UID: "report-uid", TrivyMetadata: kube.TrivyMetadata{ReportType: "vulnerability", TargetName: "myapp"}}
+	res := &kube.Resource{UID: "report-uid", TrivyMetadata: &kube.TrivyMetadata{ReportType: "vulnerability", TargetName: "myapp"}}
 	store.On("GetResourceByUID", "report-uid").Return(res)
 	kubeSvc.On("GetResourceYAML", *res).Return([]byte(vulnReportYAML), nil)
 
@@ -50,7 +50,7 @@ func TestGetTrivyFindingsUseCase_CachesUnchangedReport(t *testing.T) {
 	store := mocks.NewKubeStore(t)
 	kubeSvc := mocks.NewKubeService(t)
 
-	res := &kube.Resource{UID: "report-uid", TrivyMetadata: kube.TrivyMetadata{ReportType: "vulnerability", Critical: 1}}
+	res := &kube.Resource{UID: "report-uid", TrivyMetadata: &kube.TrivyMetadata{ReportType: "vulnerability", Critical: 1}}
 	store.On("GetResourceByUID", "report-uid").Return(res)
 	// Once: a second fetch would fail the test — the cache must serve the repeat.
 	kubeSvc.On("GetResourceYAML", *res).Return([]byte(vulnReportYAML), nil).Once()
@@ -70,8 +70,8 @@ func TestGetTrivyFindingsUseCase_RefetchesWhenReportChanges(t *testing.T) {
 
 	// The summary signature changes between calls (a rescan), so the cache entry
 	// is invalidated and the report is fetched again.
-	v1 := &kube.Resource{UID: "report-uid", TrivyMetadata: kube.TrivyMetadata{ReportType: "vulnerability", Critical: 1}}
-	v2 := &kube.Resource{UID: "report-uid", TrivyMetadata: kube.TrivyMetadata{ReportType: "vulnerability", Critical: 2}}
+	v1 := &kube.Resource{UID: "report-uid", TrivyMetadata: &kube.TrivyMetadata{ReportType: "vulnerability", Critical: 1}}
+	v2 := &kube.Resource{UID: "report-uid", TrivyMetadata: &kube.TrivyMetadata{ReportType: "vulnerability", Critical: 2}}
 	store.On("GetResourceByUID", "report-uid").Return(v1).Once()
 	store.On("GetResourceByUID", "report-uid").Return(v2).Once()
 	kubeSvc.On("GetResourceYAML", *v1).Return([]byte(vulnReportYAML), nil).Once()

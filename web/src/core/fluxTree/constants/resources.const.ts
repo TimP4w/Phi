@@ -17,7 +17,7 @@ export enum RESOURCE_TYPE {
   GATEWAYCLASS = "GatewayClass",
   CERTIFICATE = "Certificate",
   MIDDLEWARE = "Middleware",
-  CRONJOB = "Cronjob",
+  CRONJOB = "CronJob",
   NAMESPACE = "Namespace",
   REPLICASET = "ReplicaSet",
   ENDPOINTSLICE = "EndpointSlice",
@@ -53,20 +53,11 @@ export enum RESOURCE_TYPE {
   RBAC_ASSESSMENT_REPORT = "RbacAssessmentReport"
 }
 
-// Trivy Operator report kinds. They are consumed as a findings overlay and are
-// excluded from the resource graph (see buildTree).
-export const TRIVY_REPORT_KINDS = new Set<string>([
-  RESOURCE_TYPE.VULNERABILITY_REPORT,
-  RESOURCE_TYPE.CONFIG_AUDIT_REPORT,
-  RESOURCE_TYPE.EXPOSED_SECRET_REPORT,
-  RESOURCE_TYPE.RBAC_ASSESSMENT_REPORT,
-]);
+// Flux classification emitted by the backend on each resource.
+export type FluxRole = "application" | "repository";
 
-// Flux kinds, grouped the way the UI treats them: "applications" are the
-// reconciling workloads and "repositories" are the sources they pull from.
-// FLUX_KINDS is the union (applications first, then repositories) and is the
-// single source of truth for "which kinds are reconcilable Flux resources",
-// mirroring the backend reconcilableKinds in core/kubernetes/type.go.
+// Flux kinds for the dashboard kind filter. Per-resource classification comes
+// from the backend (fluxRole on the DTO), not these sets.
 export const FLUX_APPLICATION_KINDS = [
   RESOURCE_TYPE.KUSTOMIZATION,
   RESOURCE_TYPE.HELM_RELEASE,
@@ -84,14 +75,6 @@ export const FLUX_KINDS: RESOURCE_TYPE[] = [
   ...FLUX_APPLICATION_KINDS,
   ...FLUX_REPOSITORY_KINDS,
 ];
-
-// Resource kinds that carry RouteMetadata and act as HTTP routing entry points
-// in the network topology (Ingress, Traefik IngressRoute, Gateway API HTTPRoute).
-export const ROUTE_KINDS = new Set<string>([
-  RESOURCE_TYPE.INGRESS,
-  RESOURCE_TYPE.INGRESSROUTE,
-  RESOURCE_TYPE.HTTPROUTE,
-]);
 
 /** HeroUI semantic color for a Longhorn volume robustness value. Mirrors the
  * backend status mapping in infrastructure/kubernetes/longhorn.go. */

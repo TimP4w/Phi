@@ -1,6 +1,7 @@
 package kubernetes
 
 import (
+	"encoding/json"
 	"errors"
 	"maps"
 	"reflect"
@@ -18,48 +19,63 @@ const (
 )
 
 type Resource struct {
-	Kind                   string                 `json:"kind"`
-	Version                string                 `json:"version"`
-	Namespace              string                 `json:"namespace"`
-	Name                   string                 `json:"name"`
-	Resource               string                 `json:"resource"`
-	ParentIDs              []string               `json:"parentIDs"`
-	ParentRefs             []string               `json:"parentRefs"`
-	UID                    string                 `json:"uid"`
-	Labels                 map[string]string      `json:"labels"`
-	Annotations            map[string]string      `json:"annotations"`
-	Group                  string                 `json:"group"`
-	Status                 Status                 `json:"status"`
-	Conditions             []Condition            `json:"conditions"`
-	CreatedAt              time.Time              `json:"createdAt"`
-	DeletedAt              *time.Time             `json:"deletedAt,omitempty"`
-	IsFluxManaged          bool                   `json:"isFluxManaged"`
-	FluxMetadata           FluxMetadata           `json:"fluxMetadata,omitempty"`
-	PodMetadata            PodMetadata            `json:"podMetadata,omitempty"`
-	DeploymentMetadata     DeploymentMetadata     `json:"deploymentMetadata,omitempty"`
-	HelmReleaseMetadata    HelmReleaseMetadata    `json:"helmReleaseMetadata,omitempty"`
-	KustomizationMetadata  KustomizationMetadata  `json:"kustomizationMetadata,omitempty"`
-	PVCMetadata            PVCMetadata            `json:"pvcMetadata,omitempty"`
-	PVMetadata             PVMetadata             `json:"pvMetadata,omitempty"`
-	LonghornVolumeMetadata LonghornVolumeMetadata `json:"longhornVolumeMetadata,omitempty"`
-	LonghornNodeMetadata   LonghornNodeMetadata   `json:"longhornNodeMetadata,omitempty"`
-	NodeMetadata           NodeMetadata           `json:"nodeMetadata,omitempty"`
-	GitRepositoryMetadata  GitRepositoryMetadata  `json:"gitRepositoryMetadata,omitempty"`
-	OCIRepositoryMetadata  OCIRepositoryMetadata  `json:"ociRepositoryMetadata,omitempty"`
-	ServiceMetadata        ServiceMetadata        `json:"serviceMetadata,omitempty"`
-	RouteMetadata          RouteMetadata          `json:"routeMetadata,omitempty"`
-	EndpointSliceMetadata  EndpointSliceMetadata  `json:"endpointSliceMetadata,omitempty"`
-	GatewayMetadata        GatewayMetadata        `json:"gatewayMetadata,omitempty"`
-	CertificateMetadata    CertificateMetadata    `json:"certificateMetadata,omitempty"`
-	NetworkPolicyMetadata  NetworkPolicyMetadata  `json:"networkPolicyMetadata,omitempty"`
-	ProxyMetadata          ProxyMetadata          `json:"proxyMetadata,omitempty"`
-	TrivyMetadata          TrivyMetadata          `json:"trivyMetadata,omitempty"`
+	Kind                   string                  `json:"kind"`
+	Version                string                  `json:"version"`
+	Namespace              string                  `json:"namespace"`
+	Name                   string                  `json:"name"`
+	Resource               string                  `json:"resource"`
+	ParentIDs              []string                `json:"parentIDs"`
+	ParentRefs             []string                `json:"parentRefs"`
+	UID                    string                  `json:"uid"`
+	Labels                 map[string]string       `json:"labels"`
+	Annotations            map[string]string       `json:"annotations"`
+	Group                  string                  `json:"group"`
+	Status                 Status                  `json:"status"`
+	Conditions             []Condition             `json:"conditions"`
+	CreatedAt              time.Time               `json:"createdAt"`
+	DeletedAt              *time.Time              `json:"deletedAt,omitempty"`
+	IsFluxManaged          bool                    `json:"isFluxManaged"`
+	FluxMetadata           FluxMetadata            `json:"fluxMetadata,omitempty"`
+	PodMetadata            *PodMetadata            `json:"podMetadata,omitempty"`
+	DeploymentMetadata     *DeploymentMetadata     `json:"deploymentMetadata,omitempty"`
+	HelmReleaseMetadata    *HelmReleaseMetadata    `json:"helmReleaseMetadata,omitempty"`
+	KustomizationMetadata  *KustomizationMetadata  `json:"kustomizationMetadata,omitempty"`
+	PVCMetadata            *PVCMetadata            `json:"pvcMetadata,omitempty"`
+	PVMetadata             *PVMetadata             `json:"pvMetadata,omitempty"`
+	LonghornVolumeMetadata *LonghornVolumeMetadata `json:"longhornVolumeMetadata,omitempty"`
+	LonghornNodeMetadata   *LonghornNodeMetadata   `json:"longhornNodeMetadata,omitempty"`
+	NodeMetadata           *NodeMetadata           `json:"nodeMetadata,omitempty"`
+	GitRepositoryMetadata  *GitRepositoryMetadata  `json:"gitRepositoryMetadata,omitempty"`
+	OCIRepositoryMetadata  *OCIRepositoryMetadata  `json:"ociRepositoryMetadata,omitempty"`
+	ServiceMetadata        *ServiceMetadata        `json:"serviceMetadata,omitempty"`
+	RouteMetadata          *RouteMetadata          `json:"routeMetadata,omitempty"`
+	EndpointSliceMetadata  *EndpointSliceMetadata  `json:"endpointSliceMetadata,omitempty"`
+	GatewayMetadata        *GatewayMetadata        `json:"gatewayMetadata,omitempty"`
+	CertificateMetadata    *CertificateMetadata    `json:"certificateMetadata,omitempty"`
+	NetworkPolicyMetadata  *NetworkPolicyMetadata  `json:"networkPolicyMetadata,omitempty"`
+	ProxyMetadata          *ProxyMetadata          `json:"proxyMetadata,omitempty"`
+	TrivyMetadata          *TrivyMetadata          `json:"trivyMetadata,omitempty"`
 }
 
-// Clone returns a deep copy of the Resource. Every value-typed field is copied
-// by the struct assignment; the reference-typed fields (slices, maps, and the
-// metadata structs that hold them) are cloned so the copy never shares backing
-// storage with the original. TestClone guards that no reference field is missed.
+// clonePtrDeep deep-copies *p via the type's clone(), or returns nil.
+func clonePtrDeep[T any](p *T, deep func(T) T) *T {
+	if p == nil {
+		return nil
+	}
+	c := deep(*p)
+	return &c
+}
+
+// clonePtr shallow-copies *p (enough for flat structs), or returns nil.
+func clonePtr[T any](p *T) *T {
+	if p == nil {
+		return nil
+	}
+	c := *p
+	return &c
+}
+
+// Clone returns a deep copy that shares no backing storage with the original.
 func (e Resource) Clone() Resource {
 	out := e
 	out.ParentIDs = slices.Clone(e.ParentIDs)
@@ -67,19 +83,28 @@ func (e Resource) Clone() Resource {
 	out.Labels = maps.Clone(e.Labels)
 	out.Annotations = maps.Clone(e.Annotations)
 	out.Conditions = slices.Clone(e.Conditions)
-	out.PodMetadata = e.PodMetadata.clone()
-	out.DeploymentMetadata = e.DeploymentMetadata.clone()
-	out.KustomizationMetadata = e.KustomizationMetadata.clone()
-	out.PVCMetadata = e.PVCMetadata.clone()
-	out.PVMetadata = e.PVMetadata.clone()
-	out.ServiceMetadata = e.ServiceMetadata.clone()
-	out.RouteMetadata = e.RouteMetadata.clone()
-	out.EndpointSliceMetadata = e.EndpointSliceMetadata.clone()
-	out.GatewayMetadata = e.GatewayMetadata.clone()
-	out.CertificateMetadata = e.CertificateMetadata.clone()
-	out.NetworkPolicyMetadata = e.NetworkPolicyMetadata.clone()
-	out.ProxyMetadata = e.ProxyMetadata.clone()
-	out.NodeMetadata = e.NodeMetadata.clone()
+
+	// Metadata with nested slices/maps deep-copy via clone(); flat ones shallow-copy.
+	out.PodMetadata = clonePtrDeep(e.PodMetadata, PodMetadata.clone)
+	out.DeploymentMetadata = clonePtrDeep(e.DeploymentMetadata, DeploymentMetadata.clone)
+	out.KustomizationMetadata = clonePtrDeep(e.KustomizationMetadata, KustomizationMetadata.clone)
+	out.PVCMetadata = clonePtrDeep(e.PVCMetadata, PVCMetadata.clone)
+	out.PVMetadata = clonePtrDeep(e.PVMetadata, PVMetadata.clone)
+	out.ServiceMetadata = clonePtrDeep(e.ServiceMetadata, ServiceMetadata.clone)
+	out.RouteMetadata = clonePtrDeep(e.RouteMetadata, RouteMetadata.clone)
+	out.EndpointSliceMetadata = clonePtrDeep(e.EndpointSliceMetadata, EndpointSliceMetadata.clone)
+	out.GatewayMetadata = clonePtrDeep(e.GatewayMetadata, GatewayMetadata.clone)
+	out.CertificateMetadata = clonePtrDeep(e.CertificateMetadata, CertificateMetadata.clone)
+	out.NetworkPolicyMetadata = clonePtrDeep(e.NetworkPolicyMetadata, NetworkPolicyMetadata.clone)
+	out.ProxyMetadata = clonePtrDeep(e.ProxyMetadata, ProxyMetadata.clone)
+	out.NodeMetadata = clonePtrDeep(e.NodeMetadata, NodeMetadata.clone)
+
+	out.HelmReleaseMetadata = clonePtr(e.HelmReleaseMetadata)
+	out.GitRepositoryMetadata = clonePtr(e.GitRepositoryMetadata)
+	out.OCIRepositoryMetadata = clonePtr(e.OCIRepositoryMetadata)
+	out.LonghornVolumeMetadata = clonePtr(e.LonghornVolumeMetadata)
+	out.LonghornNodeMetadata = clonePtr(e.LonghornNodeMetadata)
+	out.TrivyMetadata = clonePtr(e.TrivyMetadata)
 	return out
 }
 
@@ -96,6 +121,22 @@ func (e *Resource) GetRef() string {
 func (e *Resource) GetRefVersion() string {
 	_, version := SplitAPIVersion(e.Version)
 	return version
+}
+
+// MarshalJSON adds the registry-computed classification facts; alias strips methods to avoid recursion.
+func (e Resource) MarshalJSON() ([]byte, error) {
+	type alias Resource
+	return json.Marshal(struct {
+		alias
+		IsReconcilable bool     `json:"isReconcilable"`
+		FluxRole       FluxRole `json:"fluxRole,omitempty"`
+		HasMetrics     bool     `json:"hasMetrics"`
+	}{
+		alias:          alias(e),
+		IsReconcilable: e.IsReconcilable(),
+		FluxRole:       e.FluxRole(),
+		HasMetrics:     e.HasMetrics(),
+	})
 }
 
 func (e *Resource) IsDeepEqual(other Resource) bool {
@@ -306,26 +347,6 @@ func (c CertificateMetadata) clone() CertificateMetadata {
 	out := c
 	out.DNSNames = append([]string(nil), c.DNSNames...)
 	return out
-}
-
-var reconcilableKinds = map[string]struct{}{
-	"Kustomization":  {},
-	"HelmRelease":    {},
-	"HelmRepository": {},
-	"HelmChart":      {},
-	"GitRepository":  {},
-	"OCIRepository":  {},
-	"Bucket":         {},
-}
-
-func (e *Resource) IsReconcilable() bool {
-	_, ok := reconcilableKinds[e.Kind]
-	return ok
-}
-
-func (e *Resource) IsSuspendable() bool {
-	_, ok := reconcilableKinds[e.Kind]
-	return ok
 }
 
 type Event struct {

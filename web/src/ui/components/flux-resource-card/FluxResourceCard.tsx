@@ -128,7 +128,7 @@ const App: React.FC<AppProps> = observer(({ node }) => {
       <div className="flex items-start justify-between gap-2 px-4 pt-4 pb-3">
         <div className="flex items-center gap-2.5 min-w-0">
           <div className="flex-shrink-0">
-            <AppLogo kind={node.kind} />
+            <AppLogo groupKind={node.groupKind} />
           </div>
           <div className="min-w-0">
             <p className="font-semibold text-sm truncate leading-tight">

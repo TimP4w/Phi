@@ -5,17 +5,18 @@ import (
 	"errors"
 	"testing"
 
-	kube "github.com/timp4w/phi/internal/core/kubernetes"
-	mocks "github.com/timp4w/phi/internal/testing/testdata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	kube "github.com/timp4w/phi/internal/core/kubernetes"
+	mocks "github.com/timp4w/phi/internal/testing/testdata"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 func reconcilableResource() kube.Resource {
 	return kube.Resource{
 		Kind:      "Kustomization",
+		Group:     "kustomize.toolkit.fluxcd.io",
 		Name:      "my-ks",
 		Namespace: "flux-system",
 		UID:       "ks-uid-1",
@@ -25,6 +26,7 @@ func reconcilableResource() kube.Resource {
 func suspendableResource() kube.Resource {
 	return kube.Resource{
 		Kind:      "HelmRelease",
+		Group:     "helm.toolkit.fluxcd.io",
 		Name:      "my-hr",
 		Namespace: "default",
 		UID:       "hr-uid-1",

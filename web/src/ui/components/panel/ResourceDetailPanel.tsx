@@ -34,10 +34,7 @@ import { WatchMetricsUseCase } from "../../../core/metrics/usecases/watchMetrics
 import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatchMetrics.usecase";
 import { TYPES } from "../../../core/shared/types";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
-import {
-  METRICS_KINDS,
-  METRICS_DEFAULT_RANGE,
-} from "../../../core/metrics/constants/metrics.const";
+import { METRICS_DEFAULT_RANGE } from "../../../core/metrics/constants/metrics.const";
 import {
   SeverityCounts,
   TrivySummary,
@@ -525,7 +522,7 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
 
   const uid = node?.uid;
   const isPod = node?.kind === RESOURCE_TYPE.POD;
-  const metricsEligible = !!node && METRICS_KINDS.has(node.kind);
+  const metricsEligible = !!node && node.hasMetrics;
   const showMetrics = metricsEligible && metricsStore.prometheusActive;
 
   useEffect(() => {

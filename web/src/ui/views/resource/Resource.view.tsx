@@ -32,7 +32,6 @@ import ConnectedGraph from "../../components/connected-graph/ConnectedGraph";
 import { TYPES } from "../../../core/shared/types";
 import { WatchMetricsUseCase } from "../../../core/metrics/usecases/watchMetrics.usecase";
 import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatchMetrics.usecase";
-import { METRICS_KINDS } from "../../../core/metrics/constants/metrics.const";
 
 type ResourceViewMode = "graph" | "tree" | "network";
 
@@ -209,7 +208,7 @@ const ResourceView: React.FC = observer(() => {
     const visit = (node: KubeResource, visited: Set<string>) => {
       if (visited.has(node.uid)) return;
       visited.add(node.uid);
-      if (METRICS_KINDS.has(node.kind)) uids.add(node.uid);
+      if (node.hasMetrics) uids.add(node.uid);
       for (const child of node.children ?? []) visit(child, visited);
     };
     visit(resource, new Set());
@@ -285,7 +284,7 @@ const ResourceView: React.FC = observer(() => {
 
           <div className="ml-auto flex items-center gap-3 min-w-0">
             <StatusChip resource={resource} />
-            <AppLogo kind={resource?.kind} />
+            <AppLogo groupKind={resource?.groupKind} />
             <div className="min-w-0">
               <h1 className="text-lg font-bold leading-tight truncate">{resource?.name}</h1>
               <span className="text-default-400 text-xs">

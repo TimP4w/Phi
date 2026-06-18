@@ -30,7 +30,7 @@ func mapLonghornVolume(el *kube.Resource, obj unstructured.Unstructured) {
 	accessMode, _, _ := unstructured.NestedString(obj.Object, "spec", "accessMode")
 	nodeID, _, _ := unstructured.NestedString(obj.Object, "status", "currentNodeID")
 
-	el.LonghornVolumeMetadata = kube.LonghornVolumeMetadata{
+	el.LonghornVolumeMetadata = &kube.LonghornVolumeMetadata{
 		State:            state,
 		Robustness:       robustness,
 		Size:             nestedNumber(obj.Object, "spec", "size"),
@@ -129,7 +129,7 @@ func mapLonghornNode(el *kube.Resource, obj unstructured.Unstructured) {
 		}
 	}
 
-	el.LonghornNodeMetadata = meta
+	el.LonghornNodeMetadata = &meta
 
 	switch {
 	case !meta.Ready:

@@ -33,7 +33,7 @@ const ResourceRow: React.FC<ResourceRowProps> = ({ resource, className = "" }) =
     >
       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${resourceDotClass(resource.status)}`} />
       <div className="flex-shrink-0">
-        <AppLogo kind={resource.kind} />
+        <AppLogo groupKind={resource.groupKind} />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 min-w-0">

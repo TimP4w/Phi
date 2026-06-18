@@ -82,14 +82,14 @@ func (uc *GetTrivyFindingsUseCase) Execute(in GetTrivyFindingsInput) (TrivyFindi
 	if resource == nil {
 		return TrivyFindings{}, fmt.Errorf("resource not found: %w", kubernetes.ErrNotFound)
 	}
-	if resource.TrivyMetadata.ReportType == "" {
+	if resource.TrivyMetadata == nil || resource.TrivyMetadata.ReportType == "" {
 		return TrivyFindings{}, fmt.Errorf("resource is not a Trivy report: %w", kubernetes.ErrNotFound)
 	}
 
 	// Serve from cache when the report is unchanged (same summary signature) and
 	// the entry is still fresh. This makes reopening a modal essentially free and
 	// keeps repeated opens off the API server entirely.
-	if cached, ok := uc.cachedFindings(in.ResourceUid, resource.TrivyMetadata); ok {
+	if cached, ok := uc.cachedFindings(in.ResourceUid, *resource.TrivyMetadata); ok {
 		return cached, nil
 	}
 
@@ -99,7 +99,7 @@ func (uc *GetTrivyFindingsUseCase) Execute(in GetTrivyFindingsInput) (TrivyFindi
 
 	// Another request may have populated the cache while we waited on the
 	// semaphore — re-check before doing the work.
-	if cached, ok := uc.cachedFindings(in.ResourceUid, resource.TrivyMetadata); ok {
+	if cached, ok := uc.cachedFindings(in.ResourceUid, *resource.TrivyMetadata); ok {
 		return cached, nil
 	}
 
@@ -110,7 +110,7 @@ func (uc *GetTrivyFindingsUseCase) Execute(in GetTrivyFindingsInput) (TrivyFindi
 
 	uc.mu.Lock()
 	uc.cache[in.ResourceUid] = cachedTrivyFindings{
-		meta:     resource.TrivyMetadata,
+		meta:     *resource.TrivyMetadata,
 		findings: findings,
 		at:       time.Now(),
 	}
@@ -166,7 +166,7 @@ func (uc *GetTrivyFindingsUseCase) fetchFindings(resource kubernetes.Resource, l
 
 	return TrivyFindings{
 		ReportType: resource.TrivyMetadata.ReportType,
-		Target:     resource.TrivyMetadata,
+		Target:     *resource.TrivyMetadata,
 		Items:      items,
 	}, nil
 }

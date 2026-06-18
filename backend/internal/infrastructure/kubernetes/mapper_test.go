@@ -667,7 +667,7 @@ func TestToResource_CoreNode(t *testing.T) {
 
 	res := mapper.ToResource(*obj, "nodes")
 
-	assert.Equal(t, int64(0), res.LonghornNodeMetadata.StorageMaximum)
+	assert.Nil(t, res.LonghornNodeMetadata)
 	assert.Equal(t, kube.StatusSuccess, res.Status)
 	assert.Len(t, res.Conditions, 2)
 	meta := res.NodeMetadata
@@ -681,6 +681,20 @@ func TestToResource_CoreNode(t *testing.T) {
 	assert.True(t, meta.Unschedulable)
 	// Sorted, and the empty-suffix "node-role.kubernetes.io/" label is ignored.
 	assert.Equal(t, []string{"control-plane", "worker"}, meta.Roles)
+}
+
+// The Node name collides between core/v1 and longhorn.io: each must dispatch to
+// its own mapper purely on group.
+func TestToResource_NodeKindCollision(t *testing.T) {
+	mapper := NewKubeMapper()
+
+	core := mapper.ToResource(*newUnstructuredResource("Node", "v1", "worker-1", ""), "nodes")
+	assert.NotNil(t, core.NodeMetadata)
+	assert.Nil(t, core.LonghornNodeMetadata)
+
+	lh := mapper.ToResource(*newUnstructuredResource("Node", "longhorn.io/v1beta2", "worker-1", "longhorn-system"), "nodes")
+	assert.NotNil(t, lh.LonghornNodeMetadata)
+	assert.Nil(t, lh.NodeMetadata)
 }
 
 // ── Kustomization ─────────────────────────────────────────────────────────────

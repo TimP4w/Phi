@@ -21,7 +21,6 @@ import { Handle, NodeProps, Position, Node } from "@xyflow/react";
 import { ROUTES } from "../../routes/routes.enum";
 import { Pause } from "lucide-react";
 import UsageChip from "../metrics/UsageChip";
-import { METRICS_KINDS } from "../../../core/metrics/constants/metrics.const";
 
 type ResourceProps = NodeProps<Node<VisualizationNodeData>>;
 
@@ -122,7 +121,7 @@ function Resource({ data }: ResourceProps) {
         {/* Main row */}
         <div className="flex items-center gap-2.5 px-3 py-2.5">
           <div className="flex-shrink-0">
-            <AppLogo kind={treeNode.kind} />
+            <AppLogo groupKind={treeNode.groupKind} />
           </div>
           <div className="flex-1 min-w-0">
             <Link
@@ -158,7 +157,7 @@ function Resource({ data }: ResourceProps) {
             )}
           </div>
         )}
-        {METRICS_KINDS.has(treeNode.kind) && (
+        {treeNode.hasMetrics && (
           <div className="px-3 pb-2">
             <UsageChip uid={treeNode.uid} />
           </div>

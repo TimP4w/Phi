@@ -59,84 +59,11 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		el.ParentRefs = append(el.ParentRefs, makeRef(ownerRef.Name, obj.GetNamespace(), ownerRef.Kind, ownerRef.APIVersion))
 	}
 
-	switch el.Kind {
-	case "Kustomization":
-		mapKustomizationData(&el, obj)
-	case "HelmRelease":
-		mapHelmReleaseData(&el, obj)
-	case "GitRepository":
-		mapGitRepositoryData(&el, obj)
-	case "HelmChart":
-		mapHelmChartData(&el, obj)
-	case "HelmRepository":
-		mapHelmRepositoryData(&el, obj)
-	case "OCIRepository":
-		mapOciRepositoryData(&el, obj)
-	case "Bucket":
-		mapBucketData(&el, obj)
-	case "Alert", "Provider":
-		mapGenericFluxData(&el, obj, true)
-	case "Receiver", "ImageRepository", "ImagePolicy", "ImageUpdateAutomation":
-		mapGenericFluxData(&el, obj, false)
-	case "Pod":
-		mapPodData(&el, obj)
-	case "Deployment":
-		mapDeploymentData(&el, obj)
-		traefikProxyData(&el, obj)
-	case "PersistentVolumeClaim":
-		mapPVCData(&el, obj)
-	case "PersistentVolume":
-		mapPVData(&el, obj)
-	case "Volume":
-		if el.Group == "longhorn.io" {
-			mapLonghornVolume(&el, obj)
-		}
-	case "Node":
-		if el.Group == "longhorn.io" {
-			mapLonghornNode(&el, obj)
-		} else {
-			mapNodeData(&el, obj)
-		}
-	case "Service":
-		mapServiceData(&el, obj)
-	case "Ingress":
-		mapIngressData(&el, obj)
-	case "EndpointSlice":
-		mapEndpointSliceData(&el, obj)
-	case "NetworkPolicy":
-		mapNetworkPolicyData(&el, obj)
-	case "Certificate":
-		if el.Group == "cert-manager.io" {
-			mapCertificateData(&el, obj)
-		}
-	case "Gateway":
-		if el.Group == "gateway.networking.k8s.io" {
-			mapGatewayData(&el, obj)
-		}
-	case "HTTPRoute", "TCPRoute", "GRPCRoute", "TLSRoute", "UDPRoute":
-		if el.Group == "gateway.networking.k8s.io" {
-			mapGatewayRouteData(&el, obj)
-		}
-	case "IngressRoute":
-		if strings.HasPrefix(el.Group, "traefik.") {
-			mapTraefikIngressRouteData(&el, obj)
-		}
-	case "StatefulSet":
-		mapStatefulSetData(&el, obj)
-	case "DaemonSet":
-		mapDaemonSetData(&el, obj)
-		// Proxy workloads (e.g. Traefik) are often DaemonSets; the provider
-		// no-ops for non-proxy workloads.
-		traefikProxyData(&el, obj)
-	case "VulnerabilityReport", "ConfigAuditReport", "ExposedSecretReport", "RbacAssessmentReport":
-		if el.Group == trivyGroup {
-			mapTrivyReport(&el, obj, trivyReportTypes[el.Kind])
-		}
-	case "ReplicaSet":
-		mapReplicaSetStatus(&el, obj)
-	case "Namespace":
-		mapNamespaceStatus(&el, obj)
-	default:
+	// Dispatch to the kind-specific mapper by GroupKind; unknown types fall back
+	// to the generic status mapper.
+	if fn := mapperRegistry[el.GroupKind()]; fn != nil {
+		fn(&el, obj)
+	} else {
 		mapGenericData(&el, obj)
 	}
 
@@ -282,7 +209,7 @@ func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	el.Status = mapFluxResourceStatusForCondition(gitRepository.Status.Conditions, false)
 	mapFluxMetadata(el, gitRepository.GetAnnotations(), gitRepository.Status.LastHandledReconcileAt, gitRepository.Spec.Suspend, gitRepository.Status.Conditions)
 
-	el.GitRepositoryMetadata = kube.GitRepositoryMetadata{
+	el.GitRepositoryMetadata = &kube.GitRepositoryMetadata{
 		URL:    gitRepository.Spec.URL,
 		Branch: gitRepository.Spec.Reference.Branch,
 		Tag:    gitRepository.Spec.Reference.Tag,
@@ -333,7 +260,7 @@ func mapOciRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	el.Status = mapFluxResourceStatusForCondition(ociRepository.Status.Conditions, false)
 	mapFluxMetadata(el, ociRepository.GetAnnotations(), ociRepository.Status.LastHandledReconcileAt, ociRepository.Spec.Suspend, ociRepository.Status.Conditions)
 
-	el.OCIRepositoryMetadata = kube.OCIRepositoryMetadata{
+	el.OCIRepositoryMetadata = &kube.OCIRepositoryMetadata{
 		URL:          ociRepository.Spec.URL,
 		Digest:       ociRepository.Spec.Reference.Digest,
 		Tag:          ociRepository.Spec.Reference.Tag,
@@ -434,7 +361,7 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 	if len(pod.Spec.Containers) > 0 {
 		image = pod.Spec.Containers[0].Image
 	}
-	el.PodMetadata = kube.PodMetadata{
+	el.PodMetadata = &kube.PodMetadata{
 		Phase:      string(pod.Status.Phase),
 		Image:      image,
 		Containers: mapContainerStatuses(pod),
@@ -520,7 +447,7 @@ func mapPVCData(el *kube.Resource, obj unstructured.Unstructured) {
 	if pvc.Spec.VolumeMode != nil {
 		volumeMode = string(*pvc.Spec.VolumeMode)
 	}
-	el.PVCMetadata = kube.PVCMetadata{
+	el.PVCMetadata = &kube.PVCMetadata{
 		StorageClass: storageClass,
 		VolumeName:   pvc.Spec.VolumeName,
 		VolumeMode:   volumeMode,
@@ -603,11 +530,11 @@ func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 	if pv.Spec.CSI != nil {
 		meta.Driver = pv.Spec.CSI.Driver
 	}
-	el.PVMetadata = meta
+	el.PVMetadata = &meta
 
 	// Driver-specific attributes (NFS, …) are read by their providers; no-ops
 	// for drivers they don't recognise.
-	mapCSIDriverData(&el.PVMetadata, pv)
+	mapCSIDriverData(el.PVMetadata, pv)
 
 	if pv.Spec.ClaimRef != nil {
 		el.ParentRefs = append(el.ParentRefs, makeRef(
@@ -682,7 +609,7 @@ func mapNodeData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 	slices.Sort(meta.Roles)
 
-	el.NodeMetadata = meta
+	el.NodeMetadata = &meta
 }
 
 func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
@@ -742,7 +669,7 @@ func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 		images = append(images, container.Image)
 	}
 
-	el.DeploymentMetadata = kube.DeploymentMetadata{
+	el.DeploymentMetadata = &kube.DeploymentMetadata{
 		Replicas:          deployment.Status.Replicas,
 		ReadyReplicas:     deployment.Status.ReadyReplicas,
 		UpdatedReplicas:   deployment.Status.UpdatedReplicas,
@@ -770,7 +697,7 @@ func mapKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
 		dependsOnRefs = append(dependsOnRefs, dep.Name)
 	}
 
-	el.KustomizationMetadata = kube.KustomizationMetadata{
+	el.KustomizationMetadata = &kube.KustomizationMetadata{
 		Path:      kustomization.Spec.Path,
 		DependsOn: dependsOnRefs,
 
@@ -796,7 +723,7 @@ func mapHelmReleaseData(el *kube.Resource, obj unstructured.Unstructured) {
 	el.Status = mapFluxResourceStatusForCondition(helmRelease.Status.Conditions, false)
 	mapFluxMetadata(el, helmRelease.GetAnnotations(), helmRelease.Status.LastHandledReconcileAt, helmRelease.Spec.Suspend, helmRelease.Status.Conditions)
 
-	el.HelmReleaseMetadata = kube.HelmReleaseMetadata{
+	el.HelmReleaseMetadata = &kube.HelmReleaseMetadata{
 		ChartName: helmRelease.GetHelmChartName(),
 		SourceRef: kube.SourceRef{
 			Kind:      helmRelease.Spec.Chart.Spec.SourceRef.Kind,
@@ -857,7 +784,7 @@ func mapServiceData(el *kube.Resource, obj unstructured.Unstructured) {
 		addIP(ip)
 	}
 
-	el.ServiceMetadata = meta
+	el.ServiceMetadata = &meta
 
 	if svc.Spec.Type == v1.ServiceTypeLoadBalancer && len(meta.ExternalIPs) == 0 {
 		el.Status = kube.StatusPending
@@ -943,7 +870,7 @@ func mapIngressData(el *kube.Resource, obj unstructured.Unstructured) {
 		}
 	}
 
-	el.RouteMetadata = route
+	el.RouteMetadata = &route
 }
 
 func mapNetworkPolicyData(el *kube.Resource, obj unstructured.Unstructured) {
@@ -965,7 +892,7 @@ func mapNetworkPolicyData(el *kube.Resource, obj unstructured.Unstructured) {
 		meta.PolicyTypes = append(meta.PolicyTypes, string(pt))
 	}
 
-	el.NetworkPolicyMetadata = meta
+	el.NetworkPolicyMetadata = &meta
 	el.Status = kube.StatusSuccess
 }
 
@@ -993,7 +920,7 @@ func mapEndpointSliceData(el *kube.Resource, obj unstructured.Unstructured) {
 		meta.Endpoints = append(meta.Endpoints, target)
 	}
 
-	el.EndpointSliceMetadata = meta
+	el.EndpointSliceMetadata = &meta
 	el.Status = kube.StatusSuccess
 }
 
@@ -1039,7 +966,7 @@ func mapCertificateData(el *kube.Resource, obj unstructured.Unstructured) {
 		}
 	}
 
-	el.CertificateMetadata = meta
+	el.CertificateMetadata = &meta
 	switch {
 	case meta.Ready:
 		el.Status = kube.StatusSuccess
@@ -1104,7 +1031,7 @@ func mapGatewayData(el *kube.Resource, obj unstructured.Unstructured) {
 		}
 	}
 
-	el.GatewayMetadata = meta
+	el.GatewayMetadata = &meta
 	if len(meta.Addresses) == 0 {
 		el.Status = kube.StatusPending
 	} else {
@@ -1185,7 +1112,7 @@ func mapGatewayRouteData(el *kube.Resource, obj unstructured.Unstructured) {
 		}
 	}
 
-	el.RouteMetadata = route
+	el.RouteMetadata = &route
 }
 
 func mapDaemonSetData(el *kube.Resource, obj unstructured.Unstructured) {
@@ -1256,29 +1183,6 @@ func appendUnstructuredConditions(el *kube.Resource, obj unstructured.Unstructur
 	appendConditions(el, conditionsFromUnstructured(obj), conditionFromMeta)
 }
 
-// extractUnstructuredConditions pulls status.conditions from an unstructured object.
-// staticSuccessKinds are config/identity objects that carry no runtime health.
-// Their mere existence is "healthy", so they map to success rather than unknown.
-var staticSuccessKinds = map[string]bool{
-	"ConfigMap":                      true,
-	"Secret":                         true,
-	"ServiceAccount":                 true,
-	"ClusterRole":                    true,
-	"ClusterRoleBinding":             true,
-	"Role":                           true,
-	"RoleBinding":                    true,
-	"CustomResourceDefinition":       true,
-	"ControllerRevision":             true,
-	"PriorityClass":                  true,
-	"RuntimeClass":                   true,
-	"StorageClass":                   true,
-	"IngressClass":                   true,
-	"Lease":                          true,
-	"ValidatingWebhookConfiguration": true,
-	"MutatingWebhookConfiguration":   true,
-	"CSIDriver":                      true,
-}
-
 // mapStatusFromGenericConditions derives a status from a resource's
 // status.conditions, recognizing the Ready/Available/Healthy condition types
 // commonly used by core and third-party CRDs. Returns ("", false) when no such
@@ -1315,7 +1219,7 @@ func mapGenericData(el *kube.Resource, obj unstructured.Unstructured) {
 			return
 		}
 	}
-	if staticSuccessKinds[el.Kind] {
+	if el.IsStaticSuccess() {
 		el.Status = kube.StatusSuccess
 	}
 }
