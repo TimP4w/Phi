@@ -92,6 +92,50 @@ func TestKubeServiceImplGetResourceYAML(t *testing.T) {
 	assert.Equal(t, expectedYaml, normalizeYAML(string(yaml)))
 }
 
+func TestKubeServiceImplGetResourceYAMLRedactsSecret(t *testing.T) {
+	name := "db-credentials"
+	namespace := "test-ns"
+
+	unstructuredSecret := newUnstructuredResource("Secret", "v1", name, namespace)
+	unstructuredSecret.Object["data"] = map[string]interface{}{
+		"username": "YWRtaW4=",
+		"password": "c3VwZXItc2VjcmV0",
+	}
+	unstructuredSecret.Object["stringData"] = map[string]interface{}{
+		"token": "plaintext-token",
+	}
+	metadata := unstructuredSecret.Object["metadata"].(map[string]interface{})
+	metadata["annotations"] = map[string]interface{}{
+		lastAppliedConfigAnnotation: `{"data":{"password":"c3VwZXItc2VjcmV0"}}`,
+	}
+
+	service := newTestKubeServiceImpl(unstructuredSecret)
+
+	secretResource := kubernetes.Resource{
+		Kind:      "Secret",
+		Name:      name,
+		Namespace: namespace,
+		Version:   "v1",
+		Group:     "",
+		Resource:  "secrets",
+	}
+
+	out, err := service.GetResourceYAML(secretResource)
+
+	assert.NoError(t, err)
+	yamlStr := string(out)
+	// Keys are preserved, values are redacted.
+	assert.Contains(t, yamlStr, "username")
+	assert.Contains(t, yamlStr, "password")
+	assert.Contains(t, yamlStr, "token")
+	assert.Contains(t, yamlStr, redactedValue)
+	// No secret value or full-object annotation leaks through.
+	assert.NotContains(t, yamlStr, "YWRtaW4=")
+	assert.NotContains(t, yamlStr, "c3VwZXItc2VjcmV0")
+	assert.NotContains(t, yamlStr, "plaintext-token")
+	assert.NotContains(t, yamlStr, lastAppliedConfigAnnotation)
+}
+
 func TestKubeServiceImplGetResourceYAMLResourceNotFound(t *testing.T) {
 	service := newTestKubeServiceImpl()
 

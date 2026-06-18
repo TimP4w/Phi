@@ -140,6 +140,9 @@ func (k *KubeServiceImpl) GetResourceYAML(resource kube.Resource) ([]byte, error
 		return nil, err
 	}
 
+	// Strip secret values before serialising
+	redactSecretData(&unstructuredObj)
+
 	// Convert to YAML
 	yamlData, err := yaml.Marshal(unstructuredObj)
 	if err != nil {
@@ -147,6 +150,34 @@ func (k *KubeServiceImpl) GetResourceYAML(resource kube.Resource) ([]byte, error
 	}
 
 	return yamlData, nil
+}
+
+const redactedValue = "[REDACTED]"
+
+// lastAppliedConfigAnnotation mirrors the full applied object, so it is dropped from Secret objects.
+const lastAppliedConfigAnnotation = "kubectl.kubernetes.io/last-applied-configuration"
+
+// redactSecretData masks sensitive values on Secret objects in place
+func redactSecretData(obj *unstructured.Unstructured) {
+	if obj == nil || !strings.EqualFold(obj.GetKind(), "Secret") {
+		return
+	}
+
+	for _, field := range []string{"data", "stringData"} {
+		if m, found, _ := unstructured.NestedMap(obj.Object, field); found {
+			for key := range m {
+				m[key] = redactedValue
+			}
+			_ = unstructured.SetNestedMap(obj.Object, m, field)
+		}
+	}
+
+	if annotations := obj.GetAnnotations(); annotations != nil {
+		if _, ok := annotations[lastAppliedConfigAnnotation]; ok {
+			delete(annotations, lastAppliedConfigAnnotation)
+			obj.SetAnnotations(annotations)
+		}
+	}
 }
 
 func (k *KubeServiceImpl) WatchLogs(pod kube.Resource, ctx context.Context, onLog func(kube.KubeLog)) error {
