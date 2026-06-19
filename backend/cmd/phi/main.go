@@ -65,7 +65,7 @@ func main() {
 	})
 	defer logging.Sync()
 
-	logging.Info("Starting Phi application")
+	logging.Logger().Info("Starting Phi application")
 
 	app := fx.New(
 		fx.Provide(
@@ -105,7 +105,7 @@ func registerApp(useCases UseCases, realtimeService realtime.RealtimeService, mc
 	fx.In
 	Port *string `name:"port"`
 }) {
-	logging.Info("Registering application components")
+	logging.Logger().Info("Registering application components")
 	initBackgroundTasks(useCases)
 	r := createRouter(useCases, realtimeService, mcpSrv)
 	registerServerLifecycle(lifecycle, r, *p.Port)
