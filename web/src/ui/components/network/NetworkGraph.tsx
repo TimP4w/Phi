@@ -96,6 +96,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
       return;
     }
     let cancelled = false;
+    let fitTimeout: ReturnType<typeof setTimeout> | undefined;
     networkUseCase
       .execute({ nodeId: rootResource.uid })
       .then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
@@ -104,11 +105,12 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
         setEdges(layoutedEdges);
         if (fitAfterLayout.current) {
           fitAfterLayout.current = false;
-          setTimeout(() => fitView({ duration: 300 }), 50);
+          fitTimeout = setTimeout(() => fitView({ duration: 300 }), 50);
         }
       });
     return () => {
       cancelled = true;
+      if (fitTimeout) clearTimeout(fitTimeout);
     };
   }, [rootResource?.uid, treeSize, networkUseCase, setNodes, setEdges, fitView]);
 

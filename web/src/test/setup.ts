@@ -1,5 +1,5 @@
-import '@testing-library/jest-dom/vitest';
-import 'reflect-metadata';
+import "@testing-library/jest-dom/vitest";
+import "reflect-metadata";
 
 // React Flow (and some HeroUI components) rely on ResizeObserver, which jsdom does not implement. A no-op stub is enough for rendering in tests.
 class ResizeObserverStub {
@@ -7,7 +7,9 @@ class ResizeObserverStub {
   unobserve() {}
   disconnect() {}
 }
-globalThis.ResizeObserver = globalThis.ResizeObserver ?? (ResizeObserverStub as unknown as typeof ResizeObserver);
+globalThis.ResizeObserver =
+  globalThis.ResizeObserver ??
+  (ResizeObserverStub as unknown as typeof ResizeObserver);
 
 // jsdom has no matchMedia; the dashboard uses it to decide the default sidebar state. Default to "matches: true" (desktop) so layout-dependent code runs.
 if (!window.matchMedia) {

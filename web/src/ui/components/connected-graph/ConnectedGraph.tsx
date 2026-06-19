@@ -119,13 +119,17 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
     const shouldFitView = filterChanged || fitAfterLayoutRef.current;
     fitAfterLayoutRef.current = false;
 
+    let fitTimeout: ReturnType<typeof setTimeout> | undefined;
+
     const hasActiveFilter = filter && (filter.statuses.length > 0 || filter.kinds.length > 0);
 
     if (!hasActiveFilter) {
       setNodes(rawNodes);
       setEdges(rawEdges);
-      if (shouldFitView) setTimeout(() => fitView({ duration: 300 }), 50);
-      return;
+      if (shouldFitView) fitTimeout = setTimeout(() => fitView({ duration: 300 }), 50);
+      return () => {
+        if (fitTimeout) clearTimeout(fitTimeout);
+      };
     }
 
     // Build visible set
@@ -180,10 +184,13 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
       if (cancelled) return;
       setNodes(ln);
       setEdges(le);
-      if (shouldFitView) setTimeout(() => fitView({ duration: 300 }), 50);
+      if (shouldFitView) fitTimeout = setTimeout(() => fitView({ duration: 300 }), 50);
     });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (fitTimeout) clearTimeout(fitTimeout);
+    };
   }, [rawNodes, rawEdges, filter, rootResource, setNodes, setEdges, fitView, layoutTreeUseCase]);
 
   return (

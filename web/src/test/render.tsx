@@ -65,7 +65,7 @@ export function renderWithProviders(ui: ReactElement, opts: Options = {}) {
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <Provider container={container}>
       <MemoryRouter initialEntries={[route]}>
-        <HeroUIProvider>
+        <HeroUIProvider disableAnimation>
           <ReactFlowProvider>{children}</ReactFlowProvider>
         </HeroUIProvider>
       </MemoryRouter>
