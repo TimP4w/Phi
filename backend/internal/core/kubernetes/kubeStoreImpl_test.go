@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 func makeResource(uid, name, namespace, kind, version, group string) Resource {
@@ -324,7 +323,7 @@ func TestKubeStore_AddEvent_MaxEvents_EvictsOldest(t *testing.T) {
 	now := time.Now()
 	for i := 0; i < 3; i++ {
 		ev := Event{
-			UID:          types.UID(fmt.Sprintf("event-%d", i)),
+			UID:          fmt.Sprintf("event-%d", i),
 			Name:         "Event",
 			LastObserved: now.Add(time.Duration(i) * time.Second),
 		}
