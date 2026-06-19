@@ -1,3 +1,4 @@
+import { ComponentProps } from "react";
 import { describe, it, expect } from "vitest";
 import { screen } from "@testing-library/react";
 import Resource from "./Resource";
@@ -17,7 +18,8 @@ import {
   KubeResource,
 } from "../../../core/fluxTree/models/tree";
 
-const node = (treeNode: KubeResource) => ({ data: { treeNode } }) as never;
+const node = (treeNode: KubeResource) =>
+  ({ data: { treeNode } }) as unknown as ComponentProps<typeof Resource>;
 
 describe("Resource node renderer", () => {
   it("renders a Deployment's replica summary", () => {

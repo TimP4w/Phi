@@ -55,7 +55,7 @@ export function makeTestContainer(): Container {
   return c;
 }
 
-type Options = Omit<RenderOptions, "wrapper"> & {
+type Options = Omit<RenderOptions, "wrapper" | "container"> & {
   container?: Container;
   route?: string;
 };
@@ -71,5 +71,5 @@ export function renderWithProviders(ui: ReactElement, opts: Options = {}) {
       </MemoryRouter>
     </Provider>
   );
-  return { container, ...render(ui, { wrapper: Wrapper, ...rest }) };
+  return render(ui, { wrapper: Wrapper, ...rest });
 }

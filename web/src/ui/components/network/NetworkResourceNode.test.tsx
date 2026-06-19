@@ -1,3 +1,4 @@
+import { ComponentProps } from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -52,7 +53,8 @@ describe("networkDetail", () => {
 });
 
 describe("NetworkResourceNode component", () => {
-  const props = (data: unknown) => ({ data }) as never;
+  const props = (data: unknown) =>
+    ({ data }) as unknown as ComponentProps<typeof NetworkResourceNode>;
 
   it("renders nothing without a tree node", () => {
     const { container } = renderWithProviders(<NetworkResourceNode {...props({})} />);

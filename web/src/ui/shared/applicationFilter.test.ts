@@ -32,7 +32,7 @@ describe("applicationMatchesFilter", () => {
   });
 
   it("filters by suspended state", () => {
-    const suspended = kustomization({ fluxMetadata: { isSuspended: true } });
+    const suspended = kustomization({ fluxMetadata: { isSuspended: true, isReconciling: false } });
     expect(applicationMatchesFilter(suspended, { ...EMPTY_APPLICATION_FILTER, suspend: ["suspended"] })).toBe(true);
     expect(applicationMatchesFilter(suspended, { ...EMPTY_APPLICATION_FILTER, suspend: ["resumed"] })).toBe(false);
   });

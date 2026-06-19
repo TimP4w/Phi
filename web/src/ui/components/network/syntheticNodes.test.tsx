@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { NodeProps, Node } from "@xyflow/react";
 import { renderWithProviders } from "../../../test/render";
+import { NetworkNodeData } from "../../../core/network/usecases/NetworkTopology.usecase";
 import InternetNode from "./InternetNode";
 import ExternalIpNode from "./ExternalIpNode";
 import EntrypointNode from "./EntrypointNode";
@@ -9,7 +11,8 @@ import MiddlewareWallNode from "./MiddlewareWallNode";
 import PolicyPeerNode from "./PolicyPeerNode";
 
 // React Flow node components receive a NodeProps object; tests only exercise `data`.
-const props = (data: unknown) => ({ data }) as never;
+const props = (data: unknown) =>
+  ({ data }) as unknown as NodeProps<Node<NetworkNodeData>>;
 
 describe("InternetNode", () => {
   it("renders the internet label", () => {
