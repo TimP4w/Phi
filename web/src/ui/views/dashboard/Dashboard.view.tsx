@@ -257,7 +257,13 @@ const AppsView: React.FC = observer(() => {
             sidebarOpen ? "w-full sm:w-[440px]" : "w-0"
           }`}
         >
-          {sidebarOpen && <ClusterInspector onClose={() => setSidebarOpen(false)} />}
+          {sidebarOpen && (
+            <ClusterInspector
+              onClose={() => setSidebarOpen(false)}
+              selectedKinds={selectedKindsToFilter}
+              onToggleKind={(kind) => onFilterToggle(kind, APP_FILTER.KIND)}
+            />
+          )}
         </aside>
       </div>
     </div>

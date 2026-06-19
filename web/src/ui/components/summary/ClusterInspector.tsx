@@ -154,8 +154,12 @@ const FLUX_KIND_CONFIG: { label: string; kind: string; color: string }[] = [
   { label: "Buckets", kind: RESOURCE_TYPE.BUCKET, color: "#C3F4FD" },
 ];
 
-/** Per-kind count + proportion bars for a set of Flux objects. */
-const KindBars: React.FC<{ resources: KubeResource[] }> = ({ resources }) => {
+/** Per-kind count + proportion bars for a set of Flux objects; rows toggle the dashboard kind filter. */
+const KindBars: React.FC<{
+  resources: KubeResource[];
+  selectedKinds?: string[];
+  onToggleKind?: (kind: string) => void;
+}> = ({ resources, selectedKinds, onToggleKind }) => {
   const total = resources.length;
   return (
     <div className="flex flex-col gap-1">
@@ -163,13 +167,26 @@ const KindBars: React.FC<{ resources: KubeResource[] }> = ({ resources }) => {
         const count = resources.filter((r) => r.kind === kind).length;
         if (count === 0) return null;
         const pct = total > 0 ? (count / total) * 100 : 0;
+        const active = selectedKinds?.includes(kind);
         return (
-          <div key={kind} className="flex items-center gap-2.5">
+          <button
+            key={kind}
+            type="button"
+            onClick={() => onToggleKind?.(kind)}
+            aria-pressed={active}
+            className={`flex items-center gap-2.5 w-full text-left rounded-md px-1.5 -mx-1.5 py-0.5 transition-colors ${
+              onToggleKind ? "cursor-pointer hover:bg-default-100" : "cursor-default"
+            } ${active ? "bg-default-100" : ""}`}
+          >
             <div
               className="w-2 h-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: color }}
             />
-            <span className="text-xs text-default-400 flex-1 min-w-0 truncate">{label}</span>
+            <span
+              className={`text-xs flex-1 min-w-0 truncate ${active ? "text-foreground" : "text-default-400"}`}
+            >
+              {label}
+            </span>
             <div className="flex items-center gap-2 flex-shrink-0">
               <div className="w-16 h-1 bg-default-100 rounded-full overflow-hidden">
                 <div
@@ -181,7 +198,7 @@ const KindBars: React.FC<{ resources: KubeResource[] }> = ({ resources }) => {
                 {count}
               </span>
             </div>
-          </div>
+          </button>
         );
       })}
     </div>
@@ -251,7 +268,11 @@ const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
 const FLUX_KIND_SET = new Set<string>(FLUX_KINDS);
 
 /** Right-rail cluster inspector: each section collapses to a number and expands to surface problems. */
-const ClusterInspector: React.FC<{ onClose?: () => void }> = observer(({ onClose }) => {
+const ClusterInspector: React.FC<{
+  onClose?: () => void;
+  selectedKinds?: string[];
+  onToggleKind?: (kind: string) => void;
+}> = observer(({ onClose, selectedKinds, onToggleKind }) => {
   const fluxTreeStore = useInjection(FluxTreeStore);
   const metricsStore = useInjection(MetricsStore);
   const eventsStore = useInjection(EventsStore);
@@ -445,7 +466,11 @@ const ClusterInspector: React.FC<{ onClose?: () => void }> = observer(({ onClose
         >
           <HealthButton tone={recon.tone} label={recon.label} onClick={appsModal.onOpen} />
           <div className="mt-3">
-            <KindBars resources={[...recon.apps, ...recon.sources]} />
+            <KindBars
+              resources={[...recon.apps, ...recon.sources]}
+              selectedKinds={selectedKinds}
+              onToggleKind={onToggleKind}
+            />
           </div>
         </Section>
       )}
