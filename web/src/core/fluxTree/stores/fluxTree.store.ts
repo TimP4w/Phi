@@ -3,8 +3,9 @@ import {
   observable,
   computed,
   action,
-  runInAction,
+  reaction,
   ObservableMap,
+  IReactionDisposer,
 } from "mobx";
 import {
   FluxResource,
@@ -16,48 +17,10 @@ import {
   Kustomization,
   Node,
 } from "../models/tree";
-import { RESOURCE_TYPE, FLUX_NAMESPACE } from "../constants/resources.const";
+import { RESOURCE_TYPE } from "../constants/resources.const";
 import { indexFindingsByTarget, TrivySummary } from "../../trivy/trivy";
 import { TreeNodeDto } from "../models/dtos/treeDto";
-
-function buildTree(resources: Map<string, KubeResource>): Tree {
-  resources.forEach((resource) => {
-    resource.children = [];
-  });
-
-  const childrenOf = new Map<string, KubeResource[]>();
-
-  resources.forEach((resource) => {
-    // Trivy report CRDs are a findings overlay, not graph nodes — keep them in
-    // the resource map (for the findings index) but never attach them as children.
-    if (resource.trivyMetadata) return;
-    const parentId = resource.parentIDs[0];
-    // Skip self-references and back-edges that would create cycles
-    if (parentId && parentId !== resource.uid && resources.has(parentId)) {
-      const siblings = childrenOf.get(parentId) ?? [];
-      siblings.push(resource);
-      childrenOf.set(parentId, siblings);
-    }
-  });
-
-  childrenOf.forEach((children, parentId) => {
-    const parent = resources.get(parentId);
-    if (parent) {
-      parent.children = children;
-    }
-  });
-
-  // TODO: make this configurable via env
-  const root =
-    [...resources.values()].find(
-      (r) =>
-        r.kind === RESOURCE_TYPE.KUSTOMIZATION &&
-        r.name === FLUX_NAMESPACE &&
-        r.namespace === FLUX_NAMESPACE,
-    ) ?? new KubeResource();
-
-  return new Tree(root);
-}
+import { buildTree } from "../buildTree";
 
 class FluxTreeStore {
   // resources: MobX ObservableMap that holds all cached KubeResources by UID.
@@ -68,15 +31,24 @@ class FluxTreeStore {
   >();
   private _tree: Tree = new Tree(new KubeResource());
   private selectedUid: string | null = null;
+  // Bumped by incremental upsert/remove; a debounced reaction watches it to
+  // coalesce tree rebuilds over a short window (see REBUILD_WINDOW_MS).
+  private _revision = 0;
+  private readonly _disposeRebuild: IReactionDisposer;
+  // Streaming pod logs are ephemeral UI state keyed by resource UID, kept off the
+  // KubeResource model so a new array reference (map.set) drives MobX reactivity.
+  logsByUid: ObservableMap<string, PodLog[]> = observable.map<string, PodLog[]>();
 
   constructor() {
-    makeObservable<FluxTreeStore, "_tree" | "selectedUid">(this, {
+    makeObservable<FluxTreeStore, "_tree" | "selectedUid" | "_revision">(this, {
       _tree: observable.ref,
       selectedUid: observable,
+      _revision: observable,
       selectedResource: computed,
       tree: computed,
       applications: computed,
       repositories: computed,
+      dashboardResources: computed,
       nodes: computed,
       resourceCount: computed,
       trivyIndex: computed,
@@ -86,6 +58,21 @@ class FluxTreeStore {
       setSelectedResource: action,
       appendLog: action,
     });
+
+    // Coalesce bursty incremental mutations into a single rebuild. MobX's `delay`
+    // debounces and the disposer makes this cancellable/lifecycle-aware (unlike a
+    // raw setTimeout). syncResources rebuilds synchronously and is not routed here.
+    this._disposeRebuild = reaction(
+      () => this._revision,
+      () => {
+        this._tree = buildTree(this.resources);
+      },
+      { delay: FluxTreeStore.REBUILD_WINDOW_MS },
+    );
+  }
+
+  dispose(): void {
+    this._disposeRebuild();
   }
 
   get selectedResource(): KubeResource | null {
@@ -110,36 +97,19 @@ class FluxTreeStore {
 
   // --- flat map mutators ---
 
-  // Coalesce rebuilds over a short window.
+  // Window over which bursty incremental mutations are coalesced into one rebuild.
   private static readonly REBUILD_WINDOW_MS = 150;
-  private _rebuildScheduled = false;
-  private _lastBuild = 0;
-
-  private scheduleBuild(): void {
-    if (this._rebuildScheduled) return;
-    this._rebuildScheduled = true;
-    const elapsed = Date.now() - this._lastBuild;
-    const delay = Math.max(0, FluxTreeStore.REBUILD_WINDOW_MS - elapsed);
-    setTimeout(
-      () =>
-        runInAction(() => {
-          this._tree = buildTree(this.resources);
-          this._lastBuild = Date.now();
-          this._rebuildScheduled = false;
-        }),
-      delay,
-    );
-  }
 
   upsertResource(dto: TreeNodeDto): void {
     if (!dto.uid) return;
     this.resources.set(dto.uid, KubeResource.fromDto(dto));
-    this.scheduleBuild();
+    this._revision++;
   }
 
   removeResource(uid: string): void {
     this.resources.delete(uid);
-    this.scheduleBuild();
+    this.logsByUid.delete(uid);
+    this._revision++;
   }
 
   syncResources(dtos: TreeNodeDto[]): void {
@@ -147,8 +117,12 @@ class FluxTreeStore {
     for (const dto of dtos) {
       if (dto.uid) this.resources.set(dto.uid, KubeResource.fromDto(dto));
     }
+    // Drop logs for resources that no longer exist after the resync.
+    for (const uid of this.logsByUid.keys()) {
+      if (!this.resources.has(uid)) this.logsByUid.delete(uid);
+    }
+    // Full resync rebuilds immediately rather than via the debounced reaction.
     this._tree = buildTree(this.resources);
-    this._lastBuild = Date.now();
   }
 
   // --- computed getters ---
@@ -169,6 +143,12 @@ class FluxTreeStore {
     return result.sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  // Applications + repositories, the set the dashboard renders/filters over.
+  // MobX-cached so the concat is not rebuilt on every dashboard re-render.
+  get dashboardResources(): FluxResource[] {
+    return [...this.applications, ...this.repositories];
+  }
+
   /** Core v1 Nodes (the Longhorn Node CRD is modelled separately). */
   get nodes(): Node[] {
     const result: Node[] = [];
@@ -182,6 +162,38 @@ class FluxTreeStore {
 
   findResourceByUid(uid: string): KubeResource | undefined {
     return this.resources.get(uid);
+  }
+
+  // Distinct kinds in the subtree rooted at uid (inclusive), sorted.
+  kindsInSubtree(uid?: string): string[] {
+    const root = uid ? this.resources.get(uid) : undefined;
+    if (!root) return [];
+    const kinds = new Set<string>();
+    const visit = (node: KubeResource, visited: Set<string>) => {
+      if (visited.has(node.uid)) return;
+      visited.add(node.uid);
+      kinds.add(node.kind);
+      for (const child of node.children ?? []) visit(child, visited);
+    };
+    visit(root, new Set());
+    return Array.from(kinds).sort();
+  }
+
+  // UIDs in the subtree rooted at uid that report metrics, plus the root itself
+  // (so its aggregate is always fetched), sorted.
+  metricsUidsInSubtree(uid?: string): string[] {
+    const root = uid ? this.resources.get(uid) : undefined;
+    if (!root) return [];
+    const uids = new Set<string>();
+    const visit = (node: KubeResource, visited: Set<string>) => {
+      if (visited.has(node.uid)) return;
+      visited.add(node.uid);
+      if (node.hasMetrics) uids.add(node.uid);
+      for (const child of node.children ?? []) visit(child, visited);
+    };
+    visit(root, new Set());
+    uids.add(root.uid);
+    return [...uids].sort();
   }
 
   findKustomizationByName(name?: string): Kustomization | null {
@@ -236,14 +248,15 @@ class FluxTreeStore {
     this.selectedUid = resource?.uid ?? null;
   }
 
+  logsFor(uid?: string | null): PodLog[] {
+    return uid ? (this.logsByUid.get(uid) ?? []) : [];
+  }
+
   appendLog(log: PodLog) {
-    const resource = this.selectedUid
-      ? this.resources.get(this.selectedUid)
-      : undefined;
-    if (!resource) return;
-    resource.logs.push(log);
-    // Create a new Tree instance to trigger observable.ref reactivity
-    this._tree = new Tree(this._tree.root);
+    const uid = this.selectedUid;
+    if (!uid) return;
+    // Replace the array (don't mutate) so the ObservableMap entry change notifies.
+    this.logsByUid.set(uid, [...this.logsFor(uid), log]);
   }
 }
 
