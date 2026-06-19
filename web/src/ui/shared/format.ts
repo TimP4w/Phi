@@ -31,3 +31,20 @@ export function usageColor(pct: number, ok: UsageColor = "success"): UsageColor 
   if (pct >= 75) return "warning";
   return ok;
 }
+
+/** Last path segment of a flux revision (e.g. "main@sha1:abcdef" → "abcdef"). */
+export function shortRevision(rev: string): string {
+  const tail = rev.split(/[:@]/).pop() ?? rev;
+  return tail.length > 12 ? tail.slice(0, 12) : tail;
+}
+
+/** Web URL for a commit, derived from a git remote (https or git@ssh form). */
+export function gitCommitUrl(repoUrl: string, sha: string): string {
+  const host = repoUrl
+    .replace(/^https?:\/\//, "")
+    .replace(/^ssh:\/\//, "")
+    .replace(/^git@/, "")
+    .replace(/\.git$/, "")
+    .replace(":", "/");
+  return `https://${host}/commit/${sha}`;
+}
