@@ -2,14 +2,24 @@ package kubernetes
 
 import (
 	"context"
+)
 
-	"k8s.io/apimachinery/pkg/types"
+// PatchType is the wire encoding of a patch. It mirrors the string values of
+// k8s.io/apimachinery's types.PatchType so the infra adapter can convert with a
+// plain cast, while keeping the core layer free of an apimachinery dependency.
+type PatchType string
+
+const (
+	JSONPatchType           PatchType = "application/json-patch+json"
+	MergePatchType          PatchType = "application/merge-patch+json"
+	StrategicMergePatchType PatchType = "application/strategic-merge-patch+json"
+	ApplyPatchType          PatchType = "application/apply-patch+yaml"
 )
 
 type PatchableResource interface {
 	ResourceMeta() Resource
 	PatchJSON() ([]byte, error)
-	PatchType() types.PatchType
+	PatchType() PatchType
 }
 
 type KubeService interface {

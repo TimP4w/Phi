@@ -1,6 +1,13 @@
 package kubernetes
 
-import "k8s.io/apimachinery/pkg/runtime/schema"
+// GroupKind is a resource's type identity: its API group and kind, with the
+// version deliberately excluded. It is the domain equivalent of
+// k8s.io/apimachinery's schema.GroupKind, kept here so the core layer carries no
+// dependency on apimachinery.
+type GroupKind struct {
+	Group string
+	Kind  string
+}
 
 // FluxRole is "application" (reconciling workload), "repository" (source), or empty.
 type FluxRole string
@@ -32,10 +39,10 @@ type Classification struct {
 	HasMetrics      bool // workload that surfaces metrics chips/tabs
 }
 
-func gk(group, kind string) schema.GroupKind { return schema.GroupKind{Group: group, Kind: kind} }
+func gk(group, kind string) GroupKind { return GroupKind{Group: group, Kind: kind} }
 
 // classifications maps each known GroupKind to its facts; absent keys yield the zero value.
-var classifications = map[schema.GroupKind]Classification{
+var classifications = map[GroupKind]Classification{
 	// Flux applications — reconcilable workloads.
 	gk("kustomize.toolkit.fluxcd.io", "Kustomization"): {Reconcilable: true, Suspendable: true, FluxRole: FluxRoleApplication, HasMetrics: true},
 	gk("helm.toolkit.fluxcd.io", "HelmRelease"):        {Reconcilable: true, Suspendable: true, FluxRole: FluxRoleApplication, HasMetrics: true},
@@ -80,12 +87,12 @@ var classifications = map[schema.GroupKind]Classification{
 }
 
 // GroupKind is the resource's type identity (group + kind; version excluded).
-func (e *Resource) GroupKind() schema.GroupKind {
-	return schema.GroupKind{Group: e.Group, Kind: e.Kind}
+func (e *Resource) GroupKind() GroupKind {
+	return GroupKind{Group: e.Group, Kind: e.Kind}
 }
 
 // ClassificationFor returns the facts for a GroupKind, or the zero value if unknown.
-func ClassificationFor(groupKind schema.GroupKind) Classification {
+func ClassificationFor(groupKind GroupKind) Classification {
 	return classifications[groupKind]
 }
 

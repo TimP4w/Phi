@@ -59,8 +59,7 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 		el.ParentRefs = append(el.ParentRefs, makeRef(ownerRef.Name, obj.GetNamespace(), ownerRef.Kind, ownerRef.APIVersion))
 	}
 
-	// Dispatch to the kind-specific mapper by GroupKind; unknown types fall back
-	// to the generic status mapper.
+	// Dispatch by GroupKind; unknown types fall back to the generic status mapper.
 	if fn := mapperRegistry[el.GroupKind()]; fn != nil {
 		fn(&el, obj)
 	} else {
@@ -72,7 +71,7 @@ func (mapper *KubeMapper) ToResource(obj unstructured.Unstructured, resource str
 
 func (mapper *KubeMapper) ToEvent(k8event *v1.Event) kube.Event {
 	return kube.Event{
-		UID:           k8event.UID,
+		UID:           string(k8event.UID),
 		Kind:          k8event.InvolvedObject.Kind,
 		Name:          k8event.InvolvedObject.Name,
 		Namespace:     k8event.InvolvedObject.Namespace,
@@ -88,8 +87,6 @@ func (mapper *KubeMapper) ToEvent(k8event *v1.Event) kube.Event {
 }
 
 // appendConditions converts each condition via conv and appends it to el.Conditions.
-// It is the single place that grows the resource's condition list, so the various
-// typed condition shapes (metav1, corev1, appsv1, …) all funnel through one loop.
 func appendConditions[C any](el *kube.Resource, conditions []C, conv func(C) kube.Condition) {
 	for _, c := range conditions {
 		el.Conditions = append(el.Conditions, conv(c))
@@ -111,9 +108,7 @@ func mapConditions(el *kube.Resource, conditions []metav1.Condition) []kube.Cond
 	return el.Conditions
 }
 
-// conditionsFromUnstructured parses an unstructured object's status.conditions into
-// []metav1.Condition, so the typed status/metadata mappers can serve unstructured
-// Flux resources too (those whose CRDs aren't imported as typed Go packages).
+// conditionsFromUnstructured parses an unstructured object's status.conditions into []metav1.Condition.
 func conditionsFromUnstructured(obj unstructured.Unstructured) []metav1.Condition {
 	raw := extractUnstructuredConditions(obj)
 	conditions := make([]metav1.Condition, 0, len(raw))
@@ -134,8 +129,7 @@ func conditionsFromUnstructured(obj unstructured.Unstructured) []metav1.Conditio
 	return conditions
 }
 
-// nilIfZeroTime returns a pointer to t, or nil when t is the zero value, so that
-// `omitempty` JSON tags drop unset timestamps instead of serializing year-1 dates.
+// nilIfZeroTime returns a pointer to t, or nil when t is the zero value, so omitempty drops it.
 func nilIfZeroTime(t time.Time) *time.Time {
 	if t.IsZero() {
 		return nil
@@ -220,11 +214,7 @@ func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 
 }
 
-// mapFluxResourceStatusForCondition derives a Flux resource's status from its Ready
-// condition. When defaultReadyWhenNoConditions is true and there are no conditions
-// at all, it returns StatusSuccess (used for Alert/Provider, whose valid config
-// emits no conditions in older notification-controller versions).
-// https://github.com/fluxcd/source-controller/blob/main/api/v1/condition_types.go
+// mapFluxResourceStatusForCondition derives a Flux resource's status from its Ready condition.
 func mapFluxResourceStatusForCondition(conditions []metav1.Condition, defaultReadyWhenNoConditions bool) kube.Status {
 	for _, condition := range conditions {
 		if condition.Type == "Ready" {
@@ -323,8 +313,7 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 			return kube.StatusPending
 		}
 
-		// Inspect the container statuses directly so these surface as failures
-		// instead of being flattened to a generic "pending" state.
+		// Inspect container statuses directly so these surface as failures, not "pending".
 		containerStatuses := make([]v1.ContainerStatus, 0,
 			len(pod.Status.InitContainerStatuses)+len(pod.Status.ContainerStatuses))
 		containerStatuses = append(containerStatuses, pod.Status.InitContainerStatuses...)
@@ -369,8 +358,7 @@ func mapPodData(el *kube.Resource, obj unstructured.Unstructured) {
 
 }
 
-// mapContainerStatuses flattens a pod's init and regular container statuses into
-// a UI-friendly list, recording each container's current state and reason.
+// mapContainerStatuses flattens a pod's init and regular container statuses into a UI-friendly list.
 func mapContainerStatuses(pod *v1.Pod) []kube.Container {
 	containers := make([]kube.Container, 0,
 		len(pod.Status.InitContainerStatuses)+len(pod.Status.ContainerStatuses))
@@ -411,10 +399,7 @@ func mapContainerStatuses(pod *v1.Pod) []kube.Container {
 	return containers
 }
 
-// isErrorContainerReason reports whether a container's waiting reason indicates
-// a genuine failure rather than a transient startup state. Reasons such as
-// "ContainerCreating" or "PodInitializing" are normal during startup and must
-// not be treated as failures.
+// isErrorContainerReason reports whether a container's waiting reason is a genuine failure, not startup.
 func isErrorContainerReason(reason string) bool {
 	switch reason {
 	case "CrashLoopBackOff",
@@ -532,8 +517,7 @@ func mapPVData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 	el.PVMetadata = &meta
 
-	// Driver-specific attributes (NFS, …) are read by their providers; no-ops
-	// for drivers they don't recognise.
+	// Driver-specific attributes (NFS, …) are read by their providers; no-ops otherwise.
 	mapCSIDriverData(el.PVMetadata, pv)
 
 	if pv.Spec.ClaimRef != nil {
@@ -565,8 +549,7 @@ func mapNodeData(el *kube.Resource, obj unstructured.Unstructured) {
 		}
 	})
 
-	// Ready=True is healthy; an explicit Ready=False is a failure, anything else
-	// (Unknown / missing) is unsettled.
+	// Ready=True is healthy; Ready=False is a failure; anything else is unsettled.
 	el.Status = kube.StatusPending
 	for _, c := range node.Status.Conditions {
 		if c.Type == v1.NodeReady {
@@ -598,9 +581,7 @@ func mapNodeData(el *kube.Resource, obj unstructured.Unstructured) {
 		}
 	}
 
-	// Roles are encoded as labels: node-role.kubernetes.io/<role> (the value is
-	// conventionally empty). A bare "node-role.kubernetes.io/" prefix with no
-	// suffix carries no role name and is skipped.
+	// Roles are encoded as node-role.kubernetes.io/<role> labels; a bare prefix with no suffix is skipped.
 	const rolePrefix = "node-role.kubernetes.io/"
 	for label := range node.Labels {
 		if role, ok := strings.CutPrefix(label, rolePrefix); ok && role != "" {
@@ -680,7 +661,6 @@ func mapDeploymentData(el *kube.Resource, obj unstructured.Unstructured) {
 }
 
 func mapKustomizationData(el *kube.Resource, obj unstructured.Unstructured) {
-	// Convert the unstructured object to a Kustomization object
 	kustomization := &kustomizev1.Kustomization{}
 	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.UnstructuredContent(), kustomization)
 	if err != nil {
@@ -763,8 +743,7 @@ func mapServiceData(el *kube.Resource, obj unstructured.Unstructured) {
 		})
 	}
 
-	// ExternalIPs reflect the address an LB controller (e.g. MetalLB) assigned,
-	// plus any statically configured spec.externalIPs.
+	// ExternalIPs reflect the LB-assigned address plus any statically configured spec.externalIPs.
 	seenIP := map[string]bool{}
 	addIP := func(ip string) {
 		if ip == "" || seenIP[ip] {
@@ -826,8 +805,7 @@ func mapIngressData(el *kube.Resource, obj unstructured.Unstructured) {
 		}
 	}
 
-	// A tls block means the route terminates TLS even when it names no secret
-	// (the proxy then supplies a default/wildcard certificate).
+	// A tls block means the route terminates TLS even when it names no secret.
 	if len(ing.Spec.TLS) > 0 {
 		route.TLSEnabled = true
 	}
@@ -837,9 +815,7 @@ func mapIngressData(el *kube.Resource, obj unstructured.Unstructured) {
 		}
 	}
 
-	// Controller-specific annotations (Traefik, …) are read by their providers.
-	// These no-op when the annotations are absent, so non-Traefik Ingresses are
-	// unaffected.
+	// Controller-specific annotations (Traefik, …) are read by their providers; no-ops when absent.
 	route.EntryPoints = append(route.EntryPoints, traefikIngressEntrypoints(ing.Annotations)...)
 	route.MiddlewareRefs = append(route.MiddlewareRefs, traefikIngressMiddlewares(ing.Annotations)...)
 
@@ -890,6 +866,53 @@ func mapNetworkPolicyData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 	for _, pt := range np.Spec.PolicyTypes {
 		meta.PolicyTypes = append(meta.PolicyTypes, string(pt))
+	}
+
+	mapPorts := func(ports []networkingv1.NetworkPolicyPort) []kube.NetworkPolicyPort {
+		out := make([]kube.NetworkPolicyPort, 0, len(ports))
+		for _, p := range ports {
+			port := kube.NetworkPolicyPort{}
+			if p.Protocol != nil {
+				port.Protocol = string(*p.Protocol)
+			}
+			if p.Port != nil {
+				port.Port = p.Port.String()
+			}
+			if p.EndPort != nil {
+				port.EndPort = *p.EndPort
+			}
+			out = append(out, port)
+		}
+		return out
+	}
+	mapPeers := func(peers []networkingv1.NetworkPolicyPeer) []kube.NetworkPolicyPeer {
+		out := make([]kube.NetworkPolicyPeer, 0, len(peers))
+		for _, p := range peers {
+			peer := kube.NetworkPolicyPeer{}
+			if p.PodSelector != nil {
+				peer.PodSelector = p.PodSelector.MatchLabels
+			}
+			if p.NamespaceSelector != nil {
+				peer.NamespaceSelector = p.NamespaceSelector.MatchLabels
+			}
+			if p.IPBlock != nil {
+				peer.IPBlock = p.IPBlock.CIDR
+			}
+			out = append(out, peer)
+		}
+		return out
+	}
+	for _, rule := range np.Spec.Ingress {
+		meta.Ingress = append(meta.Ingress, kube.NetworkPolicyRule{
+			Peers: mapPeers(rule.From),
+			Ports: mapPorts(rule.Ports),
+		})
+	}
+	for _, rule := range np.Spec.Egress {
+		meta.Egress = append(meta.Egress, kube.NetworkPolicyRule{
+			Peers: mapPeers(rule.To),
+			Ports: mapPorts(rule.Ports),
+		})
 	}
 
 	el.NetworkPolicyMetadata = &meta
@@ -1176,17 +1199,12 @@ func mapStatefulSetData(el *kube.Resource, obj unstructured.Unstructured) {
 	el.Status = mapStatefulSetStatus(ss)
 }
 
-// appendUnstructuredConditions converts an unstructured object's
-// status.conditions into domain Conditions and appends them to el. Used by
-// providers (e.g. Longhorn) whose CRDs aren't imported as typed Go packages.
+// appendUnstructuredConditions converts an unstructured object's status.conditions into domain Conditions on el.
 func appendUnstructuredConditions(el *kube.Resource, obj unstructured.Unstructured) {
 	appendConditions(el, conditionsFromUnstructured(obj), conditionFromMeta)
 }
 
-// mapStatusFromGenericConditions derives a status from a resource's
-// status.conditions, recognizing the Ready/Available/Healthy condition types
-// commonly used by core and third-party CRDs. Returns ("", false) when no such
-// condition is present so callers can fall back to other heuristics.
+// mapStatusFromGenericConditions derives a status from Ready/Available/Healthy conditions; ("", false) when none.
 func mapStatusFromGenericConditions(conditions []map[string]any) (kube.Status, bool) {
 	for _, cond := range conditions {
 		switch cond["type"] {
@@ -1209,9 +1227,7 @@ func mapStatusFromGenericConditions(conditions []map[string]any) (kube.Status, b
 	return "", false
 }
 
-// mapGenericData assigns a status to kinds that have no dedicated mapper. It
-// prefers a Ready/Available/Healthy condition when present, then treats static
-// config/identity objects as success, otherwise leaves the status unknown.
+// mapGenericData assigns a status to kinds with no dedicated mapper, preferring a Ready/Available/Healthy condition.
 func mapGenericData(el *kube.Resource, obj unstructured.Unstructured) {
 	if conditions := extractUnstructuredConditions(obj); len(conditions) > 0 {
 		if status, ok := mapStatusFromGenericConditions(conditions); ok {
@@ -1224,8 +1240,7 @@ func mapGenericData(el *kube.Resource, obj unstructured.Unstructured) {
 	}
 }
 
-// mapReplicaSetStatus is success when all desired replicas are ready (including
-// when scaled to zero), otherwise pending while replicas come up.
+// mapReplicaSetStatus is success when all desired replicas are ready, otherwise pending.
 func mapReplicaSetStatus(el *kube.Resource, obj unstructured.Unstructured) {
 	desired, _, _ := unstructured.NestedInt64(obj.Object, "spec", "replicas")
 	ready, _, _ := unstructured.NestedInt64(obj.Object, "status", "readyReplicas")
@@ -1236,8 +1251,7 @@ func mapReplicaSetStatus(el *kube.Resource, obj unstructured.Unstructured) {
 	el.Status = kube.StatusPending
 }
 
-// mapNamespaceStatus maps an Active namespace to success and a Terminating one
-// to pending.
+// mapNamespaceStatus maps an Active namespace to success and a Terminating one to pending.
 func mapNamespaceStatus(el *kube.Resource, obj unstructured.Unstructured) {
 	phase, _, _ := unstructured.NestedString(obj.Object, "status", "phase")
 	if phase == "" || phase == "Active" {
@@ -1261,14 +1275,7 @@ func extractUnstructuredConditions(obj unstructured.Unstructured) []map[string]a
 	return conditions
 }
 
-// mapGenericFluxData handles Flux resource types that carry no type-specific metadata
-// beyond status/suspend/reconcile. Used for notification and image automation resources.
-// Set defaultReadyWhenNoConditions=true for Alert/Provider (valid config emits no conditions
-// in older notification-controller versions).
-//
-// It converts the unstructured conditions once and then reuses the same typed
-// status/metadata mappers as the typed Flux resources, so the reconcile/suspend/Ready
-// logic lives in a single place.
+// mapGenericFluxData handles Flux resource types with no type-specific metadata beyond status/suspend/reconcile.
 func mapGenericFluxData(el *kube.Resource, obj unstructured.Unstructured, defaultReadyWhenNoConditions bool) {
 	conditions := conditionsFromUnstructured(obj)
 

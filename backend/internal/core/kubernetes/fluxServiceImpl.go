@@ -7,7 +7,6 @@ import (
 
 	"github.com/fluxcd/pkg/apis/meta"
 	"github.com/timp4w/phi/internal/core/logging"
-	"k8s.io/apimachinery/pkg/types"
 
 	helmv2 "github.com/fluxcd/helm-controller/api/v2"
 )
@@ -121,8 +120,8 @@ func (s SuspendPatch) PatchJSON() ([]byte, error) {
 	return json.Marshal(patch)
 }
 
-func (s SuspendPatch) PatchType() types.PatchType {
-	return types.MergePatchType
+func (s SuspendPatch) PatchType() PatchType {
+	return MergePatchType
 }
 
 type ResumePatch struct {
@@ -142,8 +141,8 @@ func (s ResumePatch) PatchJSON() ([]byte, error) {
 	return json.Marshal(patch)
 }
 
-func (s ResumePatch) PatchType() types.PatchType {
-	return types.MergePatchType
+func (s ResumePatch) PatchType() PatchType {
+	return MergePatchType
 }
 
 type ReconcilePatch struct {
@@ -195,7 +194,6 @@ func (r ReconcilePatch) PatchJSON() ([]byte, error) {
 	return patchBytes, nil
 }
 
-func (s ReconcilePatch) PatchType() types.PatchType {
-	return types.MergePatchType
+func (s ReconcilePatch) PatchType() PatchType {
+	return MergePatchType
 }
-
