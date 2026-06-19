@@ -19,7 +19,7 @@ import {
 import { ExternalLink, Maximize2, Search } from "lucide-react";
 import { SiTrivy } from "@icons-pack/react-simple-icons";
 import { TYPES } from "../../../core/shared/types";
-import type { TrivyService } from "../../../core/trivy/services/trivy.service";
+import type { GetTrivyFindingsUseCase } from "../../../core/trivy/usecases/getTrivyFindings.usecase";
 import { TrivyFindings } from "../../../core/trivy/models/trivyFindings";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { ROUTES } from "../../routes/routes.enum";
@@ -43,7 +43,7 @@ const SEVERITY_ORDER: Record<string, number> = {
   UNKNOWN: 4,
 };
 
-function severityChipColor(sev: string): "danger" | "warning" | "default" {
+export function severityChipColor(sev: string): "danger" | "warning" | "default" {
   switch (sev.toUpperCase()) {
     case "CRITICAL":
     case "HIGH":
@@ -61,10 +61,8 @@ function str(item: Record<string, unknown>, key: string): string {
   return typeof v === "string" ? v : "";
 }
 
-// Advisory link for a finding. For a recognised id we build the Aqua AVD page
-// directly (the format the user wants); only fall back to the link Trivy
-// embeds for ids we don't recognise.
-function findingLink(
+// Advisory link for a finding. For a recognised id we build the Aqua AVD page directly (the format the user wants); only fall back to the link Trivy embeds for ids we don't recognise.
+export function findingLink(
   item: Record<string, unknown>,
   id: string,
 ): string | undefined {
@@ -86,9 +84,8 @@ function findingLink(
   return undefined;
 }
 
-// Trivy report types use different field names; flatten each item defensively
-// into a uniform row.
-function toRow(
+// Trivy report types use different field names; flatten each item defensively into a uniform row.
+export function toRow(
   findings: TrivyFindings,
   item: Record<string, unknown>,
   i: number,
@@ -142,7 +139,9 @@ type Props = {
 
 const TrivyFindingsModal: React.FC<Props> = observer(
   ({ isOpen, onOpenChange, title, reportUids, initialSeverity }) => {
-    const trivyService = useInjection<TrivyService>(TYPES.TrivyService);
+    const getTrivyFindings = useInjection<GetTrivyFindingsUseCase>(
+      TYPES.GetTrivyFindingsUseCase,
+    );
     const fluxTreeStore = useInjection(FluxTreeStore);
     const navigate = useNavigate();
 
@@ -153,12 +152,10 @@ const TrivyFindingsModal: React.FC<Props> = observer(
     );
     const [query, setQuery] = useState("");
 
-    // Key the effect on the contents, not the array reference, so it does not
-    // refetch on every parent re-render while the modal is open.
+    // Key the effect on the contents, not the array reference, so it does not refetch on every parent re-render while the modal is open.
     const uidsKey = reportUids.join(",");
 
-    // Resolve a report's target workload (kind/namespace/name) to a resource UID
-    // so each finding can deep-link to it.
+    // Resolve a report's target workload (kind/namespace/name) to a resource UID so each finding can deep-link to it.
     const targetUidLookup = useMemo(() => {
       const lookup = new Map<string, string>();
       fluxTreeStore.resources.forEach((r) => {
@@ -176,10 +173,7 @@ const TrivyFindingsModal: React.FC<Props> = observer(
       let cancelled = false;
       setLoading(true);
 
-      // Fetch reports through a small worker pool. Each request makes the backend
-      // do a live apiserver lookup, so firing all of them at once (a cluster can
-      // have hundreds of reports) floods and crashes the backend. The pool also
-      // stops early once the modal closes.
+      // Fetch reports through a small worker pool. Each request makes the backend do a live apiserver lookup, so firing all of them at once (a cluster can have hundreds of reports) floods and crashes the backend. The pool also stops early once the modal closes.
       (async () => {
         const collected: Row[] = [];
         let seq = 0;
@@ -188,7 +182,7 @@ const TrivyFindingsModal: React.FC<Props> = observer(
         const worker = async () => {
           while (!cancelled && next < uids.length) {
             const uid = uids[next++];
-            const findings = await trivyService.getFindings(uid).catch(() => null);
+            const findings = await getTrivyFindings.execute(uid).catch(() => null);
             if (!findings) continue;
             const t = findings.target;
             const targetUid = targetUidLookup.get(
@@ -196,9 +190,7 @@ const TrivyFindingsModal: React.FC<Props> = observer(
             );
             findings.items.forEach((item, i) => {
               const row = toRow(findings, item, i, targetUid);
-              // Globally unique key across all reports — the per-report index is
-              // not unique, and duplicate keys make React/the virtualizer reuse
-              // DOM nodes and render stale rows on top after filtering.
+              // Globally unique key across all reports — the per-report index is not unique, and duplicate keys make React/the virtualizer reuse DOM nodes and render stale rows on top after filtering.
               row.key = `r${seq++}`;
               collected.push(row);
             });
@@ -223,10 +215,9 @@ const TrivyFindingsModal: React.FC<Props> = observer(
       return () => {
         cancelled = true;
       };
-    }, [isOpen, uidsKey, trivyService, targetUidLookup]);
+    }, [isOpen, uidsKey, getTrivyFindings, targetUidLookup]);
 
-    // Reset filters each time the modal opens, seeding the severity filter from
-    // the count the user clicked.
+    // Reset filters each time the modal opens, seeding the severity filter from the count the user clicked.
     useEffect(() => {
       if (isOpen) {
         setActiveSeverities(
@@ -263,9 +254,7 @@ const TrivyFindingsModal: React.FC<Props> = observer(
         return next;
       });
 
-    // Fixed-height rows: total size is always count × ROW_HEIGHT, so the scroll
-    // range shrinks correctly when filtering and rows never overlap (dynamic
-    // per-item measurement on a 6000+ list is both slower and error-prone).
+    // Fixed-height rows: total size is always count × ROW_HEIGHT, so the scroll range shrinks correctly when filtering and rows never overlap (dynamic per-item measurement on a 6000+ list is both slower and error-prone).
     const ROW_HEIGHT = 72;
     const scrollRef = useRef<HTMLDivElement>(null);
     const virtualizer = useVirtualizer({

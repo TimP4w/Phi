@@ -1,6 +1,7 @@
 const TYPES = {
   WebSocket: Symbol.for("WebSocket"),
   Http: Symbol.for("Http"),
+  Notifier: Symbol.for("Notifier"),
   TreeService: Symbol.for("TreeService"),
   ResourceService: Symbol.for("ResourceService"),
   TrivyService: Symbol.for("TrivyService"),
@@ -16,6 +17,7 @@ const TYPES = {
   HandleWsMessageUseCase: Symbol.for("HandleWsMessageUseCase"),
   WatchMetricsUseCase: Symbol.for("WatchMetricsUseCase"),
   StopWatchMetricsUseCase: Symbol.for("StopWatchMetricsUseCase"),
+  GetTrivyFindingsUseCase: Symbol.for("GetTrivyFindingsUseCase"),
 };
 
 export { TYPES };
