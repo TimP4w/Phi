@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/timp4w/phi/internal/core/kubernetes"
 	mocks "github.com/timp4w/phi/internal/testing/testdata"
@@ -17,7 +16,7 @@ func TestGetEventsUseCaseExecuteSuccess(t *testing.T) {
 
 	expectedEvents := []kubernetes.Event{
 		{
-			UID:           types.UID("123"),
+			UID:           "123",
 			Kind:          "Pod",
 			Name:          "mypod",
 			Namespace:     "default",
