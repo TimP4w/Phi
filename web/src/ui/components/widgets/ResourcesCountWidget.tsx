@@ -20,8 +20,9 @@ import {
 } from "@heroui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { AlertTriangle, CheckCircle2, Search } from "lucide-react";
-import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
+import { Search } from "lucide-react";
+import { FLUX_KINDS, RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
+import HealthButton from "../summary/HealthButton";
 import ResourceRow from "../resource-row/ResourceRow";
 import { statusChipColor } from "../../shared/helpers";
 
@@ -29,13 +30,18 @@ type ResourceCountWidgetProps = {
   resource?: KubeResource;
   skipGrandChildren?: boolean;
   compact?: boolean;
-  // Flat mode for the detail panel: renders just a subresource-count pill and
-  // the health button (which opens the modal), without the Widget card.
+  // Flat mode for the detail panel: renders a "{count} {title}" heading and the health button (which opens the modal), without the Widget card.
   bare?: boolean;
+  // Heading label for bare mode, e.g. "Subresources" → "27 Subresources".
+  title?: string;
+  // Kinds to skip when counting/listing (their children are still walked). Defaults to the Flux kinds, so "Resources" means everything non-Flux (Flux objects have their own Reconciliation section); pass an empty set to count everything.
+  excludeKinds?: Set<string>;
 };
 
-// All statuses a resource can carry, in the order they should surface (worst
-// first, so failures lead).
+// Flux objects are surfaced via Reconciliation, not the resource count.
+const FLUX_KIND_SET = new Set<string>(FLUX_KINDS);
+
+// All statuses a resource can carry, in the order they should surface (worst first, so failures lead).
 const ALL_STATUSES = [
   ResourceStatus.FAILED,
   ResourceStatus.WARNING,
@@ -64,6 +70,8 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     skipGrandChildren = false,
     compact,
     bare,
+    title,
+    excludeKinds = FLUX_KIND_SET,
   }: ResourceCountWidgetProps) => {
     const store = useInjection(FluxTreeStore);
     const tree: Tree = store.tree;
@@ -105,20 +113,26 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
         if (!node || visited.has(node.uid))
           return { total: 0, ready: 0, notReady: 0, suspended: 0, unknown: 0 };
         visited.add(node.uid);
-        collected.push(node);
 
-        let total = 1;
-        let ready = node.status === ResourceStatus.SUCCESS ? 1 : 0;
-        let suspended = node.status === ResourceStatus.SUSPENDED ? 1 : 0;
-        let unknown = node.status === ResourceStatus.UNKNOWN ? 1 : 0;
+        // Excluded kinds (e.g. Flux objects) don't count toward the totals or the listed resources, but their children still do.
+        const excluded = excludeKinds?.has(node.kind) ?? false;
+        if (!excluded) collected.push(node);
+
+        let total = excluded ? 0 : 1;
+        let ready = !excluded && node.status === ResourceStatus.SUCCESS ? 1 : 0;
+        let suspended = !excluded && node.status === ResourceStatus.SUSPENDED ? 1 : 0;
+        let unknown = !excluded && node.status === ResourceStatus.UNKNOWN ? 1 : 0;
         let notReady =
+          !excluded &&
           node.status !== ResourceStatus.SUCCESS &&
           node.status !== ResourceStatus.UNKNOWN &&
           node.status !== ResourceStatus.SUSPENDED
             ? 1
             : 0;
 
+        // Never stop at an excluded node (e.g. a nested Kustomization): we still need to walk through it to reach its real, countable descendants, otherwise a Kustomization whose children are all Kustomizations would count 0.
         const skipChildren =
+          !excluded &&
           depth > 0 &&
           (node.kind === RESOURCE_TYPE.KUSTOMIZATION ||
             node.kind === RESOURCE_TYPE.HELM_RELEASE) &&
@@ -141,7 +155,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       const counts = countResources(resource);
       setResourceCounts(counts);
       setAllResources(collected);
-    }, [resource, tree, skipGrandChildren]);
+    }, [resource, tree, skipGrandChildren, excludeKinds]);
 
     const sortedResources = useMemo(
       () =>
@@ -183,8 +197,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
         return next;
       });
 
-    // Fixed-height rows: total size is always count × ROW_HEIGHT, so the scroll
-    // range shrinks correctly when filtering and rows never overlap.
+    // Fixed-height rows: total size is always count × ROW_HEIGHT, so the scroll range shrinks correctly when filtering and rows never overlap.
     const ROW_HEIGHT = 56;
     const scrollRef = useRef<HTMLDivElement>(null);
     const virtualizer = useVirtualizer({
@@ -215,8 +228,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
       );
     }
 
-    // Card health is driven by the live resource set, not the modal snapshot,
-    // so the badge keeps reflecting the current cluster state.
+    // Card health is driven by the live resource set, not the modal snapshot, so the badge keeps reflecting the current cluster state.
     const failedCount = allResources.filter(
       (r) => r.status === ResourceStatus.FAILED,
     ).length;
@@ -226,38 +238,16 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
         r.status === ResourceStatus.WARNING,
     ).length;
 
-    // Overall health: red if anything failed, yellow if anything is still
-    // reconciling/warning, otherwise green.
+    // Overall health: red if anything failed, yellow if anything is still reconciling/warning, otherwise green.
     const health: "danger" | "warning" | "success" =
       failedCount > 0 ? "danger" : pendingCount > 0 ? "warning" : "success";
-
-    const HEALTH_STYLES = {
-      danger: {
-        border: "border-danger/30",
-        bg: "bg-danger/[0.06] hover:bg-danger/10",
-        text: "text-danger",
-        muted: "text-danger/60",
-      },
-      warning: {
-        border: "border-warning/30",
-        bg: "bg-warning/[0.06] hover:bg-warning/10",
-        text: "text-warning",
-        muted: "text-warning/60",
-      },
-      success: {
-        border: "border-success/30",
-        bg: "bg-success/[0.06] hover:bg-success/10",
-        text: "text-success",
-        muted: "text-success/60",
-      },
-    }[health];
 
     const healthLabel =
       failedCount > 0
         ? `${failedCount} failed${pendingCount > 0 ? ` · ${pendingCount} reconciling` : ""}`
         : pendingCount > 0
           ? `${pendingCount} reconciling`
-          : "All ready";
+          : `${resourceCounts.total} ready`;
 
     // Open the modal pre-filtered to the worst tier present.
     const openModal = () => {
@@ -274,18 +264,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     };
 
     const healthButton = (
-      <button
-        onClick={openModal}
-        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border ${HEALTH_STYLES.border} ${HEALTH_STYLES.bg} transition-colors text-left`}
-      >
-        {health === "success" ? (
-          <CheckCircle2 className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`} />
-        ) : (
-          <AlertTriangle className={`w-3.5 h-3.5 ${HEALTH_STYLES.text} flex-shrink-0`} />
-        )}
-        <span className={`text-xs flex-1 ${HEALTH_STYLES.text}`}>{healthLabel}</span>
-        <span className={`text-xs ${HEALTH_STYLES.muted}`}>View →</span>
-      </button>
+      <HealthButton tone={health} label={healthLabel} onClick={openModal} />
     );
 
     const modal = (
@@ -392,9 +371,11 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     if (bare) {
       return (
         <div className="space-y-2">
-          <Chip size="sm" variant="flat">
-            {resourceCounts.total} subresources
-          </Chip>
+          {title && (
+            <p className="text-xs font-semibold text-default-400 uppercase tracking-widest mb-2 px-2">
+              {resourceCounts.total} {title}
+            </p>
+          )}
           {healthButton}
           {modal}
         </div>
