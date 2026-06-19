@@ -10,8 +10,7 @@ import { TraefikProvider } from "../providers/traefik.provider";
 
 export const INTERNET_NODE_ID = "internet";
 
-// TLS termination details surfaced on a route/gateway node (shown in a popover
-// from the lock indicator instead of as separate cert/secret nodes).
+// TLS termination details surfaced in a route/gateway node's lock popover.
 export type NetworkTLSInfo = {
   certUid?: string;
   certName?: string;
@@ -23,28 +22,32 @@ export type NetworkTLSInfo = {
   dnsNames?: string[];
 };
 
-// Node data is either a real Kubernetes resource (optionally with TLS info), a
-// synthetic layer node (an external IP, an entrypoint, or a middleware "wall"
-// carrying a label and optional names), or the empty internet node.
+// One NetworkPolicy ingress rule surfaced on a pod node: permitted sources and ports.
+export type PolicyIngressRule = { sources: string[]; ports?: string };
+
+// NetworkPolicy constraints gating a pod, shown as a clickable indicator on the pod node.
+export type PolicyConstraints = {
+  policies: { uid: string; name: string }[];
+  ingress: PolicyIngressRule[];
+};
+
+// Node data is either a real resource, a synthetic layer node (label + optional names), or the internet node.
 export type NetworkNodeData =
-  | { treeNode: KubeResource; tls?: NetworkTLSInfo }
+  | { treeNode: KubeResource; tls?: NetworkTLSInfo; policy?: PolicyConstraints }
   | { label: string; names?: string[] }
   | Record<string, never>;
 
 type Output = { nodes: Node<NetworkNodeData>[]; edges: Edge[] };
 type Input = { nodeId: string };
 
-// A logical traffic edge before layout. `healthy` drives the edge styling;
-// `label` annotates how/where traffic flows (e.g. the access method).
+// A logical traffic edge before layout.
 type LogicalEdge = { source: string; target: string; healthy: boolean; label?: string };
 
-// A context edge attaches side metadata (TLS secret/cert) to an `anchor` route
-// or gateway; kept only when the anchor is in the focused component.
-type ContextEdge = LogicalEdge & { anchor: string };
+// A policy edge is an allowance declared by a NetworkPolicy, anchored to the gated pod.
+type PolicyEdge = { source: string; target: string; anchor: string; direction: "ingress" | "egress"; label?: string };
 
-// dnsMatches reports whether a hostname is covered by a certificate DNS name,
-// supporting a single leading wildcard label (e.g. *.example.com ⊇ app.example.com).
-function dnsMatches(host: string, pattern: string): boolean {
+// dnsMatches reports whether a hostname is covered by a cert DNS name (single leading wildcard supported).
+export function dnsMatches(host: string, pattern: string): boolean {
   if (pattern === host) return true;
   if (pattern.startsWith("*.")) {
     const suffix = pattern.slice(1); // ".example.com"
@@ -53,14 +56,23 @@ function dnsMatches(host: string, pattern: string): boolean {
   return false;
 }
 
-// npLabel summarises a NetworkPolicy's gated directions for an edge label.
-function npLabel(np: KubeResource): string {
-  const types = np.networkPolicyMetadata?.policyTypes ?? [];
-  return types.length > 0 ? `NetPol · ${types.join("/")}` : "NetworkPolicy";
+// portsLabel renders a policy rule's ports (":5432, :53/UDP"); empty = all ports.
+export function portsLabel(ports?: { protocol?: string; port?: string; endPort?: number }[]): string {
+  if (!ports || ports.length === 0) return "";
+  return ports
+    .map((p) => {
+      const port = p.port ?? "*";
+      const range = p.endPort ? `-${p.endPort}` : "";
+      const proto = p.protocol && p.protocol !== "TCP" ? `/${p.protocol}` : "";
+      return `:${port}${range}${proto}`;
+    })
+    .join(", ");
 }
 
+export const COLOR_POLICY = "#9353d3"; // heroui secondary — policy allowances
+
 // entrypointLabel describes how external traffic reaches a Service entrypoint.
-function entrypointLabel(service: KubeResource): string {
+export function entrypointLabel(service: KubeResource): string {
   const meta = service.serviceMetadata;
   if (!meta) return "";
   const ports = meta.ports ?? [];
@@ -76,7 +88,7 @@ function entrypointLabel(service: KubeResource): string {
   return meta.type ?? "";
 }
 
-function gatewayLabel(gateway: KubeResource): string {
+export function gatewayLabel(gateway: KubeResource): string {
   const meta = gateway.gatewayMetadata;
   if (!meta) return "Gateway";
   const addrs = (meta.addresses ?? []).join(", ") || "pending address";
@@ -95,8 +107,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
     "elk.direction": "RIGHT",
     "elk.layered.spacing.nodeNodeBetweenLayers": "120",
     "elk.spacing.nodeNode": "32",
-    // Orthogonal (right-angle) edges and aggressive crossing/alignment passes make
-    // a wide fan-out followable instead of a tangle of diagonal lines.
+    // Orthogonal edges + crossing/alignment passes keep a wide fan-out followable.
     "elk.edgeRouting": "ORTHOGONAL",
     "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
     "elk.layered.crossingMinimization.semiInteractive": "true",
@@ -137,10 +148,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
     });
   }
 
-  // buildFocusedGraph resolves the traffic chain reachable from the focus
-  // resource. The internet node is attached only to entrypoints that already
-  // belong to the focused component, so a single focus does not pull in every
-  // unrelated entrypoint through the shared internet hub.
+  // buildFocusedGraph resolves the traffic chain reachable from the focus resource.
   private buildFocusedGraph(focusId: string): { nodes: Node<NetworkNodeData>[]; edges: Edge[] } {
     const resources = this.fluxTreeStore.resources;
 
@@ -149,25 +157,20 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
     const gatewayClassByName = new Map<string, KubeResource>();
     const secretByKey = new Map<string, KubeResource>();
     const certBySecretKey = new Map<string, KubeResource>();
-    // All Certificates, for matching a route's hostnames to a cert's DNS names
-    // when the route terminates TLS but names no secret (wildcard / default cert).
+    // All Certificates, for matching a secret-less route's hostnames to a cert's DNS names.
     const certificates: KubeResource[] = [];
     const networkPolicies: KubeResource[] = [];
-    // Entrypoint name -> middleware refs applied to all its traffic (aggregated
-    // from every proxy workload's ProxyMetadata).
+    // Entrypoint name -> middleware refs, aggregated from every proxy workload's ProxyMetadata.
     const entrypointMiddlewares = new Map<string, string[]>();
-    // Synthetic layer nodes that aren't Kubernetes resources: external IPs,
-    // entrypoints, and middleware walls. These give the topology real columns to
-    // follow instead of collapsing everything onto one Service node.
+    // Synthetic layer nodes (external IPs, entrypoints, middleware walls) that aren't Kubernetes resources.
     const syntheticMeta = new Map<
       string,
-      { type: "externalIp" | "entrypoint" | "middlewareWall"; label: string; names?: string[] }
+      { type: "externalIp" | "entrypoint" | "middlewareWall" | "policyPeer"; label: string; names?: string[] }
     >();
     const ipNodeId = (ip: string) => `ip::${ip}`;
     const entrypointNodeId = (lbUid: string, ep: string) => `ep::${lbUid}::${ep}`;
 
-    // Vendor-specific ref handling is delegated to providers; the builder itself
-    // stays controller-agnostic. Instantiated per build so their indexes are fresh.
+    // Vendor-specific ref handling is delegated to providers; instantiated per build for fresh indexes.
     const providers: NetworkProvider[] = [new TraefikProvider()];
     const middlewareName = (ref: string): string => {
       for (const p of providers) {
@@ -176,8 +179,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
       }
       return ref;
     };
-    // Index LoadBalancer Services by their external address so a route can be
-    // linked to the ingress controller's Service that actually fronts it.
+    // Index LoadBalancer Services by external address so a route can link to its fronting Service.
     const lbServiceByAddress = new Map<string, KubeResource>();
     resources.forEach((r) => {
       providers.forEach((p) => p.index(r));
@@ -206,17 +208,13 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
 
     const resourceEdges: LogicalEdge[] = [];
     const internetEdges: LogicalEdge[] = [];
-    // Context edges hang side metadata (currently NetworkPolicies) off an anchor
-    // node. Kept only when the anchor is in the focused component.
-    const contextEdges: ContextEdge[] = [];
+    // Policy edges are NetworkPolicy egress allowances, anchored to the gated pod.
+    const policyEdges: PolicyEdge[] = [];
 
-    // TLS info per route/gateway, surfaced in the node's lock popover rather than
-    // as separate cert/secret nodes (which cluttered the graph).
+    // TLS info per route/gateway, surfaced in the node's lock popover.
     const tlsByNode = new Map<string, NetworkTLSInfo>();
 
-    // resolveTls finds the certificate backing a route/gateway: first by the TLS
-    // secret it names, then (for secret-less routes) by matching its hostnames to
-    // a certificate's DNS names (wildcard/default cert the proxy serves).
+    // resolveTls finds the cert backing a route/gateway, by named secret then by matching hostnames to DNS names.
     const resolveTls = (anchorUid: string, refs: string[], hostnames?: string[]) => {
       let cert: KubeResource | undefined;
       let secret: KubeResource | undefined;
@@ -246,9 +244,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
       });
     };
 
-    // entrypointExit returns the node routes should attach from: the entrypoint's
-    // own middleware wall when it has entrypoint-level middlewares, else the
-    // entrypoint node itself. The wall is built once per entrypoint.
+    // entrypointExit returns the node routes attach from: the entrypoint's middleware wall, else the entrypoint.
     const entrypointExitCache = new Map<string, string>();
     const entrypointExit = (lbUid: string, ep: string): string => {
       const epId = entrypointNodeId(lbUid, ep);
@@ -271,9 +267,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
     };
 
     resources.forEach((r) => {
-      // Entrypoints exposed to the internet. LoadBalancers get an explicit
-      // external-IP node per address (Internet → IP → loadbalancer) so multiple
-      // IPs/LBs branch cleanly; NodePort services attach to the internet directly.
+      // Entrypoints exposed to the internet; LoadBalancers get an external-IP node per address.
       if (r.kind === RESOURCE_TYPE.SERVICE && r.serviceMetadata?.type === "LoadBalancer") {
         const ips = r.serviceMetadata.externalIPs ?? [];
         if (ips.length > 0) {
@@ -305,14 +299,10 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
         if (gwTlsRefs.length > 0) resolveTls(r.uid, gwTlsRefs);
       }
 
-      // Routes: attached to a Gateway (Gateway API), fronted by the ingress
-      // controller's LoadBalancer Service (matched on external address), or — as
-      // a last resort — drawn straight from the internet.
+      // Routes: attached to a Gateway, fronted by the LB Service (by address), else drawn from the internet.
       if (r.routeMetadata) {
         const parentRefs = r.routeMetadata.routeParentRefs ?? [];
-        // Controller-agnostic "which door" label: the route's named entrypoints
-        // (Traefik), else its ingressClass (how nginx/caddy split internal vs
-        // external), else its hostnames. Nothing here assumes a Traefik cluster.
+        // Controller-agnostic "which door" label: entrypoints, else ingressClass, else hostnames.
         const entryLabel =
           r.routeMetadata.entryPoints?.join(", ") ||
           r.routeMetadata.class ||
@@ -328,10 +318,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
           }
         }
         if (!linked) {
-          // Match the controller's LB Service via the route's own external address,
-          // then route through an entrypoint node per entrypoint the route binds
-          // to (loadbalancer → websecure → ingress). This groups the many ingresses
-          // by entrypoint instead of fanning them all off the single LB node.
+          // Match the LB Service by address, then route through an entrypoint node per bound entrypoint.
           const lbService = (r.routeMetadata.addresses ?? [])
             .map((addr) => lbServiceByAddress.get(addr))
             .find((svc): svc is KubeResource => !!svc);
@@ -354,8 +341,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
         if (!linked) {
           internetEdges.push({ source: INTERNET_NODE_ID, target: r.uid, healthy: true, label: entryLabel });
         }
-        // Route-level middlewares render as one "wall" node listing their names,
-        // sitting between the route and its backend services.
+        // Route-level middlewares render as one "wall" node between the route and its backends.
         let tail = r.uid;
         const mwRefs = r.routeMetadata.middlewareRefs ?? [];
         if (mwRefs.length > 0) {
@@ -392,28 +378,102 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
       }
     });
 
-    // NetworkPolicies gate the pods they select (same namespace). Attached as
-    // context anchored to each gated pod, so they show when the pod is in view
-    // without a shared policy dragging in every pod it matches.
+    // NetworkPolicies gate the pods they select: egress rules become edges, ingress rules go in a per-pod popover.
+    const policyIngressByPod = new Map<string, PolicyIngressRule[]>();
+    const policiesByPod = new Map<string, { uid: string; name: string }[]>();
+    const peerNodeId = (raw: string) => `np-peer::${raw}`;
+    const ensurePeerNode = (id: string, label: string, subtitle?: string): string => {
+      if (!syntheticMeta.has(id)) {
+        syntheticMeta.set(id, { type: "policyPeer", label, names: subtitle ? [subtitle] : undefined });
+      }
+      return id;
+    };
+    const selectorText = (sel: Record<string, string>): string =>
+      Object.entries(sel)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(",");
+    // matchPods finds live Pods in a namespace whose labels satisfy a selector.
+    const matchPods = (selector: Record<string, string>, namespace: string): KubeResource[] => {
+      const entries = Object.entries(selector);
+      const out: KubeResource[] = [];
+      resources.forEach((pod) => {
+        if (pod.kind !== RESOURCE_TYPE.POD || pod.namespace !== namespace) return;
+        if (!entries.every(([k, v]) => pod.labels.get(k) === v)) return;
+        out.push(pod);
+      });
+      return out;
+    };
+    // resolvePeers turns a rule's peer list into node ids; an empty list means "anywhere".
+    const resolvePeers = (
+      peers: { podSelector?: Record<string, string>; namespaceSelector?: Record<string, string>; ipBlock?: string }[] | undefined,
+      policyNs: string,
+    ): string[] => {
+      if (!peers || peers.length === 0) {
+        return [ensurePeerNode(peerNodeId("anywhere"), "Anywhere", "0.0.0.0/0")];
+      }
+      const ids: string[] = [];
+      for (const peer of peers) {
+        if (peer.ipBlock) {
+          ids.push(ensurePeerNode(peerNodeId(`cidr::${peer.ipBlock}`), peer.ipBlock, "CIDR"));
+        } else if (peer.namespaceSelector) {
+          const ns = selectorText(peer.namespaceSelector) || "all namespaces";
+          const pod = peer.podSelector ? ` · ${selectorText(peer.podSelector)}` : "";
+          ids.push(ensurePeerNode(peerNodeId(`ns::${ns}${pod}`), `ns: ${ns}${pod}`, "Namespace selector"));
+        } else if (peer.podSelector) {
+          // Group the selector into one node (not one per pod) to keep gated pods aligned in ELK.
+          const sel = selectorText(peer.podSelector) || "(any pod)";
+          const count = matchPods(peer.podSelector, policyNs).length;
+          const subtitle = count > 0 ? `${count} pod${count === 1 ? "" : "s"}` : "no live pods";
+          ids.push(ensurePeerNode(peerNodeId(`pod::${policyNs}::${sel}`), sel, subtitle));
+        }
+      }
+      return ids;
+    };
+    // describePeers is the textual counterpart of resolvePeers, used for the ingress popover.
+    const describePeers = (
+      peers: { podSelector?: Record<string, string>; namespaceSelector?: Record<string, string>; ipBlock?: string }[] | undefined,
+      policyNs: string,
+    ): string[] => {
+      if (!peers || peers.length === 0) return ["Anywhere (0.0.0.0/0)"];
+      const out: string[] = [];
+      for (const peer of peers) {
+        if (peer.ipBlock) {
+          out.push(peer.ipBlock);
+        } else if (peer.namespaceSelector) {
+          const ns = selectorText(peer.namespaceSelector) || "all namespaces";
+          const pod = peer.podSelector ? ` · ${selectorText(peer.podSelector)}` : "";
+          out.push(`ns: ${ns}${pod}`);
+        } else if (peer.podSelector) {
+          const pods = matchPods(peer.podSelector, policyNs);
+          out.push(pods.length > 0 ? pods.map((p) => p.name).join(", ") : `${selectorText(peer.podSelector) || "(any pod)"} (no live pods)`);
+        }
+      }
+      return out;
+    };
+
     for (const np of networkPolicies) {
-      const selector = Object.entries(np.networkPolicyMetadata?.podSelector ?? {});
+      const meta = np.networkPolicyMetadata;
+      const selector = Object.entries(meta?.podSelector ?? {});
       resources.forEach((pod) => {
         if (pod.kind !== RESOURCE_TYPE.POD || pod.namespace !== np.namespace) return;
         if (!selector.every(([k, v]) => pod.labels.get(k) === v)) return;
-        contextEdges.push({
-          source: np.uid,
-          target: pod.uid,
-          healthy: true,
-          label: npLabel(np),
-          anchor: pod.uid,
-        });
+        policiesByPod.set(pod.uid, [...(policiesByPod.get(pod.uid) ?? []), { uid: np.uid, name: np.name }]);
+        for (const rule of meta?.egress ?? []) {
+          const label = portsLabel(rule.ports);
+          for (const target of resolvePeers(rule.peers, np.namespace ?? "")) {
+            if (target === pod.uid) continue;
+            policyEdges.push({ source: pod.uid, target, anchor: pod.uid, direction: "egress", label });
+          }
+        }
+        for (const rule of meta?.ingress ?? []) {
+          const list = policyIngressByPod.get(pod.uid) ?? [];
+          list.push({ sources: describePeers(rule.peers, np.namespace ?? ""), ports: portsLabel(rule.ports) || undefined });
+          policyIngressByPod.set(pod.uid, list);
+        }
       });
     }
 
-    // Scope to the focus by following traffic direction: keep only nodes on a
-    // path through a seed — its ancestors (what reaches it) and descendants
-    // (what it reaches). This stops a shared entrypoint (e.g. the Traefik LB
-    // Service) from dragging in every sibling route that also hangs off it.
+    // Scope to the focus: keep only nodes on a path through a seed (its ancestors and descendants).
     const allEdges = [...internetEdges, ...resourceEdges];
     const forward = new Map<string, Set<string>>();
     const reverse = new Map<string, Set<string>>();
@@ -426,11 +486,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
       addDir(reverse, e.target, e.source);
     }
 
-    // Seeds: the focus plus everything it owns (flux ownership subtree). Focusing
-    // a Kustomization/HelmRelease/Deployment thus renders the union of the
-    // traffic chains of every Pod/Service/route it owns — the complete tree.
-    // Only seeds that actually take part in the network graph are kept, so owned
-    // ConfigMaps/Secrets/etc. do not appear as isolated nodes.
+    // Seeds: the focus plus everything it owns, keeping only those that take part in the network graph.
     const networked = (uid: string) => forward.has(uid) || reverse.has(uid);
     const seeds = [...this.ownershipSubtree(focusId)].filter(networked);
     // Fall back to the focus itself so a lone resource still renders a node.
@@ -453,18 +509,14 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
 
     const component = new Set<string>([...startIds, ...reachable(forward), ...reachable(reverse)]);
 
-    // Fold in context (TLS secrets/certs) for every anchor already in the
-    // component, so a route's TLS provenance shows even when focusing a pod.
-    const keptContextEdges = contextEdges.filter((e) => component.has(e.anchor));
-    for (const e of keptContextEdges) {
+    // Fold in NetworkPolicy egress allowances for every gated pod in the component, pulling their peer nodes in.
+    const keptPolicyEdges = policyEdges.filter((e) => component.has(e.anchor));
+    for (const e of keptPolicyEdges) {
       component.add(e.source);
       component.add(e.target);
     }
 
-    const keptEdges = [
-      ...allEdges.filter((e) => component.has(e.source) && component.has(e.target)),
-      ...keptContextEdges,
-    ];
+    const keptEdges = allEdges.filter((e) => component.has(e.source) && component.has(e.target));
     const includeInternet = component.has(INTERNET_NODE_ID);
 
     // Deduplicate edges (multiple slices/refs can produce the same pair).
@@ -479,9 +531,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
         id,
         source: e.source,
         target: e.target,
-        // Bezier (default) rather than orthogonal: a node fanning out to several
-        // stacked targets renders as distinct curves instead of overlapping
-        // vertical segments that look like one bus linking the targets.
+        // Bezier (default) rather than orthogonal: fan-out renders as distinct curves, not one bus.
         type: "default",
         animated: !e.healthy,
         label: e.label,
@@ -493,6 +543,28 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
       });
     }
 
+    // Policy edges render distinctly (dashed purple) and are deduped by direction+pair.
+    const seenPolicy = new Set<string>();
+    for (const e of keptPolicyEdges) {
+      const id = `policy::${e.direction}::${e.source}->${e.target}`;
+      if (seenPolicy.has(id)) continue;
+      seenPolicy.add(id);
+      const cue = e.direction === "egress" ? "⇥ egress" : "⇤ ingress";
+      edges.push({
+        id,
+        source: e.source,
+        target: e.target,
+        type: "default",
+        animated: false,
+        label: e.label ? `${cue} ${e.label}` : cue,
+        labelStyle: { fill: "#c4b5fd", fontSize: 10 },
+        labelBgStyle: { fill: "#18181b", fillOpacity: 0.85 },
+        labelBgPadding: [4, 2],
+        labelBgBorderRadius: 4,
+        style: { stroke: COLOR_POLICY, strokeDasharray: "4 3" },
+      });
+    }
+
     const nodes: Node<NetworkNodeData>[] = [];
     if (includeInternet) {
       nodes.push({ id: INTERNET_NODE_ID, type: "internet", data: {}, position: { x: 0, y: 0 } });
@@ -500,10 +572,15 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
     for (const uid of component) {
       const resource = resources.get(uid);
       if (resource) {
+        const policies = policiesByPod.get(uid);
         nodes.push({
           id: uid,
           type: this.nodeTypeFor(resource),
-          data: { treeNode: resource, tls: tlsByNode.get(uid) },
+          data: {
+            treeNode: resource,
+            tls: tlsByNode.get(uid),
+            policy: policies ? { policies, ingress: policyIngressByPod.get(uid) ?? [] } : undefined,
+          },
           position: { x: 0, y: 0 },
         });
         continue;
@@ -522,10 +599,7 @@ export class NetworkTopologyUseCase extends UseCase<Input, Promise<Output>> {
     return { nodes, edges };
   }
 
-  // ownershipSubtree returns the focus UID plus every resource it owns,
-  // following the flux ownership tree (children populated from ownerReferences /
-  // flux labels). Used to expand an owner (Kustomization, HelmRelease,
-  // Deployment, …) into all of its networked resources.
+  // ownershipSubtree returns the focus UID plus every resource it owns, following the flux ownership tree.
   private ownershipSubtree(focusId: string): Set<string> {
     const result = new Set<string>([focusId]);
     const root = this.fluxTreeStore.resources.get(focusId);
