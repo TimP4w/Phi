@@ -1,10 +1,26 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import AppsView from "./Dashboard.view";
 import { renderWithProviders, makeTestContainer } from "../../../test/render";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { makeDto } from "../../../test/fixtures";
+
+// The sidebar's default open state is decided by a matchMedia("(min-width: 1024px)")
+// probe; report it unmatched to exercise the mobile (collapsed) default.
+const realMatchMedia = window.matchMedia;
+function forceMobile() {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+}
 
 const populated = () => {
   const c = makeTestContainer();
@@ -18,6 +34,9 @@ const populated = () => {
 
 describe("AppsView (Dashboard)", () => {
   beforeEach(() => sessionStorage.clear());
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
+  });
 
   it("renders the applications heading and the app cards", () => {
     renderWithProviders(<AppsView />, { container: populated() });
@@ -37,6 +56,12 @@ describe("AppsView (Dashboard)", () => {
     renderWithProviders(<AppsView />, { container: populated() });
     // Desktop default opens the sidebar, so the toggle collapses it.
     await userEvent.click(screen.getByLabelText("Collapse sidebar"));
+    expect(screen.getByLabelText("Expand sidebar")).toBeInTheDocument();
+  });
+
+  it("starts with the sidebar collapsed on mobile", () => {
+    forceMobile();
+    renderWithProviders(<AppsView />, { container: populated() });
     expect(screen.getByLabelText("Expand sidebar")).toBeInTheDocument();
   });
 });

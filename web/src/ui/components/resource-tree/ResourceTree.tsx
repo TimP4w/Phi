@@ -135,7 +135,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
           {/* Identity */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="text-sm font-semibold truncate">{resource.name}</span>
+              <span className="text-sm font-semibold truncate min-w-0">{resource.name}</span>
               <span className="text-xs text-muted flex-shrink-0">
                 {resource.kind}
               </span>

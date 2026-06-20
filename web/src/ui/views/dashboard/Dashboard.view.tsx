@@ -15,6 +15,7 @@ import { TYPES } from "../../../core/shared/types";
 import { WatchMetricsUseCase } from "../../../core/metrics/usecases/watchMetrics.usecase";
 import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatchMetrics.usecase";
 import ClusterInspector from "../../components/summary/ClusterInspector";
+import FilterDropdown from "../../components/filter-dropdown/FilterDropdown";
 import {
   ApplicationFilter,
   KIND_FILTERS,
@@ -202,7 +203,7 @@ const AppsView: React.FC = observer(() => {
                   />
                 </div>
 
-                <div className="flex flex-wrap items-center gap-1">
+                <div className="hidden md:flex flex-wrap items-center gap-1">
                   {STATUS_FILTERS.map((f) => (
                     <Chip
                       key={f.key}
@@ -217,9 +218,9 @@ const AppsView: React.FC = observer(() => {
                   ))}
                 </div>
 
-                <div className="h-4 w-px bg-surface-tertiary hidden sm:block" />
+                <div className="h-4 w-px bg-surface-tertiary hidden md:block" />
 
-                <div className="flex flex-wrap items-center gap-1">
+                <div className="hidden md:flex flex-wrap items-center gap-1">
                   {KIND_FILTERS.map((f) => (
                     <Chip
                       key={f.key}
@@ -233,9 +234,9 @@ const AppsView: React.FC = observer(() => {
                   ))}
                 </div>
 
-                <div className="h-4 w-px bg-surface-tertiary hidden sm:block" />
+                <div className="h-4 w-px bg-surface-tertiary hidden md:block" />
 
-                <div className="flex flex-wrap items-center gap-1">
+                <div className="hidden md:flex flex-wrap items-center gap-1">
                   {SUSPEND_FILTERS.map((f) => (
                     <Chip
                       key={f.key}
@@ -247,6 +248,27 @@ const AppsView: React.FC = observer(() => {
                       {f.label}
                     </Chip>
                   ))}
+                </div>
+
+                <div className="flex md:hidden items-center gap-1.5">
+                  <FilterDropdown
+                    label="Status"
+                    options={STATUS_FILTERS}
+                    selected={selectedStatusesToFilter}
+                    onChange={setSelectedStatusesToFilter}
+                  />
+                  <FilterDropdown
+                    label="Kind"
+                    options={KIND_FILTERS}
+                    selected={selectedKindsToFilter}
+                    onChange={setSelectedKindsToFilter}
+                  />
+                  <FilterDropdown
+                    label="State"
+                    options={SUSPEND_FILTERS}
+                    selected={selectedSuspendStatusesToFilter}
+                    onChange={setSelectedSuspendStatusesToFilter}
+                  />
                 </div>
 
                 {hasActiveFilters && (

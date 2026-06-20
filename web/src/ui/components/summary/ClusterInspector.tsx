@@ -28,7 +28,15 @@ import {
   Pod,
   ResourceStatus,
 } from "../../../core/fluxTree/models/tree";
-import { FLUX_KINDS, RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
+import {
+  FLUX_KINDS,
+  FLUX_VERSION_LABEL,
+  RESOURCE_TYPE,
+} from "../../../core/fluxTree/constants/resources.const";
+import { Link } from "react-router-dom";
+import { SiFlux } from "@icons-pack/react-simple-icons";
+import { ROUTES } from "../../routes/routes.enum";
+import { statusDotClass } from "../../shared/helpers";
 import {
   SeverityCounts,
   clusterSummary,
@@ -267,6 +275,22 @@ const sum = (xs: number[]): number => xs.reduce((a, b) => a + b, 0);
 // Flux objects live in the Reconciliation section, so they're excluded from the Resources count.
 const FLUX_KIND_SET = new Set<string>(FLUX_KINDS);
 
+// Trim the conventional "-controller" suffix so controller names stay compact.
+const shortControllerName = (name: string) => name.replace(/-controller$/, "");
+
+// Most common version label across the Flux controller deployments.
+function fluxVersionOf(deployments: KubeResource[]): string | null {
+  const versions = deployments
+    .map((d) => d.labels.get(FLUX_VERSION_LABEL))
+    .filter(Boolean) as string[];
+  if (versions.length === 0) return null;
+  const counts = versions.reduce<Record<string, number>>((acc, v) => {
+    acc[v] = (acc[v] || 0) + 1;
+    return acc;
+  }, {});
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+}
+
 /** Right-rail cluster inspector: each section collapses to a number and expands to surface problems. */
 const ClusterInspector: React.FC<{
   onClose?: () => void;
@@ -322,6 +346,13 @@ const ClusterInspector: React.FC<{
 
   // Flux reconciliation (shared with the tree-view section).
   const recon = computeReconciliation(fluxTreeStore.root);
+
+  const fluxControllers = fluxTreeStore.tree.getFluxControllersDeployments();
+  const fluxVersion = fluxVersionOf(fluxControllers);
+  const fluxDown = fluxControllers.filter(
+    (d) => d.status !== ResourceStatus.SUCCESS,
+  ).length;
+  const fluxTone: Tone = fluxDown > 0 ? "danger" : "success";
 
   // Resources (workloads). Completed pods are excluded from the denominator.
   const counts = countTree(fluxTreeStore.root, FLUX_KIND_SET);
@@ -463,6 +494,49 @@ const ClusterInspector: React.FC<{
           </button>
         )}
       </div>
+
+      {fluxControllers.length > 0 && (
+        <Section
+          icon={<SiFlux color="#326CE5" className="w-4 h-4" />}
+          title="FluxCD"
+          tone={fluxTone}
+          summary={
+            <Count
+              value={fluxControllers.length}
+              label="controllers"
+              accent={
+                fluxDown > 0 ? (
+                  <Danger>{fluxDown} down</Danger>
+                ) : fluxVersion ? (
+                  <span className="font-mono text-xs text-muted">{fluxVersion}</span>
+                ) : null
+              }
+            />
+          }
+        >
+          <div className="flex flex-col gap-1.5">
+            {fluxControllers.map((controller) => (
+              <Link
+                key={controller.uid}
+                to={`${ROUTES.RESOURCE}/${controller.uid}`}
+                className="flex items-center gap-2 group"
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(controller.status)}`}
+                />
+                <span className="text-xs text-muted group-hover:text-foreground transition-colors truncate flex-1 min-w-0">
+                  {shortControllerName(controller.name)}
+                </span>
+                {controller.labels.get(FLUX_VERSION_LABEL) && (
+                  <span className="text-[11px] font-mono text-muted flex-shrink-0">
+                    {controller.labels.get(FLUX_VERSION_LABEL)}
+                  </span>
+                )}
+              </Link>
+            ))}
+          </div>
+        </Section>
+      )}
 
       {recon.apps.length > 0 && (
         <Section

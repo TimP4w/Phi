@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Routes, Route } from "react-router-dom";
@@ -7,6 +7,22 @@ import { renderWithProviders, makeTestContainer } from "../../../test/render";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { makeDto } from "../../../test/fixtures";
 import { FLUX_NAMESPACE } from "../../../core/fluxTree/constants/resources.const";
+
+// The detail panel's default open state comes from a matchMedia("(min-width: 768px)")
+// probe; report it unmatched to exercise the mobile (collapsed) default.
+const realMatchMedia = window.matchMedia;
+function forceMobile() {
+  window.matchMedia = ((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: () => {},
+    removeListener: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    dispatchEvent: () => false,
+  })) as unknown as typeof window.matchMedia;
+}
 
 const routedView = (
   <Routes>
@@ -25,6 +41,10 @@ const populated = () => {
 };
 
 describe("ResourceView", () => {
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
+  });
+
   it("renders the breadcrumb with the focused resource name", () => {
     renderWithProviders(routedView, { container: populated(), route: "/resource/app" });
     expect(screen.getAllByText("my-app").length).toBeGreaterThan(0);
@@ -41,5 +61,12 @@ describe("ResourceView", () => {
   it("opens the network view directly from the URL segment", () => {
     const { container } = renderWithProviders(routedView, { container: populated(), route: "/resource/app/network" });
     expect(container.querySelector(".react-flow")).toBeInTheDocument();
+  });
+
+  it("starts with the detail panel collapsed on mobile", () => {
+    forceMobile();
+    renderWithProviders(routedView, { container: populated(), route: "/resource/app" });
+    expect(screen.getByLabelText("Open details panel")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Close details panel")).not.toBeInTheDocument();
   });
 });

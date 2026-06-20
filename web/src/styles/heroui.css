@@ -25,4 +25,26 @@
 
 @theme {
   --breakpoint-xxl: 1600px;
+  --animate-crumb-in: crumb-in 0.25s ease-out both;
+  --animate-slide-in-right: slide-in-right 0.25s ease-out both;
+
+  @keyframes crumb-in {
+    from {
+      opacity: 0;
+      transform: translateX(-6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes slide-in-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
 }
