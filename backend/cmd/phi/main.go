@@ -52,15 +52,19 @@ type UseCases struct {
 
 func main() {
 	port := flag.String("port", "8080", "Server port")
-	logLevel := flag.String("log-level", "info", "Log level (debug, info, warn, error, fatal)")
 	logJSON := flag.Bool("log-json", false, "Enable JSON logging")
 
 	flag.Parse()
 
-	// Initialize logger
+	logLevel := os.Getenv(shared.ENV_PHI_LOG_LEVEL)
+	if logLevel == "" {
+		logLevel = "info"
+	}
+	isDev := os.Getenv(shared.ENV_PHI_DEV) == "true"
+
 	logging.Init(logging.Config{
-		Level:       logging.LogLevel(*logLevel),
-		Development: *logLevel == "debug",
+		Level:       logging.LogLevel(logLevel),
+		Development: isDev,
 		JSON:        *logJSON,
 	})
 	defer logging.Sync()
