@@ -19,6 +19,10 @@ Recently it has moved to an "agentic" supported development, since it does what 
     <td><img src="./docs/network.png" alt="img" width="500"></td>
     <td><img src="./docs/mcp.png" alt="MCP server" width="500"></td>
   </tr>
+  <tr>
+    <td><img src="./docs/command-palette.png" alt="Command palette" width="500"></td>
+    <td><img src="./docs/error-panel.png" alt="Resource error in detail panel" width="500"></td>
+  </tr>
 </table>
 
 ## Features
