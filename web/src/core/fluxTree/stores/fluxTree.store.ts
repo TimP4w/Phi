@@ -31,6 +31,8 @@ class FluxTreeStore {
   >();
   private _tree: Tree = new Tree(new KubeResource());
   private selectedUid: string | null = null;
+  // False until the first full resource snapshot arrives; drives loading skeletons.
+  loaded = false;
   // Bumped by incremental upsert/remove; a debounced reaction watches it to
   // coalesce tree rebuilds over a short window (see REBUILD_WINDOW_MS).
   private _revision = 0;
@@ -43,6 +45,7 @@ class FluxTreeStore {
     makeObservable<FluxTreeStore, "_tree" | "selectedUid" | "_revision">(this, {
       _tree: observable.ref,
       selectedUid: observable,
+      loaded: observable,
       _revision: observable,
       selectedResource: computed,
       tree: computed,
@@ -123,6 +126,7 @@ class FluxTreeStore {
     }
     // Full resync rebuilds immediately rather than via the debounced reaction.
     this._tree = buildTree(this.resources);
+    this.loaded = true;
   }
 
   // --- computed getters ---

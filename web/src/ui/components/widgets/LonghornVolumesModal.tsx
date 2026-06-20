@@ -1,14 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useNavigate } from "react-router-dom";
-import {
-  Chip,
-  Input,
-  Modal,
-  ModalBody,
-  ModalContent,
-  ModalHeader,
-} from "@heroui/react";
+import { Chip, Input, Modal, ModalBody, ModalHeader } from "@heroui/react";
 import { ExternalLink, Search } from "lucide-react";
 import { LonghornVolume } from "../../../core/fluxTree/models/tree";
 import { formatBytes } from "../../shared/format";
@@ -34,7 +27,7 @@ function robustnessChipColor(
 
 type Props = {
   isOpen: boolean;
-  onOpenChange: () => void;
+  onOpenChange: (isOpen: boolean) => void;
   volumes: LonghornVolume[];
   initialFilter?: Robustness;
 };
@@ -100,122 +93,111 @@ const LonghornVolumesModal: React.FC<Props> = observer(
       });
 
     const openResource = (uid: string) => {
-      onOpenChange();
+      onOpenChange(false);
       navigate(`${ROUTES.RESOURCE}/${uid}`);
     };
 
     return (
-      <Modal
-        isOpen={isOpen}
-        onOpenChange={onOpenChange}
-        size="2xl"
-        className="dark"
-      >
-        <ModalContent>
-          {() => (
-            <>
-              <ModalHeader className="flex items-center gap-2">
-                Longhorn Volumes
-                <span className="text-sm font-normal text-default-400 ml-1">
-                  ({filteredVolumes.length}
-                  {filteredVolumes.length !== frozenVolumes.length
-                    ? ` / ${frozenVolumes.length}`
-                    : ""}
-                  )
-                </span>
-              </ModalHeader>
-              <ModalBody className="px-0 py-0 gap-0">
-                {/* Filters */}
-                <div className="flex flex-col gap-2 px-4 py-3 border-b border-default-100">
+      <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
+        <Modal.Container size="lg">
+          <Modal.Dialog>
+            <Modal.CloseTrigger className="absolute right-3 top-3 z-10" />
+            <ModalHeader className="flex items-center gap-2">
+              Longhorn Volumes
+              <span className="text-sm font-normal text-muted ml-1">
+                ({filteredVolumes.length}
+                {filteredVolumes.length !== frozenVolumes.length
+                  ? ` / ${frozenVolumes.length}`
+                  : ""}
+                )
+              </span>
+            </ModalHeader>
+            <ModalBody className="px-0 py-0 gap-0">
+              {/* Filters */}
+              <div className="flex flex-col gap-2 px-4 py-3 border-b border-border">
+                <div className="relative w-full">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" />
                   <Input
-                    size="sm"
+                    className="pl-8"
                     placeholder="Filter volumes…"
                     value={query}
-                    onValueChange={setQuery}
-                    startContent={
-                      <Search className="w-3.5 h-3.5 text-default-400" />
-                    }
-                    isClearable
-                    onClear={() => setQuery("")}
+                    onChange={(e) => setQuery(e.target.value)}
                   />
-                  <div className="flex flex-wrap gap-1.5">
-                    {ROBUSTNESS.map((robustness) => {
-                      const active = activeRobustness.has(robustness);
-                      return (
-                        <Chip
-                          key={robustness}
-                          size="sm"
-                          variant={active ? "solid" : "flat"}
-                          color={robustnessChipColor(robustness)}
-                          className="cursor-pointer capitalize"
-                          onClick={() => toggleRobustness(robustness)}
-                        >
-                          {robustness}
-                        </Chip>
-                      );
-                    })}
-                  </div>
                 </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {ROBUSTNESS.map((robustness) => {
+                    const active = activeRobustness.has(robustness);
+                    return (
+                      <Chip
+                        key={robustness}
+                        size="sm"
+                        variant={active ? "primary" : "soft"}
+                        color={robustnessChipColor(robustness)}
+                        className="cursor-pointer capitalize"
+                        onClick={() => toggleRobustness(robustness)}
+                      >
+                        {robustness}
+                      </Chip>
+                    );
+                  })}
+                </div>
+              </div>
 
-                {/* List */}
-                {filteredVolumes.length === 0 ? (
-                  <div className="text-center text-default-400 text-sm py-10">
-                    No volumes.
-                  </div>
-                ) : (
-                  <div
-                    className="overflow-y-auto"
-                    style={{ maxHeight: "60vh" }}
-                  >
-                    {filteredVolumes.map((v) => {
-                      const robustness = v.metadata?.robustness ?? "";
-                      return (
-                        <div
-                          key={v.uid}
-                          className="border-b border-default-100 overflow-hidden"
-                        >
-                          <div className="flex items-start gap-3 px-4 py-2.5">
-                            <Chip
-                              size="sm"
-                              color={robustnessChipColor(robustness)}
-                              variant="flat"
-                              className="flex-shrink-0 capitalize"
+              {/* List */}
+              {filteredVolumes.length === 0 ? (
+                <div className="text-center text-muted text-sm py-10">
+                  No volumes.
+                </div>
+              ) : (
+                <div className="overflow-y-auto" style={{ maxHeight: "60vh" }}>
+                  {filteredVolumes.map((v) => {
+                    const robustness = v.metadata?.robustness ?? "";
+                    return (
+                      <div
+                        key={v.uid}
+                        className="border-b border-border overflow-hidden"
+                      >
+                        <div className="flex items-start gap-3 px-4 py-2.5">
+                          <Chip
+                            size="sm"
+                            color={robustnessChipColor(robustness)}
+                            variant="soft"
+                            className="flex-shrink-0 capitalize"
+                          >
+                            {robustness || "—"}
+                          </Chip>
+                          <div className="min-w-0 flex-1">
+                            <button
+                              type="button"
+                              onClick={() => openResource(v.uid)}
+                              className="inline-flex items-center gap-1 text-sm font-medium text-foreground hover:underline max-w-full"
                             >
-                              {robustness || "—"}
-                            </Chip>
-                            <div className="min-w-0 flex-1">
-                              <button
-                                type="button"
-                                onClick={() => openResource(v.uid)}
-                                className="inline-flex items-center gap-1 text-sm font-medium text-primary-400 hover:underline max-w-full"
-                              >
-                                <span className="truncate">{v.name}</span>
-                                <ExternalLink className="w-3 h-3 flex-shrink-0" />
-                              </button>
-                              <p className="text-xs text-default-400 truncate">
-                                {[
-                                  v.metadata?.state,
-                                  v.metadata?.size != null &&
-                                    formatBytes(v.metadata.size),
-                                  v.metadata?.numberOfReplicas != null &&
-                                    `${v.metadata.numberOfReplicas} replicas`,
-                                  v.metadata?.nodeID,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" · ")}
-                              </p>
-                            </div>
+                              <span className="truncate">{v.name}</span>
+                              <ExternalLink className="w-3 h-3 flex-shrink-0" />
+                            </button>
+                            <p className="text-xs text-muted truncate">
+                              {[
+                                v.metadata?.state,
+                                v.metadata?.size != null &&
+                                  formatBytes(v.metadata.size),
+                                v.metadata?.numberOfReplicas != null &&
+                                  `${v.metadata.numberOfReplicas} replicas`,
+                                v.metadata?.nodeID,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </p>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </ModalBody>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </ModalBody>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
     );
   },
 );

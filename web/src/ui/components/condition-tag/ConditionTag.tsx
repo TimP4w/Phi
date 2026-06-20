@@ -14,7 +14,7 @@ import { isEnumValue } from "../../../core/shared/enum.utils";
 import { ICONS } from "../../shared/icons";
 import { Chip, Tooltip } from "@heroui/react";
 
-type ChipColor = "default" | "success" | "danger" | "primary" | "warning";
+type ChipColor = "default" | "success" | "danger" | "accent" | "warning";
 
 type ConditionTagProps = {
   condition: Condition;
@@ -68,14 +68,16 @@ const ConditionTag: React.FC<ConditionTagProps> = ({
   }, [condition]);
 
   return (
-    <Tooltip content={condition.message} className="dark">
-      <Chip
-        color={color}
-        startContent={<DynamicIcon name={icon} size={16} />}
-        variant="faded"
-      >
-        {condition.type}
-      </Chip>
+    <Tooltip>
+      <Tooltip.Trigger>
+        <Chip color={color} variant="tertiary">
+          <span className="flex items-center gap-1">
+            <DynamicIcon name={icon} size={16} />
+            {condition.type}
+          </span>
+        </Chip>
+      </Tooltip.Trigger>
+      <Tooltip.Content>{condition.message}</Tooltip.Content>
     </Tooltip>
   );
 };

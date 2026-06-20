@@ -2,6 +2,7 @@ import "reflect-metadata";
 
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "./styles/heroui.css";
 import "./index.scss";
 import { BrowserRouter } from "react-router-dom";
 import { Provider } from "inversify-react";
@@ -37,7 +38,9 @@ void fetchEventsUseCase.execute().catch(console.error);
 root.render(
   <React.StrictMode>
     <Provider container={container}>
-      <BrowserRouter>
+      <BrowserRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <Phi />
       </BrowserRouter>
     </Provider>

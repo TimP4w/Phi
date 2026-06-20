@@ -8,7 +8,7 @@ import { conditionDotClass } from "../../shared/helpers";
 import Source from "../source/Source";
 import ReconcileSuspendButtonGroup from "../play-pause/ReconcileSuspendButtonGroup";
 import AppLogo from "../resource-icon/ResourceIcon";
-import { Divider, Tooltip } from "@heroui/react";
+import { Separator, Tooltip } from "@heroui/react";
 import { useNavigate, Link } from "react-router-dom";
 import { ROUTES } from "../../routes/routes.enum";
 import TooltipedDate from "../tooltiped-date/TooltipedDate";
@@ -35,7 +35,7 @@ const SEVERITY_TEXT = {
   danger: "text-danger",
   warning: "text-warning",
   success: "text-success",
-  default: "text-default-400",
+  default: "text-muted",
 };
 
 // Compact shield, tiered by the worst severity present:
@@ -73,14 +73,17 @@ const ShieldStat: React.FC<{
   }
 
   return (
-    <Tooltip content={tooltip} className="dark">
-      <span className={`flex items-center gap-1 ${colorClass}`}>
-        <Icon className="w-3.5 h-3.5" />
-        {big !== null && <span className="font-medium">{big}</span>}
-        {rest > 0 && (
-          <span className="text-[10px] text-default-400">+{rest}</span>
-        )}
-      </span>
+    <Tooltip>
+      <Tooltip.Trigger>
+        <span className={`flex items-center gap-1 ${colorClass}`}>
+          <Icon className="w-3.5 h-3.5" />
+          {big !== null && <span className="font-medium">{big}</span>}
+          {rest > 0 && (
+            <span className="text-[10px] text-muted">+{rest}</span>
+          )}
+        </span>
+      </Tooltip.Trigger>
+      <Tooltip.Content>{tooltip}</Tooltip.Content>
     </Tooltip>
   );
 };
@@ -121,7 +124,7 @@ const App: React.FC<AppProps> = observer(({ node }) => {
 
   return (
     <div
-      className="group flex flex-col rounded-xl bg-content1 border border-default-100 hover:bg-content2 transition-colors cursor-pointer overflow-hidden"
+      className="group flex flex-col rounded-xl bg-surface border border-border hover:bg-surface-secondary transition-colors cursor-pointer overflow-hidden"
       onClick={() => navigate(`${ROUTES.RESOURCE}/${node.uid}`)}
     >
       {/* Header */}
@@ -134,15 +137,18 @@ const App: React.FC<AppProps> = observer(({ node }) => {
             <p className="font-semibold text-sm truncate leading-tight">
               {node.name}
             </p>
-            <p className="text-xs text-default-400 truncate">
+            <p className="text-xs text-muted truncate">
               {node.kind} · {node.namespace}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           {node.isSuspended && (
-            <Tooltip content="Suspended" className="dark">
-              <Pause className="w-3.5 h-3.5 text-default-400" />
+            <Tooltip>
+              <Tooltip.Trigger>
+                <Pause className="w-3.5 h-3.5 text-muted" />
+              </Tooltip.Trigger>
+              <Tooltip.Content>Suspended</Tooltip.Content>
             </Tooltip>
           )}
           <StatusChip resource={node} />
@@ -153,17 +159,20 @@ const App: React.FC<AppProps> = observer(({ node }) => {
       <div className="flex items-center justify-between gap-2 px-4 pb-3">
         <div className="flex flex-wrap gap-x-3 gap-y-1 min-w-0">
           {node.conditions.slice(0, 4).map((c) => (
-            <Tooltip key={c.type} content={c.message} className="dark">
-              <div className="flex items-center gap-1.5 cursor-default">
-                <div
-                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${conditionDotClass(c)}`}
-                />
-                <span className="text-xs text-default-400">{c.type}</span>
-              </div>
+            <Tooltip key={c.type}>
+              <Tooltip.Trigger>
+                <div className="flex items-center gap-1.5 cursor-default">
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${conditionDotClass(c)}`}
+                  />
+                  <span className="text-xs text-muted">{c.type}</span>
+                </div>
+              </Tooltip.Trigger>
+              <Tooltip.Content>{c.message}</Tooltip.Content>
             </Tooltip>
           ))}
           {node.conditions.length > 4 && (
-            <span className="text-xs text-default-400">
+            <span className="text-xs text-muted">
               +{node.conditions.length - 4} more
             </span>
           )}
@@ -174,13 +183,13 @@ const App: React.FC<AppProps> = observer(({ node }) => {
         </div>
       </div>
 
-      <Divider />
+      <Separator />
 
       {/* Info rows */}
       <div className="flex flex-col gap-1.5 px-4 py-3 text-xs">
         {sourceRef && repository && (
           <div className="flex justify-between items-center gap-2">
-            <span className="text-default-400">Source</span>
+            <span className="text-muted">Source</span>
             <Link
               to={`${ROUTES.RESOURCE}/${repository.uid}`}
               className="font-mono text-xs text-white hover:underline truncate max-w-[140px]"
@@ -195,28 +204,28 @@ const App: React.FC<AppProps> = observer(({ node }) => {
             className="flex justify-between items-center gap-2"
             onClick={(e) => e.stopPropagation()}
           >
-            <span className="text-default-400">{revisionLabel}</span>
+            <span className="text-muted">{revisionLabel}</span>
             <span className="font-mono truncate max-w-[140px]">
               <Source fluxResource={node} />
             </span>
           </div>
         )}
         <div className="flex justify-between items-center gap-2">
-          <span className="text-default-400">Last sync</span>
-          <span className="text-default-300">
+          <span className="text-muted">Last sync</span>
+          <span className="text-muted">
             <TooltipedDate date={node.lastSyncAt} />
           </span>
         </div>
         {showUsage && (
           <div className="flex justify-between items-center gap-2">
-            <span className="text-default-400">Usage</span>
-            <span className="flex items-center gap-3 font-mono text-default-300">
+            <span className="text-muted">Usage</span>
+            <span className="flex items-center gap-3 font-mono text-muted">
               <span className="flex items-center gap-1">
-                <Cpu className="w-3 h-3 text-default-400" />
+                <Cpu className="w-3 h-3 text-muted" />
                 {lastCpu !== undefined ? formatCores(lastCpu) : "—"}
               </span>
               <span className="flex items-center gap-1">
-                <MemoryStick className="w-3 h-3 text-default-400" />
+                <MemoryStick className="w-3 h-3 text-muted" />
                 {lastMem !== undefined ? formatBytes(lastMem) : "—"}
               </span>
             </span>
@@ -224,9 +233,9 @@ const App: React.FC<AppProps> = observer(({ node }) => {
         )}
         {showStorage && (
           <div className="flex justify-between items-center gap-2">
-            <span className="text-default-400">Storage</span>
-            <span className="flex items-center gap-1 font-mono text-default-300">
-              <HardDrive className="w-3 h-3 text-default-400" />
+            <span className="text-muted">Storage</span>
+            <span className="flex items-center gap-1 font-mono text-muted">
+              <HardDrive className="w-3 h-3 text-muted" />
               {storage.measured > 0
                 ? `${formatBytes(storage.used)} / ${formatBytes(storage.requested)}`
                 : formatBytes(storage.requested)}
@@ -235,7 +244,7 @@ const App: React.FC<AppProps> = observer(({ node }) => {
         )}
         {showFindings && (
           <div className="flex justify-between items-center gap-2">
-            <span className="text-default-400">Security</span>
+            <span className="text-muted">Security</span>
             <span className="flex items-center gap-3">
               <ShieldStat
                 icon={ShieldAlert}

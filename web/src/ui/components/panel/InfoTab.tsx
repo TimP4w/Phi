@@ -33,7 +33,7 @@ const Section = ({
   children: React.ReactNode;
 }) => (
   <div className="mb-6">
-    <p className="text-xs font-semibold text-default-400 uppercase tracking-widest mb-2 px-2">
+    <p className="text-xs font-semibold text-muted uppercase tracking-widest mb-2 px-2">
       {title}
     </p>
     <div className="space-y-0.5">{children}</div>
@@ -47,10 +47,10 @@ const InfoRow = ({
   label: string;
   value?: React.ReactNode;
 }) => (
-  <div className="flex items-start justify-between gap-6 px-2 py-1.5 rounded-lg hover:bg-default-50 group">
-    <span className="text-sm text-default-400 flex-shrink-0 w-40">{label}</span>
+  <div className="flex items-start justify-between gap-6 px-2 py-1.5 rounded-lg hover:bg-surface group">
+    <span className="text-sm text-muted flex-shrink-0 w-40">{label}</span>
     <span className="text-xs font-mono text-right break-all">
-      {value ?? <span className="text-default-300">—</span>}
+      {value ?? <span className="text-muted">—</span>}
     </span>
   </div>
 );
@@ -60,9 +60,9 @@ const KVChips = ({ entries }: { entries: Map<string, string> }) => (
     {Array.from(entries).map(([k, v]) => (
       <div
         key={k}
-        className="flex text-xs rounded-md overflow-hidden border border-default-200 max-w-full"
+        className="flex text-xs rounded-md overflow-hidden border border-border max-w-full"
       >
-        <span className="px-2 py-0.5 bg-default-100 text-default-400 truncate max-w-[160px]">
+        <span className="px-2 py-0.5 bg-surface-secondary text-muted truncate max-w-[160px]">
           {k}
         </span>
         <span className="px-2 py-0.5 font-mono truncate max-w-[200px]">{v}</span>
@@ -75,24 +75,24 @@ export const ContainerRow = ({ container }: { container: Container }) => {
   const color = containerStateColor(container);
   const status = container.reason || container.state || "Unknown";
   return (
-    <div className="flex flex-col gap-1 px-2 py-2 rounded-lg hover:bg-default-50 border-b border-default-100 last:border-b-0">
+    <div className="flex flex-col gap-1 px-2 py-2 rounded-lg hover:bg-surface border-b border-border last:border-b-0">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           {container.isInit && (
-            <Chip size="sm" variant="flat" color="default" className="text-[10px]">
+            <Chip size="sm" variant="soft" color="default" className="text-[10px]">
               init
             </Chip>
           )}
           <span className="text-sm font-medium truncate">{container.name}</span>
         </div>
-        <Chip size="sm" variant="flat" color={color} className="flex-shrink-0">
+        <Chip size="sm" variant="soft" color={color} className="flex-shrink-0">
           {status}
         </Chip>
       </div>
-      <span className="text-xs font-mono text-default-400 break-all">
+      <span className="text-xs font-mono text-muted break-all">
         {container.image}
       </span>
-      <div className="flex items-center gap-3 text-xs text-default-400">
+      <div className="flex items-center gap-3 text-xs text-muted">
         <span>{container.ready ? "Ready" : "Not Ready"}</span>
         <span>Restarts: {container.restartCount}</span>
         {container.state === "Terminated" && (
@@ -183,10 +183,10 @@ const renderKindFields = (resource: KubeResource) => {
           />
           {n.metadata?.images && n.metadata.images.length > 0 && (
             <div className="px-2 py-1.5">
-              <p className="text-sm text-default-400 mb-1.5">Images</p>
+              <p className="text-sm text-muted mb-1.5">Images</p>
               <div className="flex flex-wrap gap-1.5">
                 {n.metadata.images.map((img) => (
-                  <Chip key={img} size="sm" variant="flat" className="font-mono text-xs">
+                  <Chip key={img} size="sm" variant="soft" className="font-mono text-xs">
                     {img}
                   </Chip>
                 ))}
@@ -207,12 +207,12 @@ const renderKindFields = (resource: KubeResource) => {
           <InfoRow label="Phase" value={n.metadata?.phase?.toString()} />
           {images.length > 0 && (
             <div className="px-2 py-1.5">
-              <p className="text-sm text-default-400 mb-1.5">
+              <p className="text-sm text-muted mb-1.5">
                 {images.length > 1 ? "Images" : "Image"}
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {images.map((img) => (
-                  <Chip key={img} size="sm" variant="flat" className="font-mono text-xs">
+                  <Chip key={img} size="sm" variant="soft" className="font-mono text-xs">
                     {img}
                   </Chip>
                 ))}
@@ -278,7 +278,7 @@ const renderKindFields = (resource: KubeResource) => {
           <InfoRow
             label="Robustness"
             value={
-              <Chip size="sm" variant="flat" color={robustnessColor(robustness)}>
+              <Chip size="sm" variant="soft" color={robustnessColor(robustness)}>
                 {robustness}
               </Chip>
             }
@@ -291,7 +291,7 @@ const renderKindFields = (resource: KubeResource) => {
                 <span>
                   {formatBytes(used)} / {formatBytes(size)} ({pct.toFixed(0)}%)
                 </span>
-                <div className="w-full h-1.5 rounded-full bg-default-100 overflow-hidden">
+                <div className="w-full h-1.5 rounded-full bg-surface-secondary overflow-hidden">
                   <div
                     className={`h-full rounded-full bg-${usageColor(pct)}`}
                     style={{ width: `${pct}%` }}
@@ -339,14 +339,14 @@ export const StorageRollup = observer(({ resource }: { resource: KubeResource })
               <span>
                 {formatBytes(used)} / {formatBytes(requested)} ({pct.toFixed(0)}%)
               </span>
-              <div className="w-full h-1.5 rounded-full bg-default-100 overflow-hidden">
+              <div className="w-full h-1.5 rounded-full bg-surface-secondary overflow-hidden">
                 <div
                   className={`h-full rounded-full bg-${usageColor(pct)}`}
                   style={{ width: `${pct}%` }}
                 />
               </div>
               {measured < pvcCount && (
-                <span className="text-default-300">
+                <span className="text-muted">
                   measured {measured}/{pvcCount}
                 </span>
               )}
@@ -357,7 +357,7 @@ export const StorageRollup = observer(({ resource }: { resource: KubeResource })
         <InfoRow
           label="Used"
           value={
-            <span className="text-default-300">
+            <span className="text-muted">
               {metricsStore.prometheusActive ? "—" : "Prometheus off"}
             </span>
           }
@@ -372,7 +372,7 @@ export const InfoTab = observer(({ resource, hideStorage }: InfoTabProps) => {
 
   if (!resource) {
     return (
-      <p className="text-default-400 text-sm px-2">No resource selected.</p>
+      <p className="text-muted text-sm px-2">No resource selected.</p>
     );
   }
 
@@ -415,13 +415,13 @@ export const InfoTab = observer(({ resource, hideStorage }: InfoTabProps) => {
         <Section title="Metadata">
           {hasLabels && (
             <>
-              <p className="text-sm text-default-400 px-2 mb-1">Labels</p>
+              <p className="text-sm text-muted px-2 mb-1">Labels</p>
               <KVChips entries={resource.labels!} />
             </>
           )}
           {hasAnnotations && (
             <>
-              <p className="text-sm text-default-400 px-2 mt-3 mb-1">
+              <p className="text-sm text-muted px-2 mt-3 mb-1">
                 Annotations
               </p>
               <KVChips entries={resource.annotations!} />

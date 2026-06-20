@@ -66,7 +66,7 @@ describe("usageColor", () => {
 
   it("returns the supplied ok colour below 75", () => {
     expect(usageColor(10)).toBe("success");
-    expect(usageColor(10, "primary")).toBe("primary");
+    expect(usageColor(10, "accent")).toBe("accent");
   });
 });
 

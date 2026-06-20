@@ -8,10 +8,10 @@ const resourceDotClass = (status: ResourceStatus): string => {
   switch (status) {
     case ResourceStatus.SUCCESS: return "bg-success";
     case ResourceStatus.FAILED: return "bg-danger";
-    case ResourceStatus.PENDING: return "bg-primary";
+    case ResourceStatus.PENDING: return "bg-accent";
     case ResourceStatus.WARNING: return "bg-warning";
-    case ResourceStatus.SUSPENDED: return "bg-default-400";
-    default: return "bg-default-400";
+    case ResourceStatus.SUSPENDED: return "bg-segment";
+    default: return "bg-segment";
   }
 };
 
@@ -29,7 +29,7 @@ const ResourceRow: React.FC<ResourceRowProps> = ({ resource, className = "" }) =
   return (
     <Link
       to={`${ROUTES.RESOURCE}/${resource.uid}`}
-      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-content2 transition-colors text-foreground ${className}`}
+      className={`flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-surface-secondary transition-colors text-foreground ${className}`}
     >
       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${resourceDotClass(resource.status)}`} />
       <div className="flex-shrink-0">
@@ -38,9 +38,9 @@ const ResourceRow: React.FC<ResourceRowProps> = ({ resource, className = "" }) =
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm font-medium truncate">{resource.name}</span>
-          <span className="text-xs text-default-500 flex-shrink-0">{resource.kind}</span>
+          <span className="text-xs text-muted flex-shrink-0">{resource.kind}</span>
           {resource.namespace && (
-            <span className="text-xs text-default-600 font-mono flex-shrink-0">
+            <span className="text-xs text-foreground font-mono flex-shrink-0">
               {resource.namespace}
             </span>
           )}

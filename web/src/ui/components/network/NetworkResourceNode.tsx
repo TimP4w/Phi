@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Handle, NodeProps, Position, Node } from "@xyflow/react";
 import { Lock, ShieldAlert } from "lucide-react";
-import { Popover, PopoverTrigger, PopoverContent } from "@heroui/react";
+import { Popover } from "@heroui/react";
 import { KubeResource } from "../../../core/fluxTree/models/tree";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import {
@@ -72,32 +72,34 @@ export function networkDetail(node: KubeResource): string | null {
 function TLSLockPopover({ tls }: { tls: NetworkTLSInfo }) {
   const days = tls.notAfter ? daysUntil(tls.notAfter) : null;
   return (
-    <Popover placement="top" showArrow>
-      <PopoverTrigger>
+    <Popover>
+      <Popover.Trigger>
         <button
           aria-label="TLS details"
-          onClick={(e) => e.stopPropagation()}
-          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-success-600 hover:text-success-500 hover:bg-success-500/10 transition-colors cursor-pointer flex-shrink-0"
+          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-success hover:text-success hover:bg-success/10 transition-colors cursor-pointer flex-shrink-0"
         >
           <Lock className="w-3.5 h-3.5" />
           TLS
         </button>
-      </PopoverTrigger>
-      <PopoverContent>
-        <div className="px-1 py-2 text-xs space-y-1 max-w-[280px]">
+      </Popover.Trigger>
+      <Popover.Content
+        placement="top"
+        className="rounded-lg border-small border-default-100 shadow-xl"
+      >
+        <div className="px-3 py-2.5 text-xs space-y-1 max-w-[280px]">
           <p className="text-sm font-semibold">TLS terminated</p>
           {tls.certName ? (
             <p>
               Certificate:{" "}
               <Link
                 to={`${ROUTES.RESOURCE}/${tls.certUid}`}
-                className="text-primary hover:underline"
+                className="text-foreground hover:underline"
               >
                 {tls.certName}
               </Link>
             </p>
           ) : (
-            <p className="text-default-400">
+            <p className="text-muted">
               No cert-manager Certificate found
             </p>
           )}
@@ -109,7 +111,7 @@ function TLSLockPopover({ tls }: { tls: NetworkTLSInfo }) {
             </p>
           )}
           {tls.ready != null && (
-            <p className={tls.ready ? "text-success-500" : "text-danger"}>
+            <p className={tls.ready ? "text-success" : "text-danger"}>
               {tls.ready ? "Ready" : "NOT READY"}
             </p>
           )}
@@ -119,7 +121,7 @@ function TLSLockPopover({ tls }: { tls: NetworkTLSInfo }) {
               {tls.secretUid ? (
                 <Link
                   to={`${ROUTES.RESOURCE}/${tls.secretUid}`}
-                  className="text-primary hover:underline"
+                  className="text-foreground hover:underline"
                 >
                   {tls.secretName}
                 </Link>
@@ -132,7 +134,7 @@ function TLSLockPopover({ tls }: { tls: NetworkTLSInfo }) {
             <p className="break-words">DNS: {tls.dnsNames.join(", ")}</p>
           )}
         </div>
-      </PopoverContent>
+      </Popover.Content>
     </Popover>
   );
 }
@@ -140,26 +142,28 @@ function TLSLockPopover({ tls }: { tls: NetworkTLSInfo }) {
 // PolicyConstraintsPopover flags that NetworkPolicies gate a pod
 function PolicyConstraintsPopover({ policy }: { policy: PolicyConstraints }) {
   return (
-    <Popover placement="top" showArrow>
-      <PopoverTrigger>
+    <Popover>
+      <Popover.Trigger>
         <button
           aria-label="Network policy constraints"
-          onClick={(e) => e.stopPropagation()}
-          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-secondary-500 hover:text-secondary-400 hover:bg-secondary-500/10 transition-colors cursor-pointer flex-shrink-0"
+          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted hover:text-muted hover:bg-accent/10 transition-colors cursor-pointer flex-shrink-0"
         >
           <ShieldAlert className="w-3.5 h-3.5" />
           {policy.policies.length}
         </button>
-      </PopoverTrigger>
-      <PopoverContent>
-        <div className="px-1 py-2 text-xs space-y-2 max-w-[280px]">
+      </Popover.Trigger>
+      <Popover.Content
+        placement="top"
+        className="rounded-lg border-small border-default-100 shadow-xl"
+      >
+        <div className="px-3 py-2.5 text-xs space-y-2 max-w-[280px]">
           <p className="text-sm font-semibold">Network policies in effect</p>
           <div className="space-y-0.5">
             {policy.policies.map((p) => (
               <p key={p.uid}>
                 <Link
                   to={`${ROUTES.RESOURCE}/${p.uid}`}
-                  className="text-primary hover:underline break-words"
+                  className="text-foreground hover:underline break-words"
                 >
                   {p.name}
                 </Link>
@@ -167,11 +171,11 @@ function PolicyConstraintsPopover({ policy }: { policy: PolicyConstraints }) {
             ))}
           </div>
           {policy.ingress.length > 0 && (
-            <div className="space-y-1 border-t border-default-100 pt-1.5">
+            <div className="space-y-1 border-t border-border pt-1.5">
               <p className="font-semibold">Allowed ingress</p>
               {policy.ingress.map((rule, i) => (
                 <div key={i} className="space-y-0.5">
-                  <p className="text-default-400">
+                  <p className="text-muted">
                     {rule.ports ? rule.ports : "all ports"}
                   </p>
                   {rule.sources.map((src, j) => (
@@ -183,11 +187,11 @@ function PolicyConstraintsPopover({ policy }: { policy: PolicyConstraints }) {
               ))}
             </div>
           )}
-          <p className="text-default-400 border-t border-default-100 pt-1.5">
+          <p className="text-muted border-t border-border pt-1.5">
             Egress shown as edges →
           </p>
         </div>
-      </PopoverContent>
+      </Popover.Content>
     </Popover>
   );
 }
@@ -211,7 +215,7 @@ function NetworkResourceNode({ data }: NetworkResourceNodeProps) {
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} />
-      <div className="w-[240px] bg-content1 border border-default-200 rounded-lg shadow-sm">
+      <div className="w-[240px] bg-surface border border-border rounded-lg shadow-sm">
         <div className="flex items-center gap-2.5 px-3 py-2.5">
           <div className="flex-shrink-0">
             <AppLogo groupKind={treeNode.groupKind} />
@@ -220,11 +224,11 @@ function NetworkResourceNode({ data }: NetworkResourceNodeProps) {
             <Link
               to={`${ROUTES.RESOURCE}/${treeNode.uid}/${NETWORK_SUBPATH}`}
               onClick={(e) => e.stopPropagation()}
-              className="text-sm font-semibold truncate block hover:text-primary transition-colors leading-tight"
+              className="text-sm font-semibold truncate block hover:text-foreground transition-colors leading-tight"
             >
               {treeNode.name}
             </Link>
-            <p className="text-xs text-default-500 leading-tight mt-0.5">
+            <p className="text-xs text-muted leading-tight mt-0.5">
               {treeNode.kind}
               {treeNode.namespace ? ` · ${treeNode.namespace}` : ""}
             </p>
@@ -235,9 +239,9 @@ function NetworkResourceNode({ data }: NetworkResourceNodeProps) {
           </div>
         </div>
         {(detail || d.tls) && (
-          <div className="px-3 pb-2 border-t border-default-100 pt-1.5 flex items-center gap-1.5">
+          <div className="px-3 pb-2 border-t border-border pt-1.5 flex items-center gap-1.5">
             {detail && (
-              <p className="text-xs text-default-500 truncate flex-1 min-w-0">
+              <p className="text-xs text-muted truncate flex-1 min-w-0">
                 {detail}
               </p>
             )}

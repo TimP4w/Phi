@@ -47,13 +47,11 @@ const FluxControllersHeader: React.FC = observer(() => {
   return (
     <div className="hidden lg:flex items-center gap-4">
       {fluxVersion && (
-        <Chip
-          size="md"
-          variant="flat"
-          className="font-mono text-xs h-5"
-          startContent={<SiFlux color="#326CE5" className="w-3 h-3 ml-0.5" />}
-        >
-          {fluxVersion}
+        <Chip size="md" variant="soft" className="font-mono text-xs h-5">
+          <span className="flex items-center gap-1">
+            <SiFlux color="#326CE5" className="w-3 h-3 ml-0.5" />
+            {fluxVersion}
+          </span>
         </Chip>
       )}
       <div className="flex items-center gap-4">
@@ -63,29 +61,28 @@ const FluxControllersHeader: React.FC = observer(() => {
             .filter(Boolean)
             .join(", ");
           return (
-            <Tooltip
-              key={resource.uid}
-              size="sm"
-              content={
+            <Tooltip key={resource.uid}>
+              <Tooltip.Trigger>
+                <Link
+                  to={`${ROUTES.RESOURCE}/${resource.uid}`}
+                  className="flex items-center gap-1.5 group"
+                >
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(resource.status)}`}
+                  />
+                  <span className="text-xs text-muted group-hover:text-foreground transition-colors">
+                    {shortName(resource.name)}
+                  </span>
+                </Link>
+              </Tooltip.Trigger>
+              <Tooltip.Content>
                 <div className="flex flex-col">
                   <span className="font-medium">{resource.name}</span>
                   {tag && (
-                    <span className="font-mono text-default-400">{tag}</span>
+                    <span className="font-mono text-muted">{tag}</span>
                   )}
                 </div>
-              }
-            >
-              <Link
-                to={`${ROUTES.RESOURCE}/${resource.uid}`}
-                className="flex items-center gap-1.5 group"
-              >
-                <div
-                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(resource.status)}`}
-                />
-                <span className="text-xs text-default-400 group-hover:text-foreground transition-colors">
-                  {shortName(resource.name)}
-                </span>
-              </Link>
+              </Tooltip.Content>
             </Tooltip>
           );
         })}

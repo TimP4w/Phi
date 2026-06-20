@@ -4,7 +4,7 @@ import {
   Kustomization,
 } from "../../../core/fluxTree/models/tree";
 import { useCallback, useEffect, useState } from "react";
-import { Button, Tooltip } from "@heroui/react";
+import { Button, Spinner, Tooltip } from "@heroui/react";
 import { Pause, Play, RefreshCw } from "lucide-react";
 import { useInjection } from "inversify-react";
 import { TYPES } from "../../../core/shared/types";
@@ -75,36 +75,42 @@ const ReconcileSuspendButtonGroup: React.FC<ReconcileSuspendButtonGroupProps> =
     if (compact) {
       return (
         <div className="flex gap-1.5">
-          <Tooltip content="Reconcile" className="dark">
+          <Tooltip>
             <Button
               size="sm"
               isIconOnly
-              variant="flat"
+              variant="ghost"
+              className="rounded-lg"
               isDisabled={isReconciling || isSuspended}
               onPress={reconcile}
-              isLoading={isReconciling}
             >
-              {!isReconciling && <RefreshCw className="w-3.5 h-3.5" />}
+              {isReconciling ? (
+                <Spinner size="sm" />
+              ) : (
+                <RefreshCw className="w-3.5 h-3.5" />
+              )}
             </Button>
+            <Tooltip.Content>Reconcile</Tooltip.Content>
           </Tooltip>
-          <Tooltip
-            content={isSuspended ? "Resume" : "Suspend"}
-            className="dark"
-          >
+          <Tooltip>
             <Button
               size="sm"
               isIconOnly
-              variant={isSuspended ? "solid" : "flat"}
+              variant={isSuspended ? "secondary" : "ghost"}
+              className="rounded-lg"
               onPress={toggle}
-              isLoading={isToggling}
             >
-              {!isToggling &&
-                (isSuspended ? (
-                  <Play className="w-3.5 h-3.5" />
-                ) : (
-                  <Pause className="w-3.5 h-3.5" />
-                ))}
+              {isToggling ? (
+                <Spinner size="sm" />
+              ) : isSuspended ? (
+                <Play className="w-3.5 h-3.5" />
+              ) : (
+                <Pause className="w-3.5 h-3.5" />
+              )}
             </Button>
+            <Tooltip.Content>
+              {isSuspended ? "Resume" : "Suspend"}
+            </Tooltip.Content>
           </Tooltip>
         </div>
       );
@@ -114,31 +120,37 @@ const ReconcileSuspendButtonGroup: React.FC<ReconcileSuspendButtonGroupProps> =
       <div className="flex gap-2 w-full">
         <Button
           size="sm"
-          variant="flat"
+          variant="secondary"
           className={`w-full ${
             !isReconciling && !isSuspended
-              ? "hover:bg-primary-400"
+              ? "hover:bg-accent"
               : "cursor-not-allowed"
           }`}
-          disabled={isReconciling || isSuspended}
+          isDisabled={isReconciling || isSuspended}
           onPress={reconcile}
-          isLoading={isReconciling}
-          startContent={
-            isReconciling ? null : <RefreshCw className="w-3 h-3 mr-1" />
-          }
         >
+          {isReconciling ? (
+            <Spinner size="sm" />
+          ) : (
+            <RefreshCw className="w-3 h-3 mr-1" />
+          )}
           Reconcile
         </Button>
         <Button
           size="sm"
-          variant={isSuspended ? "solid" : "flat"}
+          variant={isSuspended ? "primary" : "secondary"}
           className={`w-full ${
             isSuspended ? "hover:bg-green-600" : "hover:bg-red-600"
           }`}
           onPress={toggle}
-          isLoading={isToggling}
         >
-          {isSuspended ? "Resume" : "Suspend"}
+          {isToggling ? (
+            <Spinner size="sm" />
+          ) : isSuspended ? (
+            "Resume"
+          ) : (
+            "Suspend"
+          )}
         </Button>
       </div>
     );

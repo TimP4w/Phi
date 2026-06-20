@@ -26,8 +26,8 @@ const STATUS_PRESENTATION: Record<ResourceStatus, StatusPresentation> = {
   [ResourceStatus.FAILED]: { color: "danger", text: "Not Ready", dotClass: "bg-danger", textClass: "text-danger" },
   [ResourceStatus.PENDING]: { color: "warning", text: "Reconciling", dotClass: "bg-warning", textClass: "text-warning" },
   [ResourceStatus.WARNING]: { color: "warning", text: "Reconciling", dotClass: "bg-warning", textClass: "text-warning" },
-  [ResourceStatus.SUSPENDED]: { color: "default", text: "Suspended", dotClass: "bg-default-400", textClass: "text-default-400" },
-  [ResourceStatus.UNKNOWN]: { color: "default", text: "Unknown", dotClass: "bg-default-400", textClass: "text-default-400" },
+  [ResourceStatus.SUSPENDED]: { color: "default", text: "Suspended", dotClass: "bg-segment", textClass: "text-muted" },
+  [ResourceStatus.UNKNOWN]: { color: "default", text: "Unknown", dotClass: "bg-segment", textClass: "text-muted" },
 };
 
 const presentationFor = (status: ResourceStatus): StatusPresentation =>
@@ -97,5 +97,5 @@ export const conditionDotClass = (condition: Condition): string => {
   if (WARNING_REASONS.includes(condition.reason)) return "bg-warning";
   if (SUCCESS_REASONS.includes(condition.reason)) return "bg-success";
 
-  return "bg-default-400";
+  return "bg-segment";
 };

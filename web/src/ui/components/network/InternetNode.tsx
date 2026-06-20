@@ -5,14 +5,14 @@ import { Globe } from "lucide-react";
 function InternetNode() {
   return (
     <div className="relative">
-      <div className="w-[240px] bg-content2 border border-default-300 border-dashed rounded-lg shadow-sm">
+      <div className="w-[240px] bg-surface-secondary border border-segment border-dashed rounded-lg shadow-sm">
         <div className="flex items-center gap-2.5 px-3 py-2.5">
-          <div className="flex-shrink-0 text-default-500">
+          <div className="flex-shrink-0 text-muted">
             <Globe className="w-6 h-6" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold leading-tight">Internet</p>
-            <p className="text-xs text-default-500 leading-tight mt-0.5">
+            <p className="text-xs text-muted leading-tight mt-0.5">
               External traffic
             </p>
           </div>

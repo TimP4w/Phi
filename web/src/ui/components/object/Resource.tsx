@@ -117,7 +117,7 @@ function Resource({ data }: ResourceProps) {
     <div className="relative">
       <Handle type="target" position={Position.Left} />
 
-      <div className="w-[240px] bg-content1 border border-default-200 rounded-lg shadow-sm">
+      <div className="w-[240px] bg-surface border border-border rounded-lg shadow-sm">
         {/* Main row */}
         <div className="flex items-center gap-2.5 px-3 py-2.5">
           <div className="flex-shrink-0">
@@ -127,11 +127,11 @@ function Resource({ data }: ResourceProps) {
             <Link
               to={`${ROUTES.RESOURCE}/${treeNode.uid}`}
               onClick={(e) => e.stopPropagation()}
-              className="text-sm font-semibold truncate block hover:text-primary transition-colors leading-tight"
+              className="text-sm font-semibold truncate block hover:text-foreground transition-colors leading-tight"
             >
               {treeNode.name}
             </Link>
-            <p className="text-xs text-default-500 leading-tight mt-0.5">
+            <p className="text-xs text-muted leading-tight mt-0.5">
               {treeNode.kind}
               {treeNode.namespace ? ` · ${treeNode.namespace}` : ""}
             </p>
@@ -139,7 +139,7 @@ function Resource({ data }: ResourceProps) {
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
             <StatusChip resource={treeNode} />
             {isSuspended && (
-              <span className="flex items-center gap-0.5 text-[10px] text-default-400">
+              <span className="flex items-center gap-0.5 text-[10px] text-muted">
                 <Pause className="w-2.5 h-2.5" />
                 Paused
               </span>
@@ -149,11 +149,11 @@ function Resource({ data }: ResourceProps) {
 
         {/* Footer: type-specific info or failure message */}
         {hasFooter && (
-          <div className="px-3 pb-2 border-t border-default-100 pt-1.5">
+          <div className="px-3 pb-2 border-t border-border pt-1.5">
             {failureMessage ? (
               <p className="text-xs text-danger line-clamp-2 leading-snug">{failureMessage}</p>
             ) : (
-              <p className="text-xs text-default-500 truncate">{extraInfo}</p>
+              <p className="text-xs text-muted truncate">{extraInfo}</p>
             )}
           </div>
         )}

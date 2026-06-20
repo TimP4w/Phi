@@ -10,11 +10,7 @@ import {
   KubeResource,
   ResourceStatus,
 } from "../../../core/fluxTree/models/tree";
-import {
-  BreadcrumbItem,
-  Breadcrumbs,
-  Button,
-} from "@heroui/react";
+import { Breadcrumbs, Button } from "@heroui/react";
 import AppLogo from "../../components/resource-icon/ResourceIcon";
 import ResourceDetailPanel from "../../components/panel/ResourceDetailPanel";
 import Header from "../../components/layout/Header";
@@ -88,8 +84,8 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
         onClick={() => setOpen((v) => !v)}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
           selectedKinds.length > 0
-            ? "bg-content3 text-foreground"
-            : "text-default-400 hover:text-foreground hover:bg-content2"
+            ? "bg-surface-tertiary text-foreground"
+            : "text-muted hover:text-foreground hover:bg-surface-secondary"
         }`}
       >
         {selectedKinds.length > 0 ? `${selectedKinds.length} types` : "Type"}
@@ -97,18 +93,18 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1.5 z-50 w-52 bg-content1 border border-default-200 rounded-lg shadow-xl">
-          <div className="flex items-center gap-1.5 px-2.5 py-2 border-b border-default-100">
+        <div className="absolute top-full left-0 mt-1.5 z-50 w-52 bg-surface border border-border rounded-lg shadow-xl">
+          <div className="flex items-center gap-1.5 px-2.5 py-2 border-b border-border">
             <input
               autoFocus
               type="text"
               placeholder="Search types…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent text-xs outline-none placeholder:text-default-400"
+              className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="text-default-400 hover:text-foreground">
+              <button onClick={() => setSearch("")} className="text-muted hover:text-foreground">
                 <X className="w-3 h-3" />
               </button>
             )}
@@ -116,7 +112,7 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
 
           <div className="max-h-56 overflow-y-auto p-1">
             {filtered.length === 0 ? (
-              <p className="text-xs text-default-400 px-2 py-2">No matches</p>
+              <p className="text-xs text-muted px-2 py-2">No matches</p>
             ) : (
               filtered.map((kind) => {
                 const selected = selectedKinds.includes(kind);
@@ -124,11 +120,11 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
                   <button
                     key={kind}
                     onClick={() => toggle(kind)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-content2 text-xs text-left transition-colors"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-secondary text-xs text-left transition-colors"
                   >
                     <div
                       className={`w-3.5 h-3.5 rounded-sm border flex-shrink-0 flex items-center justify-center transition-colors ${
-                        selected ? "bg-primary border-primary" : "border-default-400"
+                        selected ? "bg-accent border-accent" : "border-segment"
                       }`}
                     >
                       {selected && <Check className="w-2.5 h-2.5 text-white" />}
@@ -141,10 +137,10 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
           </div>
 
           {selectedKinds.length > 0 && (
-            <div className="border-t border-default-100 p-1">
+            <div className="border-t border-border p-1">
               <button
                 onClick={() => { onChange([]); setOpen(false); setSearch(""); }}
-                className="w-full text-left text-xs text-default-400 hover:text-foreground px-2 py-1.5 rounded-md hover:bg-content2 transition-colors"
+                className="w-full text-left text-xs text-muted hover:text-foreground px-2 py-1.5 rounded-md hover:bg-surface-secondary transition-colors"
               >
                 Clear selection
               </button>
@@ -247,15 +243,20 @@ const ResourceView: React.FC = observer(() => {
       </Header>
 
       <main className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <div className="flex-shrink-0 px-6 py-2.5 border-b border-default-100 flex items-end gap-4">
-          <Breadcrumbs size="sm" className="min-w-0">
-            <BreadcrumbItem onPress={() => navigate("/")}>Cluster</BreadcrumbItem>
+        <div className="flex-shrink-0 px-6 py-2.5 border-b border-border flex items-end gap-4">
+          <Breadcrumbs className="min-w-0">
+            <Breadcrumbs.Item onPress={() => navigate("/")}>
+              Cluster
+            </Breadcrumbs.Item>
             {fullChain.map((res) => (
-              <BreadcrumbItem key={res.uid} onPress={() => navigate(`/resource/${res.uid}`)}>
+              <Breadcrumbs.Item
+                key={res.uid}
+                onPress={() => navigate(`/resource/${res.uid}`)}
+              >
                 {res.name}
-              </BreadcrumbItem>
+              </Breadcrumbs.Item>
             ))}
-            <BreadcrumbItem>{resource?.name}</BreadcrumbItem>
+            <Breadcrumbs.Item>{resource?.name}</Breadcrumbs.Item>
           </Breadcrumbs>
 
           <div className="ml-auto flex items-center gap-3 min-w-0">
@@ -263,7 +264,7 @@ const ResourceView: React.FC = observer(() => {
             <AppLogo groupKind={resource?.groupKind} />
             <div className="min-w-0">
               <h1 className="text-lg font-bold leading-tight truncate">{resource?.name}</h1>
-              <span className="text-default-400 text-xs">
+              <span className="text-muted text-xs">
                 {resource?.kind} · {resource?.namespace}
               </span>
             </div>
@@ -271,40 +272,43 @@ const ResourceView: React.FC = observer(() => {
         </div>
 
         {/* Mobile view switcher — separate static row avoids overlap with the floating filter bar. */}
-        <div className="md:hidden flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-default-100">
-          <div className="flex items-center gap-1 bg-content1 rounded-lg p-1 border border-default-200">
+        <div className="md:hidden flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-border">
+          <div className="flex items-center gap-1 bg-surface rounded-lg p-1 border border-border">
             <Button
               size="sm"
-              variant={activeView === "graph" ? "solid" : "light"}
+              variant={activeView === "graph" ? "secondary" : "ghost"}
+              className="rounded-md"
               onPress={() => selectView("graph")}
-              startContent={<Network className="w-3.5 h-3.5" />}
             >
+              <Network className="w-3.5 h-3.5" />
               Graph
             </Button>
             <Button
               size="sm"
-              variant={activeView === "tree" ? "solid" : "light"}
+              variant={activeView === "tree" ? "secondary" : "ghost"}
+              className="rounded-md"
               onPress={() => selectView("tree")}
-              startContent={<List className="w-3.5 h-3.5" />}
             >
+              <List className="w-3.5 h-3.5" />
               Tree
             </Button>
             <Button
               size="sm"
-              variant={activeView === "network" ? "solid" : "light"}
+              variant={activeView === "network" ? "secondary" : "ghost"}
+              className="rounded-md"
               onPress={() => selectView("network")}
-              startContent={<Workflow className="w-3.5 h-3.5" />}
             >
+              <Workflow className="w-3.5 h-3.5" />
               Network
             </Button>
           </div>
           <Button
             size="sm"
-            variant="flat"
+            variant="secondary"
             className="ml-auto flex-shrink-0"
             onPress={() => setSidebarOpen(true)}
-            startContent={<PanelRightOpen className="w-3.5 h-3.5" />}
           >
+            <PanelRightOpen className="w-3.5 h-3.5" />
             Details
           </Button>
         </div>
@@ -314,35 +318,38 @@ const ResourceView: React.FC = observer(() => {
           <div className="flex-1 min-w-0 min-h-0 relative">
 
             {/* Floating view controls — desktop only (mobile uses the row above) */}
-            <div className="hidden md:flex absolute top-3 right-4 z-10 items-center gap-1 bg-content1/90 backdrop-blur-sm rounded-lg p-1 border border-default-200 shadow-sm">
+            <div className="hidden md:flex absolute top-3 right-4 z-10 items-center gap-1 bg-surface/90 backdrop-blur-sm rounded-lg p-1 border border-border shadow-sm">
               <Button
                 size="sm"
-                variant={activeView === "graph" ? "solid" : "light"}
+                variant={activeView === "graph" ? "secondary" : "ghost"}
+                className="rounded-md"
                 onPress={() => selectView("graph")}
-                startContent={<Network className="w-3.5 h-3.5" />}
               >
+                <Network className="w-3.5 h-3.5" />
                 Graph
               </Button>
               <Button
                 size="sm"
-                variant={activeView === "tree" ? "solid" : "light"}
+                variant={activeView === "tree" ? "secondary" : "ghost"}
+                className="rounded-md"
                 onPress={() => selectView("tree")}
-                startContent={<List className="w-3.5 h-3.5" />}
               >
+                <List className="w-3.5 h-3.5" />
                 Tree
               </Button>
               <Button
                 size="sm"
-                variant={activeView === "network" ? "solid" : "light"}
+                variant={activeView === "network" ? "secondary" : "ghost"}
+                className="rounded-md"
                 onPress={() => selectView("network")}
-                startContent={<Workflow className="w-3.5 h-3.5" />}
               >
+                <Workflow className="w-3.5 h-3.5" />
                 Network
               </Button>
-              <div className="w-px h-5 bg-default-200 mx-0.5" />
+              <div className="w-px h-5 bg-surface-tertiary mx-0.5" />
               <Button
                 size="sm"
-                variant="light"
+                variant="ghost"
                 isIconOnly
                 onPress={() => setSidebarOpen(!sidebarOpen)}
                 aria-label="Toggle details panel"
@@ -357,9 +364,9 @@ const ResourceView: React.FC = observer(() => {
 
             {/* Network legend — replaces filters in network view */}
             {activeView === "network" && (
-              <div className="hidden sm:flex absolute top-3 left-4 z-10 items-center gap-3 bg-content1/90 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-default-200 shadow-sm">
+              <div className="hidden sm:flex absolute top-3 left-4 z-10 items-center gap-3 bg-surface/90 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-border shadow-sm">
                 {NETWORK_LEGEND.map((item) => (
-                  <span key={item.label} className="flex items-center gap-1.5 text-xs text-default-500">
+                  <span key={item.label} className="flex items-center gap-1.5 text-xs text-muted">
                     <span
                       className="inline-block w-4 h-0.5"
                       style={{
@@ -377,7 +384,7 @@ const ResourceView: React.FC = observer(() => {
 
             {/* Filter bar — wrap instead of overflow scroll, which would clip the Type dropdown. */}
             {activeView !== "network" && (
-            <div className="flex flex-wrap absolute top-3 left-4 z-10 items-center gap-1 bg-content1/90 backdrop-blur-sm rounded-lg px-2 py-1 border border-default-200 shadow-sm max-w-[calc(100%-2rem)] md:max-w-none">
+            <div className="flex flex-wrap absolute top-3 left-4 z-10 items-center gap-1 bg-surface/90 backdrop-blur-sm rounded-lg px-2 py-1 border border-border shadow-sm max-w-[calc(100%-2rem)] md:max-w-none">
               {STATUS_FILTER_OPTIONS.map(({ value, label }) => {
                 const active = statusFilters.includes(value);
                 return (
@@ -386,8 +393,8 @@ const ResourceView: React.FC = observer(() => {
                     onClick={() => toggleStatus(value)}
                     className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors flex-shrink-0 ${
                       active
-                        ? "bg-content3 text-foreground"
-                        : "text-default-400 hover:text-foreground hover:bg-content2"
+                        ? "bg-surface-tertiary text-foreground"
+                        : "text-muted hover:text-foreground hover:bg-surface-secondary"
                     }`}
                   >
                     <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(value)}`} />
@@ -397,7 +404,7 @@ const ResourceView: React.FC = observer(() => {
               })}
               {availableKinds.length > 0 && (
                 <>
-                  <div className="w-px h-4 bg-default-200 mx-0.5 flex-shrink-0" />
+                  <div className="w-px h-4 bg-surface-tertiary mx-0.5 flex-shrink-0" />
                   <KindFilterSelect
                     availableKinds={availableKinds}
                     selectedKinds={kindFilters}
@@ -407,10 +414,10 @@ const ResourceView: React.FC = observer(() => {
               )}
               {hasActiveFilter && (
                 <>
-                  <div className="w-px h-4 bg-default-200 mx-0.5 flex-shrink-0" />
+                  <div className="w-px h-4 bg-surface-tertiary mx-0.5 flex-shrink-0" />
                   <button
                     onClick={clearFilters}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-default-400 hover:text-foreground hover:bg-content2 transition-colors flex-shrink-0"
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted hover:text-foreground hover:bg-surface-secondary transition-colors flex-shrink-0"
                   >
                     <X className="w-3 h-3" />
                     Clear
@@ -459,7 +466,7 @@ const ResourceView: React.FC = observer(() => {
 
           {/* Detail panel — docked on desktop, full-screen overlay on mobile */}
           <div
-            className={`flex-shrink-0 md:border-l md:border-default-100 md:overflow-hidden md:transition-all md:duration-300 ${
+            className={`flex-shrink-0 md:border-l md:border-border md:overflow-hidden md:transition-all md:duration-300 ${
               sidebarOpen
                 ? "fixed inset-0 z-40 bg-background md:static md:inset-auto md:z-auto md:bg-transparent md:w-[33vw]"
                 : "hidden md:block md:w-0"

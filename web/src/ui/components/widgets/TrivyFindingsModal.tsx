@@ -8,12 +8,9 @@ import {
   Input,
   Modal,
   ModalBody,
-  ModalContent,
   ModalFooter,
   ModalHeader,
   Popover,
-  PopoverContent,
-  PopoverTrigger,
   Spinner,
 } from "@heroui/react";
 import { ExternalLink, Maximize2, Search } from "lucide-react";
@@ -43,7 +40,9 @@ const SEVERITY_ORDER: Record<string, number> = {
   UNKNOWN: 4,
 };
 
-export function severityChipColor(sev: string): "danger" | "warning" | "default" {
+export function severityChipColor(
+  sev: string,
+): "danger" | "warning" | "default" {
   switch (sev.toUpperCase()) {
     case "CRITICAL":
     case "HIGH":
@@ -122,7 +121,9 @@ export function toRow(
     severity: str(item, "severity"),
     title: str(item, "title") || id,
     detail:
-      str(item, "description") || str(item, "messages") || str(item, "category"),
+      str(item, "description") ||
+      str(item, "messages") ||
+      str(item, "category"),
     targetLabel,
     targetUid,
     link: findingLink(item, id),
@@ -131,7 +132,7 @@ export function toRow(
 
 type Props = {
   isOpen: boolean;
-  onOpenChange: () => void;
+  onOpenChange: (isOpen: boolean) => void;
   title: string;
   reportUids: string[];
   initialSeverity?: string;
@@ -182,7 +183,9 @@ const TrivyFindingsModal: React.FC<Props> = observer(
         const worker = async () => {
           while (!cancelled && next < uids.length) {
             const uid = uids[next++];
-            const findings = await getTrivyFindings.execute(uid).catch(() => null);
+            const findings = await getTrivyFindings
+              .execute(uid)
+              .catch(() => null);
             if (!findings) continue;
             const t = findings.target;
             const targetUid = targetUidLookup.get(
@@ -221,7 +224,9 @@ const TrivyFindingsModal: React.FC<Props> = observer(
     useEffect(() => {
       if (isOpen) {
         setActiveSeverities(
-          initialSeverity ? new Set([initialSeverity.toUpperCase()]) : new Set(),
+          initialSeverity
+            ? new Set([initialSeverity.toUpperCase()])
+            : new Set(),
         );
         setQuery("");
       }
@@ -271,226 +276,219 @@ const TrivyFindingsModal: React.FC<Props> = observer(
     }, [filteredRows, virtualizer]);
 
     const openResource = (uid: string) => {
-      onOpenChange();
+      onOpenChange(false);
       navigate(`${ROUTES.RESOURCE}/${uid}`);
     };
 
     return (
-      <Modal
-        isOpen={isOpen}
-        onOpenChange={onOpenChange}
-        size="2xl"
-        className="dark"
-      >
-        <ModalContent>
-          {() => (
-            <>
-              <ModalHeader className="flex items-center gap-2">
-                {title}
-                <span className="text-sm font-normal text-default-400 ml-1">
-                  ({filteredRows.length}
-                  {filteredRows.length !== rows.length ? ` / ${rows.length}` : ""}
-                  )
-                </span>
-              </ModalHeader>
-              <ModalBody className="px-0 py-0 gap-0">
-                {/* Filters */}
-                <div className="flex flex-col gap-2 px-4 py-3 border-b border-default-100">
+      <Modal.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
+        <Modal.Container size="lg">
+          <Modal.Dialog className="!max-w-3xl w-full">
+            <Modal.CloseTrigger className="absolute right-3 top-3 z-10" />
+            <ModalHeader className="flex items-center gap-2">
+              {title}
+              <span className="text-sm font-normal text-muted ml-1">
+                ({filteredRows.length}
+                {filteredRows.length !== rows.length ? ` / ${rows.length}` : ""}
+                )
+              </span>
+            </ModalHeader>
+            <ModalBody className="px-0 py-0 gap-0">
+              {/* Filters */}
+              <div className="flex flex-col gap-2 px-4 py-3 border-b border-border">
+                <div className="relative w-full">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" />
                   <Input
-                    size="sm"
+                    className="pl-8"
                     placeholder="Filter findings…"
                     value={query}
-                    onValueChange={setQuery}
-                    startContent={
-                      <Search className="w-3.5 h-3.5 text-default-400" />
-                    }
-                    isClearable
-                    onClear={() => setQuery("")}
+                    onChange={(e) => setQuery(e.target.value)}
                   />
-                  <div className="flex flex-wrap gap-1.5">
-                    {SEVERITIES.map((sev) => {
-                      const active = activeSeverities.has(sev);
-                      return (
-                        <Chip
-                          key={sev}
-                          size="sm"
-                          variant={active ? "solid" : "flat"}
-                          color={severityChipColor(sev)}
-                          className="cursor-pointer uppercase"
-                          onClick={() => toggleSeverity(sev)}
-                        >
-                          {sev}
-                        </Chip>
-                      );
-                    })}
-                  </div>
                 </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {SEVERITIES.map((sev) => {
+                    const active = activeSeverities.has(sev);
+                    return (
+                      <Chip
+                        key={sev}
+                        size="sm"
+                        variant={active ? "primary" : "soft"}
+                        color={severityChipColor(sev)}
+                        className="cursor-pointer uppercase"
+                        onClick={() => toggleSeverity(sev)}
+                      >
+                        {sev}
+                      </Chip>
+                    );
+                  })}
+                </div>
+              </div>
 
-                {/* List */}
-                {loading ? (
-                  <div className="flex justify-center py-10">
-                    <Spinner size="sm" />
-                  </div>
-                ) : filteredRows.length === 0 ? (
-                  <div className="text-center text-default-400 text-sm py-10">
-                    No findings.
-                  </div>
-                ) : (
+              {/* List */}
+              {loading ? (
+                <div className="flex justify-center py-10">
+                  <Spinner size="sm" />
+                </div>
+              ) : filteredRows.length === 0 ? (
+                <div className="text-center text-muted text-sm py-10">
+                  No findings.
+                </div>
+              ) : (
+                <div
+                  ref={scrollRef}
+                  className="overflow-y-auto"
+                  style={{ height: "60vh" }}
+                >
                   <div
-                    ref={scrollRef}
-                    className="overflow-y-auto"
-                    style={{ height: "60vh" }}
+                    style={{
+                      height: `${virtualizer.getTotalSize()}px`,
+                      position: "relative",
+                      width: "100%",
+                    }}
                   >
-                    <div
-                      style={{
-                        height: `${virtualizer.getTotalSize()}px`,
-                        position: "relative",
-                        width: "100%",
-                      }}
-                    >
-                      {virtualizer.getVirtualItems().map((vItem) => {
-                        const row = filteredRows[vItem.index];
-                        return (
-                          <div
-                            key={vItem.key}
-                            className="absolute top-0 left-0 w-full border-b border-default-100 overflow-hidden"
-                            style={{
-                              height: `${ROW_HEIGHT}px`,
-                              transform: `translateY(${vItem.start}px)`,
-                            }}
-                          >
-                            <div className="flex items-start gap-3 px-4 py-2.5">
-                              <Chip
-                                size="sm"
-                                color={severityChipColor(row.severity)}
-                                variant="flat"
-                                className="flex-shrink-0 uppercase"
+                    {virtualizer.getVirtualItems().map((vItem) => {
+                      const row = filteredRows[vItem.index];
+                      return (
+                        <div
+                          key={vItem.key}
+                          className="absolute top-0 left-0 w-full border-b border-border overflow-hidden"
+                          style={{
+                            height: `${ROW_HEIGHT}px`,
+                            transform: `translateY(${vItem.start}px)`,
+                          }}
+                        >
+                          <div className="flex items-start gap-3 px-4 py-2.5">
+                            <Chip
+                              size="sm"
+                              color={severityChipColor(row.severity)}
+                              variant="soft"
+                              className="flex-shrink-0 uppercase"
+                            >
+                              {row.severity || "—"}
+                            </Chip>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <p className="text-sm font-medium truncate">
+                                  {row.title}
+                                </p>
+                                {row.link && (
+                                  <a
+                                    href={row.link}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    aria-label="More info"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="flex-shrink-0 text-muted hover:text-foreground"
+                                  >
+                                    <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                )}
+                              </div>
+                              {row.detail && (
+                                <p className="text-xs text-muted truncate">
+                                  {row.detail}
+                                </p>
+                              )}
+                              {row.targetLabel &&
+                                (row.targetUid ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => openResource(row.targetUid!)}
+                                    className="mt-0.5 inline-flex items-center gap-1 text-xs text-foreground hover:underline"
+                                  >
+                                    {row.targetLabel}
+                                    <ExternalLink className="w-3 h-3" />
+                                  </button>
+                                ) : (
+                                  <p className="text-xs text-muted mt-0.5">
+                                    {row.targetLabel}
+                                  </p>
+                                ))}
+                            </div>
+
+                            {/* Expand — full text without changing row height */}
+                            <Popover>
+                              <Popover.Trigger>
+                                <button
+                                  type="button"
+                                  aria-label="Expand finding"
+                                  className="flex-shrink-0 text-muted hover:text-foreground p-1 rounded-md hover:bg-surface-secondary"
+                                >
+                                  <Maximize2 className="w-3.5 h-3.5" />
+                                </button>
+                              </Popover.Trigger>
+                              <Popover.Content
+                                placement="left top"
+                                className="max-w-sm p-4 rounded-lg border-small border-default-100 shadow-xl"
                               >
-                                {row.severity || "—"}
-                              </Chip>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  <p className="text-sm font-medium truncate">
+                                <div className="flex flex-col gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Chip
+                                      size="sm"
+                                      color={severityChipColor(row.severity)}
+                                      variant="soft"
+                                      className="uppercase"
+                                    >
+                                      {row.severity || "—"}
+                                    </Chip>
+                                  </div>
+                                  <p className="text-sm font-medium break-words">
                                     {row.title}
                                   </p>
+                                  {row.detail && (
+                                    <p className="text-xs text-muted break-words whitespace-pre-wrap">
+                                      {row.detail}
+                                    </p>
+                                  )}
                                   {row.link && (
                                     <a
                                       href={row.link}
                                       target="_blank"
                                       rel="noreferrer"
-                                      aria-label="More info"
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="flex-shrink-0 text-default-400 hover:text-foreground"
+                                      className="inline-flex items-center gap-1 text-xs text-foreground hover:underline self-start"
                                     >
+                                      View advisory
                                       <ExternalLink className="w-3 h-3" />
                                     </a>
                                   )}
-                                </div>
-                                {row.detail && (
-                                  <p className="text-xs text-default-400 truncate">
-                                    {row.detail}
-                                  </p>
-                                )}
-                                {row.targetLabel &&
-                                  (row.targetUid ? (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        openResource(row.targetUid!)
-                                      }
-                                      className="mt-0.5 inline-flex items-center gap-1 text-xs text-primary-400 hover:underline"
-                                    >
-                                      {row.targetLabel}
-                                      <ExternalLink className="w-3 h-3" />
-                                    </button>
-                                  ) : (
-                                    <p className="text-xs text-default-300 mt-0.5">
-                                      {row.targetLabel}
-                                    </p>
-                                  ))}
-                              </div>
-
-                              {/* Expand — full text without changing row height */}
-                              <Popover placement="left-start" className="dark">
-                                <PopoverTrigger>
-                                  <button
-                                    type="button"
-                                    aria-label="Expand finding"
-                                    className="flex-shrink-0 text-default-400 hover:text-foreground p-1 rounded-md hover:bg-default-100"
-                                  >
-                                    <Maximize2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </PopoverTrigger>
-                                <PopoverContent className="max-w-sm">
-                                  <div className="flex flex-col gap-2 px-1 py-2">
-                                    <div className="flex items-center gap-2">
-                                      <Chip
-                                        size="sm"
-                                        color={severityChipColor(row.severity)}
-                                        variant="flat"
-                                        className="uppercase"
+                                  {row.targetLabel &&
+                                    (row.targetUid ? (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          openResource(row.targetUid!)
+                                        }
+                                        className="inline-flex items-center gap-1 text-xs text-foreground hover:underline self-start"
                                       >
-                                        {row.severity || "—"}
-                                      </Chip>
-                                    </div>
-                                    <p className="text-sm font-medium break-words">
-                                      {row.title}
-                                    </p>
-                                    {row.detail && (
-                                      <p className="text-xs text-default-400 break-words whitespace-pre-wrap">
-                                        {row.detail}
-                                      </p>
-                                    )}
-                                    {row.link && (
-                                      <a
-                                        href={row.link}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="inline-flex items-center gap-1 text-xs text-primary-400 hover:underline self-start"
-                                      >
-                                        View advisory
+                                        {row.targetLabel}
                                         <ExternalLink className="w-3 h-3" />
-                                      </a>
-                                    )}
-                                    {row.targetLabel &&
-                                      (row.targetUid ? (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            openResource(row.targetUid!)
-                                          }
-                                          className="inline-flex items-center gap-1 text-xs text-primary-400 hover:underline self-start"
-                                        >
-                                          {row.targetLabel}
-                                          <ExternalLink className="w-3 h-3" />
-                                        </button>
-                                      ) : (
-                                        <p className="text-xs text-default-300">
-                                          {row.targetLabel}
-                                        </p>
-                                      ))}
-                                  </div>
-                                </PopoverContent>
-                              </Popover>
-                            </div>
+                                      </button>
+                                    ) : (
+                                      <p className="text-xs text-muted">
+                                        {row.targetLabel}
+                                      </p>
+                                    ))}
+                                </div>
+                              </Popover.Content>
+                            </Popover>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                )}
-              </ModalBody>
-              <ModalFooter className="py-2">
-                <span className="flex items-center gap-1 text-[11px] text-default-400 ml-auto">
-                  Powered by
-                  <SiTrivy className="w-3 h-3" color="currentColor" />
-                  Trivy
-                </span>
-              </ModalFooter>
-            </>
-          )}
-        </ModalContent>
-      </Modal>
+                </div>
+              )}
+            </ModalBody>
+            <ModalFooter className="py-2">
+              <span className="flex items-center gap-1 text-[11px] text-muted ml-auto">
+                Powered by
+                <SiTrivy className="w-3 h-3" color="currentColor" />
+                Trivy
+              </span>
+            </ModalFooter>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
     );
   },
 );

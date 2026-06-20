@@ -23,7 +23,7 @@ const severityTextClass: Record<string, string> = {
   danger: "text-danger",
   warning: "text-warning",
   success: "text-success",
-  default: "text-default-400",
+  default: "text-muted",
 };
 
 function nodeMatchesFilter(node: KubeResource, filter: ResourceFilter): boolean {
@@ -90,7 +90,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
       <div>
         {/* Node row */}
         <div
-          className={`group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-content2 transition-colors cursor-pointer select-none ${
+          className={`group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-surface-secondary transition-colors cursor-pointer select-none ${
             dimmed ? "opacity-40" : ""
           }`}
           onClick={() => onResourceClick(resource)}
@@ -98,7 +98,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
           {/* Expand / collapse */}
           {canExpand ? (
             <button
-              className="flex-shrink-0 text-default-400 hover:text-foreground transition-colors"
+              className="flex-shrink-0 text-muted hover:text-foreground transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsExpanded((v) => !v);
@@ -128,11 +128,11 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm font-semibold truncate">{resource.name}</span>
-              <span className="text-xs text-default-500 flex-shrink-0">
+              <span className="text-xs text-muted flex-shrink-0">
                 {resource.kind}
               </span>
               {resource.namespace && (
-                <span className="text-xs text-default-600 font-mono flex-shrink-0">
+                <span className="text-xs text-foreground font-mono flex-shrink-0">
                   {resource.namespace}
                 </span>
               )}
@@ -146,21 +146,21 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
 
           {/* Trivy findings */}
           {findings && (
-            <Tooltip
-              content={
-                `${totalCves(findings)} CVEs` +
-                (totalOther(findings) > 0
-                  ? `, ${totalOther(findings)} other findings`
-                  : "")
-              }
-              className="dark"
-            >
-              <span
-                className={`flex items-center gap-0.5 flex-shrink-0 text-xs ${severityTextClass[findingsColor]}`}
-              >
-                <ShieldAlert className="w-3.5 h-3.5" />
-                {totalCves(findings) > 0 && totalCves(findings)}
-              </span>
+            <Tooltip>
+              <Tooltip.Trigger>
+                <span
+                  className={`flex items-center gap-0.5 flex-shrink-0 text-xs ${severityTextClass[findingsColor]}`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  {totalCves(findings) > 0 && totalCves(findings)}
+                </span>
+              </Tooltip.Trigger>
+              <Tooltip.Content>
+                {`${totalCves(findings)} CVEs` +
+                  (totalOther(findings) > 0
+                    ? `, ${totalOther(findings)} other findings`
+                    : "")}
+              </Tooltip.Content>
             </Tooltip>
           )}
 
@@ -170,22 +170,25 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
           </div>
 
           {/* Navigate — visible on row hover */}
-          <Tooltip content="Open resource" className="dark">
-            <button
-              className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-default-400 hover:text-foreground p-1 rounded-md hover:bg-default-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`${ROUTES.RESOURCE}/${resource.uid}`);
-              }}
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
+          <Tooltip>
+            <Tooltip.Trigger>
+              <button
+                className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-muted hover:text-foreground p-1 rounded-md hover:bg-surface-secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`${ROUTES.RESOURCE}/${resource.uid}`);
+                }}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip.Trigger>
+            <Tooltip.Content>Open resource</Tooltip.Content>
           </Tooltip>
         </div>
 
         {/* Children */}
         {shouldShowChildren && (
-          <div className="ml-5 border-l border-default-100 pl-2.5">
+          <div className="ml-5 border-l border-border pl-2.5">
             {resource.children.map((child) => (
               <ResourceTree
                 key={child.uid}

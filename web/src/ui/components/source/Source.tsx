@@ -50,7 +50,8 @@ const Source: React.FC<SourceProps> = ({ fluxResource: node }: SourceProps) => {
       <Link
         href={url()}
         className="flex items-center gap-2 font-mono text-xs hover:underline text-white"
-        isExternal
+        target="_blank"
+        rel="noreferrer"
       >
         <GitCommitHorizontal />
         {" " + kustomization.getLastAttemptedHash().slice(0, 8)}

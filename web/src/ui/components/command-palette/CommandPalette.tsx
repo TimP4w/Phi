@@ -12,6 +12,7 @@ import {
   RefreshCw,
   CornerDownLeft,
   ChevronRight,
+  X,
 } from "lucide-react";
 
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
@@ -57,7 +58,7 @@ const COMMAND_ICON: Record<CommandName, React.ReactNode> = {
 };
 
 const Kbd: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <kbd className="px-1.5 py-0.5 rounded bg-default-100 text-default-500 text-[10px] font-mono">
+  <kbd className="px-1.5 py-0.5 rounded bg-surface-secondary text-muted text-[10px] font-mono">
     {children}
   </kbd>
 );
@@ -292,7 +293,7 @@ const CommandPalette: React.FC = observer(() => {
   const renderItem = (item: Item, index: number) => {
     const active = index === safeIndex;
     const base = `w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
-      active ? "bg-content2" : "hover:bg-content2/50"
+      active ? "bg-surface-secondary" : "hover:bg-surface-secondary/50"
     }`;
     const common = {
       key: index,
@@ -305,10 +306,10 @@ const CommandPalette: React.FC = observer(() => {
     if (item.type === "suggestion") {
       return (
         <button {...common}>
-          <ChevronRight className="w-4 h-4 text-default-400 flex-shrink-0" />
+          <ChevronRight className="w-4 h-4 text-muted flex-shrink-0" />
           <span className="font-mono text-sm">{item.suggestion.label}</span>
           {item.suggestion.hint && (
-            <span className="ml-auto text-xs text-default-400">
+            <span className="ml-auto text-xs text-muted">
               {item.suggestion.hint}
             </span>
           )}
@@ -320,15 +321,15 @@ const CommandPalette: React.FC = observer(() => {
       const r = item.resource;
       return (
         <button {...common}>
-          <Box className="w-4 h-4 text-default-400 flex-shrink-0" />
+          <Box className="w-4 h-4 text-muted flex-shrink-0" />
           <span className="text-sm truncate">{r.name}</span>
-          <span className="text-xs text-default-400 truncate">
+          <span className="text-xs text-muted truncate">
             {r.kind}
             {r.namespace ? ` · ${r.namespace}` : ""}
           </span>
           <Chip
             size="sm"
-            variant="flat"
+            variant="soft"
             color={statusChipColor(r.status)}
             className="ml-auto flex-shrink-0"
           >
@@ -344,12 +345,12 @@ const CommandPalette: React.FC = observer(() => {
         <button {...common}>
           <Calendar
             className={`w-4 h-4 flex-shrink-0 ${
-              ev.type === "Warning" ? "text-warning" : "text-default-400"
+              ev.type === "Warning" ? "text-warning" : "text-muted"
             }`}
           />
           <span className="text-sm truncate flex-shrink-0">{ev.reason}</span>
-          <span className="text-xs text-default-400 truncate">{ev.message}</span>
-          <span className="ml-auto text-xs text-default-400 flex-shrink-0 truncate max-w-[40%]">
+          <span className="text-xs text-muted truncate">{ev.message}</span>
+          <span className="ml-auto text-xs text-muted flex-shrink-0 truncate max-w-[40%]">
             {ev.kind}/{ev.name}
           </span>
         </button>
@@ -359,12 +360,12 @@ const CommandPalette: React.FC = observer(() => {
     // command
     return (
       <button {...common}>
-        <span className="text-default-400 flex-shrink-0">
+        <span className="text-muted flex-shrink-0">
           {COMMAND_ICON[item.command]}
         </span>
         <span className="text-sm capitalize flex-shrink-0">{item.command}</span>
         <span className="text-sm truncate">{item.resource.name}</span>
-        <span className="text-xs text-default-400 truncate ml-auto">
+        <span className="text-xs text-muted truncate ml-auto">
           {item.resource.kind}
           {item.resource.namespace ? ` · ${item.resource.namespace}` : ""}
         </span>
@@ -384,22 +385,31 @@ const CommandPalette: React.FC = observer(() => {
             if (e.target === e.currentTarget) close();
           }}
         >
-          <div className="dark w-full max-w-2xl mx-4 bg-content1 text-foreground rounded-xl border border-default-100 shadow-2xl overflow-hidden flex flex-col">
+          <div className="dark w-full max-w-2xl mx-4 bg-surface text-foreground rounded-xl border border-border shadow-2xl overflow-hidden flex flex-col">
             {/* Input row with pills */}
-            <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-default-100">
-              <Search className="w-4 h-4 text-default-400 flex-shrink-0" />
+            <div className="flex items-center gap-2 flex-wrap px-3 py-2.5 border-b border-border">
+              <Search className="w-4 h-4 text-muted flex-shrink-0" />
               {tokens.map((t, i) => (
                 <Chip
                   key={`${t.prefix}-${t.value}-${i}`}
                   size="sm"
-                  variant="flat"
-                  color="primary"
-                  onClose={() =>
-                    setTokens((prev) => prev.filter((_, idx) => idx !== i))
-                  }
+                  variant="soft"
+                  color="accent"
                   className="font-mono"
                 >
-                  {t.prefix}:{t.value}
+                  <span className="flex items-center gap-1">
+                    {t.prefix}:{t.value}
+                    <button
+                      type="button"
+                      aria-label="Remove filter"
+                      onClick={() =>
+                        setTokens((prev) => prev.filter((_, idx) => idx !== i))
+                      }
+                      className="opacity-60 hover:opacity-100"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
                 </Chip>
               ))}
               <input
@@ -417,7 +427,7 @@ const CommandPalette: React.FC = observer(() => {
                     ? "add another filter…"
                     : "Search resources, events, or run a command…"
                 }
-                className="flex-1 min-w-[8rem] bg-transparent outline-none text-sm placeholder:text-default-400 py-1"
+                className="flex-1 min-w-[8rem] bg-transparent outline-none text-sm placeholder:text-muted py-1"
                 spellCheck={false}
                 autoComplete="off"
               />
@@ -427,14 +437,14 @@ const CommandPalette: React.FC = observer(() => {
             <div className="max-h-[50vh] overflow-y-auto py-1">
               {items.map(renderItem)}
               {showEmpty && (
-                <div className="px-3 py-6 text-center text-sm text-default-400">
+                <div className="px-3 py-6 text-center text-sm text-muted">
                   No matches
                 </div>
               )}
             </div>
 
             {/* Footer hints */}
-            <div className="px-3 py-2 border-t border-default-100 text-xs text-default-400 flex items-center gap-3 flex-wrap">
+            <div className="px-3 py-2 border-t border-border text-xs text-muted flex items-center gap-3 flex-wrap">
               <span className="flex items-center gap-1">
                 <Kbd>↑</Kbd>
                 <Kbd>↓</Kbd> navigate

@@ -6,7 +6,7 @@ type SparklineProps = {
 };
 
 /** Minimal SVG polyline — used inside React Flow nodes, so no chart lib. */
-function Sparkline({ values, width = 56, height = 16, className = "stroke-primary" }: SparklineProps) {
+function Sparkline({ values, width = 56, height = 16, className = "stroke-accent" }: SparklineProps) {
   if (values.length < 2) return null;
   const max = Math.max(...values, 1e-9);
   const min = Math.min(...values, 0);

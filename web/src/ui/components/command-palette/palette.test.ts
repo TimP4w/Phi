@@ -111,11 +111,17 @@ describe("collectFilters / hasResourceFilters", () => {
 describe("resourceMatches", () => {
   const pod = kubeResource({ uid: "abc-123", kind: "Pod", name: "web", namespace: "flux-system", status: "failed" });
 
-  it("matches namespace, uuid and kind case-insensitively as substrings", () => {
+  it("matches namespace and uuid case-insensitively as substrings", () => {
     expect(resourceMatches(pod, emptyFilters({ ns: ["FLUX"] }))).toBe(true);
     expect(resourceMatches(pod, emptyFilters({ uuid: ["abc"] }))).toBe(true);
-    expect(resourceMatches(pod, emptyFilters({ kind: ["pod"] }))).toBe(true);
     expect(resourceMatches(pod, emptyFilters({ ns: ["other"] }))).toBe(false);
+  });
+
+  it("matches kind exactly (case-insensitive), not as a substring", () => {
+    expect(resourceMatches(pod, emptyFilters({ kind: ["pod"] }))).toBe(true);
+    expect(resourceMatches(pod, emptyFilters({ kind: ["POD"] }))).toBe(true);
+    const pdb = kubeResource({ kind: "PodDisruptionBudget", name: "pdb" });
+    expect(resourceMatches(pdb, emptyFilters({ kind: ["Pod"] }))).toBe(false);
   });
 
   it("expands a partial status term to the statuses it prefixes", () => {

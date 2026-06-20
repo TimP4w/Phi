@@ -1,7 +1,7 @@
 import { ReactNode, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useInjection } from "inversify-react";
-import { Progress, useDisclosure } from "@heroui/react";
+import { ProgressBar, useOverlayState } from "@heroui/react";
 import {
   Bell,
   Boxes,
@@ -47,7 +47,7 @@ import { computeReconciliation } from "./reconciliation";
 type Tone = "default" | "success" | "warning" | "danger";
 
 const DOT: Record<Tone, string> = {
-  default: "bg-default-300",
+  default: "bg-segment",
   success: "bg-success",
   warning: "bg-warning",
   danger: "bg-danger",
@@ -64,18 +64,18 @@ const Section: React.FC<{
 }> = ({ icon, title, tone, summary, defaultOpen, children }) => {
   const [open, setOpen] = useState(defaultOpen ?? false);
   return (
-    <div className="border-b border-default-100 last:border-b-0">
+    <div className="border-b border-border last:border-b-0">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-content2/50 transition-colors"
+        className="w-full flex items-center gap-2.5 px-4 py-2.5 hover:bg-surface-secondary/50 transition-colors"
       >
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${DOT[tone]}`} />
-        <span className="text-default-400 flex-shrink-0">{icon}</span>
+        <span className="text-muted flex-shrink-0">{icon}</span>
         <span className="text-sm font-medium flex-1 text-left">{title}</span>
         <span className="flex items-center gap-2">{summary}</span>
         <ChevronDown
-          className={`w-3.5 h-3.5 text-default-400 transition-transform flex-shrink-0 ${
+          className={`w-3.5 h-3.5 text-muted transition-transform flex-shrink-0 ${
             open ? "rotate-180" : ""
           }`}
         />
@@ -93,10 +93,10 @@ const Block: React.FC<{ title: string; provider?: string; children: ReactNode }>
 }) => (
   <div className="mb-3 last:mb-0">
     <div className="flex items-baseline gap-1.5 mb-1.5">
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-default-300">
+      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
         {title}
       </span>
-      {provider && <span className="text-[10px] text-default-400">· {provider}</span>}
+      {provider && <span className="text-[10px] text-muted">· {provider}</span>}
     </div>
     {children}
   </div>
@@ -109,7 +109,7 @@ const ViewAll: React.FC<{ onClick: () => void; children: ReactNode }> = ({
   <button
     type="button"
     onClick={onClick}
-    className="text-xs text-primary hover:underline mt-2"
+    className="text-xs text-foreground hover:underline mt-2"
   >
     {children} →
   </button>
@@ -121,7 +121,7 @@ const Stat: React.FC<{ label: string; value: ReactNode; tone?: string }> = ({
   tone = "text-foreground",
 }) => (
   <div className="flex justify-between items-center text-xs">
-    <span className="text-default-400">{label}</span>
+    <span className="text-muted">{label}</span>
     <span className={`font-medium tabular-nums ${tone}`}>{value}</span>
   </div>
 );
@@ -134,7 +134,7 @@ const Count: React.FC<{ value: number; label?: string; accent?: ReactNode }> = (
 }) => (
   <>
     <span className="text-sm font-semibold tabular-nums">{value}</span>
-    {label && <span className="text-xs text-default-400">{label}</span>}
+    {label && <span className="text-xs text-muted">{label}</span>}
     {accent}
   </>
 );
@@ -175,26 +175,26 @@ const KindBars: React.FC<{
             onClick={() => onToggleKind?.(kind)}
             aria-pressed={active}
             className={`flex items-center gap-2.5 w-full text-left rounded-md px-1.5 -mx-1.5 py-0.5 transition-colors ${
-              onToggleKind ? "cursor-pointer hover:bg-default-100" : "cursor-default"
-            } ${active ? "bg-default-100" : ""}`}
+              onToggleKind ? "cursor-pointer hover:bg-surface-secondary" : "cursor-default"
+            } ${active ? "bg-surface-secondary" : ""}`}
           >
             <div
               className="w-2 h-2 rounded-full flex-shrink-0"
               style={{ backgroundColor: color }}
             />
             <span
-              className={`text-xs flex-1 min-w-0 truncate ${active ? "text-foreground" : "text-default-400"}`}
+              className={`text-xs flex-1 min-w-0 truncate ${active ? "text-foreground" : "text-muted"}`}
             >
               {label}
             </span>
             <div className="flex items-center gap-2 flex-shrink-0">
-              <div className="w-16 h-1 bg-default-100 rounded-full overflow-hidden">
+              <div className="w-16 h-1 bg-surface-secondary rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${pct}%`, backgroundColor: color }}
                 />
               </div>
-              <span className="text-xs font-mono text-default-400 w-4 text-right tabular-nums">
+              <span className="text-xs font-mono text-muted w-4 text-right tabular-nums">
                 {count}
               </span>
             </div>
@@ -278,15 +278,16 @@ const ClusterInspector: React.FC<{
   const eventsStore = useInjection(EventsStore);
   const [eventFilter, setEventFilter] = useState<EventFilter>("all");
 
-  const appsModal = useDisclosure();
-  const nodesModal = useDisclosure();
-  const longhornModal = useDisclosure();
-  const pvModal = useDisclosure();
-  const routesModal = useDisclosure();
-  const servicesModal = useDisclosure();
-  const certsModal = useDisclosure();
-  const cveModal = useDisclosure();
-  const otherModal = useDisclosure();
+  const appsModal = useOverlayState();
+  const podsModal = useOverlayState();
+  const nodesModal = useOverlayState();
+  const longhornModal = useOverlayState();
+  const pvModal = useOverlayState();
+  const routesModal = useOverlayState();
+  const servicesModal = useOverlayState();
+  const certsModal = useOverlayState();
+  const cveModal = useOverlayState();
+  const otherModal = useOverlayState();
 
   // Single pass over the resource cache, bucketed by kind.
   const pods: Pod[] = [];
@@ -328,15 +329,34 @@ const ClusterInspector: React.FC<{
     p.metadata?.phase === "Succeeded" || p.metadata?.phase === "Completed";
   const podsExpected = pods.filter((p) => !podDone(p));
   const podsExpectedCount = podsExpected.length;
-  const podsRunning = podsExpected.filter((p) => p.metadata?.phase === "Running").length;
-  // A pod still spinning up is pending, not unhealthy; only failed/warning/unknown pods are unhealthy.
-  const podsBad = podsExpected.filter(
-    (p) =>
-      p.status === ResourceStatus.FAILED ||
-      p.status === ResourceStatus.WARNING ||
-      p.status === ResourceStatus.UNKNOWN,
+  // "Ready" means the pod actually reconciled, not merely that a container is running:
+  // a pod in Running phase with a crashed/errored container is unhealthy, not ready.
+  const podsReady = podsExpected.filter(
+    (p) => p.status === ResourceStatus.SUCCESS,
   ).length;
-  const podsPending = podsExpectedCount - podsRunning;
+  // A pod still spinning up is pending, not unhealthy; only failed/warning/unknown pods are unhealthy.
+  const isPodBad = (p: Pod) =>
+    p.status === ResourceStatus.FAILED ||
+    p.status === ResourceStatus.WARNING ||
+    p.status === ResourceStatus.UNKNOWN;
+  const podsBad = podsExpected.filter(isPodBad).length;
+  const podsPending = podsExpectedCount - podsReady - podsBad;
+  const podsHealthLabel =
+    podsBad > 0
+      ? `${podsBad} unhealthy${podsPending > 0 ? ` · ${podsPending} pending` : ""}`
+      : podsPending > 0
+        ? `${podsPending} pending`
+        : `${podsReady} ready`;
+  const podsSeed: Set<string> | undefined =
+    podsBad > 0
+      ? new Set([
+          ResourceStatus.FAILED,
+          ResourceStatus.WARNING,
+          ResourceStatus.UNKNOWN,
+        ])
+      : podsPending > 0
+        ? new Set([ResourceStatus.PENDING])
+        : undefined;
   const resourcesTone: Tone =
     pods.length > 0
       ? podsBad > 0
@@ -430,14 +450,14 @@ const ClusterInspector: React.FC<{
 
   return (
     <div className="flex flex-col">
-      <div className="flex items-center px-4 py-3 border-b border-default-100 sticky top-0 bg-background z-10">
+      <div className="flex items-center px-4 py-3 border-b border-border sticky top-0 bg-background z-10">
         <span className="text-sm font-semibold">Cluster</span>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
             aria-label="Close sidebar"
-            className="ml-auto p-1 rounded-md text-default-400 hover:text-foreground hover:bg-content2 transition-colors lg:hidden"
+            className="ml-auto p-1 rounded-md text-muted hover:text-foreground hover:bg-surface-secondary transition-colors lg:hidden"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -464,7 +484,7 @@ const ClusterInspector: React.FC<{
             />
           }
         >
-          <HealthButton tone={recon.tone} label={recon.label} onClick={appsModal.onOpen} />
+          <HealthButton tone={recon.tone} label={recon.label} onClick={appsModal.open} />
           <div className="mt-3">
             <KindBars
               resources={[...recon.apps, ...recon.sources]}
@@ -483,9 +503,9 @@ const ClusterInspector: React.FC<{
           pods.length > 0 ? (
             <>
               <span className="text-sm font-semibold tabular-nums">
-                {podsRunning}/{podsExpectedCount}
+                {podsReady}/{podsExpectedCount}
               </span>
-              <span className="text-xs text-default-400">pods</span>
+              <span className="text-xs text-muted">pods</span>
               {podsBad > 0 ? (
                 <Danger>{podsBad} unhealthy</Danger>
               ) : podsPending > 0 ? (
@@ -500,12 +520,22 @@ const ClusterInspector: React.FC<{
           )
         }
       >
-        {/* bare mode supplies the count + health button; Flux objects have their own section */}
-        <ResourceCountWidget
-          resource={fluxTreeStore.root}
-          bare
-          excludeKinds={FLUX_KIND_SET}
-        />
+        {pods.length > 0 ? (
+          // Driven by the flat resource cache (not the ownership tree) so pods that
+          // aren't owned by a Flux root — e.g. Trivy scan jobs — still surface here.
+          <HealthButton
+            tone={resourcesTone}
+            label={podsHealthLabel}
+            onClick={podsModal.open}
+          />
+        ) : (
+          /* No pods (e.g. an empty cluster): fall back to the tree-walked resource count. */
+          <ResourceCountWidget
+            resource={fluxTreeStore.root}
+            bare
+            excludeKinds={FLUX_KIND_SET}
+          />
+        )}
       </Section>
 
       {nodes.length > 0 && (
@@ -521,7 +551,7 @@ const ClusterInspector: React.FC<{
                 notReadyNodes > 0 ? (
                   <Danger>{notReadyNodes} down</Danger>
                 ) : cpuPct !== undefined && memPct !== undefined ? (
-                  <span className="text-xs text-default-400">
+                  <span className="text-xs text-muted">
                     {Math.round(cpuPct)}% · {Math.round(memPct)}%
                   </span>
                 ) : null
@@ -532,30 +562,36 @@ const ClusterInspector: React.FC<{
           {cpuPct !== undefined || memPct !== undefined ? (
             <div className="flex flex-col gap-2">
               {cpuPct !== undefined && (
-                <Progress
+                <ProgressBar
                   size="sm"
                   value={cpuPct}
-                  color={usageColor(cpuPct, "primary")}
-                  label="CPU"
-                  showValueLabel
-                  classNames={{ label: "text-xs", value: "text-xs" }}
-                />
+                  color={usageColor(cpuPct, "accent")}
+                >
+                  <div className="flex items-center justify-between text-xs">
+                    <span>CPU</span>
+                    <ProgressBar.Output />
+                  </div>
+                  <ProgressBar.Track>
+                    <ProgressBar.Fill />
+                  </ProgressBar.Track>
+                </ProgressBar>
               )}
               {memPct !== undefined && (
-                <Progress
-                  size="sm"
-                  value={memPct}
-                  color={usageColor(memPct)}
-                  label="Memory"
-                  showValueLabel
-                  classNames={{ label: "text-xs", value: "text-xs" }}
-                />
+                <ProgressBar size="sm" value={memPct} color={usageColor(memPct)}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span>Memory</span>
+                    <ProgressBar.Output />
+                  </div>
+                  <ProgressBar.Track>
+                    <ProgressBar.Fill />
+                  </ProgressBar.Track>
+                </ProgressBar>
               )}
             </div>
           ) : (
-            <p className="text-xs text-default-400">metrics unavailable</p>
+            <p className="text-xs text-muted">metrics unavailable</p>
           )}
-          <ViewAll onClick={nodesModal.onOpen}>
+          <ViewAll onClick={nodesModal.open}>
             Inspect {nodes.length} node{nodes.length === 1 ? "" : "s"}
           </ViewAll>
         </Section>
@@ -578,7 +614,7 @@ const ClusterInspector: React.FC<{
                 ) : unboundPVCs > 0 ? (
                   <Warn>{unboundPVCs} unbound</Warn>
                 ) : showLonghorn ? (
-                  <span className="text-xs text-default-400">
+                  <span className="text-xs text-muted">
                     {Math.round(storagePct)}% used
                   </span>
                 ) : null
@@ -590,14 +626,19 @@ const ClusterInspector: React.FC<{
             <Block title="Longhorn" provider="distributed block storage">
               {lhNodes.length > 0 && (
                 <div className="flex flex-col gap-2 mb-1">
-                  <Progress
+                  <ProgressBar
                     size="sm"
                     value={storagePct}
                     color={usageColor(storagePct)}
-                    label={`${formatBytes(storageUsed)} used`}
-                    showValueLabel
-                    classNames={{ label: "text-xs", value: "text-xs" }}
-                  />
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <span>{`${formatBytes(storageUsed)} used`}</span>
+                      <ProgressBar.Output />
+                    </div>
+                    <ProgressBar.Track>
+                      <ProgressBar.Fill />
+                    </ProgressBar.Track>
+                  </ProgressBar>
                   <Stat label="Schedulable" value={formatBytes(storageSchedulable)} />
                   <Stat label="Total" value={formatBytes(storageTotal)} />
                 </div>
@@ -607,7 +648,7 @@ const ClusterInspector: React.FC<{
               {degraded > 0 && (
                 <Stat label="Degraded" value={degraded} tone="text-warning" />
               )}
-              <ViewAll onClick={longhornModal.onOpen}>View Longhorn volumes</ViewAll>
+              <ViewAll onClick={longhornModal.open}>View Longhorn volumes</ViewAll>
             </Block>
           )}
 
@@ -622,7 +663,7 @@ const ClusterInspector: React.FC<{
               {pvCapacity > 0 && (
                 <Stat label="Capacity" value={formatBytes(pvCapacity)} />
               )}
-              <ViewAll onClick={pvModal.onOpen}>View volumes &amp; claims</ViewAll>
+              <ViewAll onClick={pvModal.open}>View volumes &amp; claims</ViewAll>
             </Block>
           )}
         </Section>
@@ -651,7 +692,7 @@ const ClusterInspector: React.FC<{
         >
           {certs.length > 0 && (
             <div className="mb-2">
-              <div className="flex items-center gap-1.5 mb-1 text-[11px] font-semibold uppercase tracking-wide text-default-300">
+              <div className="flex items-center gap-1.5 mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
                 <Lock className="w-3 h-3" />
                 TLS · cert-manager
               </div>
@@ -666,13 +707,13 @@ const ClusterInspector: React.FC<{
               {cert.expired > 0 && (
                 <Stat label="Expired / invalid" value={cert.expired} tone="text-danger" />
               )}
-              <ViewAll onClick={certsModal.onOpen}>View certificates</ViewAll>
+              <ViewAll onClick={certsModal.open}>View certificates</ViewAll>
             </div>
           )}
 
           {trackedServices.length > 0 && (
             <div className="mb-2">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-default-300 mb-1">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-1">
                 Endpoints
               </div>
               <Stat
@@ -683,22 +724,22 @@ const ClusterInspector: React.FC<{
               {brokenServices.length > 0 && (
                 <>
                   <Stat label="No endpoints" value={brokenServices.length} tone="text-danger" />
-                  <ViewAll onClick={servicesModal.onOpen}>View affected services</ViewAll>
+                  <ViewAll onClick={servicesModal.open}>View affected services</ViewAll>
                 </>
               )}
             </div>
           )}
 
           {(routesTotal > 0 || netpols.length > 0) && (
-            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-default-400 pt-1 border-t border-default-100">
+            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted pt-1 border-t border-border">
               {ingresses.length > 0 && <span>{ingresses.length} ingress</span>}
               {routes.length > 0 && <span>{routes.length} routes</span>}
               {netpols.length > 0 && <span>{netpols.length} policies</span>}
               {routesTotal > 0 && (
                 <button
                   type="button"
-                  onClick={routesModal.onOpen}
-                  className="text-primary hover:underline"
+                  onClick={routesModal.open}
+                  className="text-foreground hover:underline"
                 >
                   view →
                 </button>
@@ -721,7 +762,7 @@ const ClusterInspector: React.FC<{
                 summary.cve.critical > 0 ? (
                   <Danger>{summary.cve.critical} crit</Danger>
                 ) : summary.cve.high > 0 ? (
-                  <span className="text-xs font-medium text-danger-400">
+                  <span className="text-xs font-medium text-danger">
                     {summary.cve.high} high
                   </span>
                 ) : null
@@ -732,21 +773,21 @@ const ClusterInspector: React.FC<{
           {cveCount > 0 && (
             <div className="mb-2">
               <div className="flex items-center gap-2 mb-1">
-                <ShieldAlert className="w-3.5 h-3.5 text-default-400" />
+                <ShieldAlert className="w-3.5 h-3.5 text-muted" />
                 <span className="text-xs font-medium">Vulnerabilities</span>
               </div>
               <SeverityRow counts={summary.cve} />
-              <ViewAll onClick={cveModal.onOpen}>View vulnerabilities</ViewAll>
+              <ViewAll onClick={cveModal.open}>View vulnerabilities</ViewAll>
             </div>
           )}
           {otherCount > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <FileWarning className="w-3.5 h-3.5 text-default-400" />
+                <FileWarning className="w-3.5 h-3.5 text-muted" />
                 <span className="text-xs font-medium">Misconfigurations</span>
               </div>
               <SeverityRow counts={summary.other} />
-              <ViewAll onClick={otherModal.onOpen}>View misconfigurations</ViewAll>
+              <ViewAll onClick={otherModal.open}>View misconfigurations</ViewAll>
             </div>
           )}
         </Section>
@@ -763,7 +804,7 @@ const ClusterInspector: React.FC<{
           />
         }
       >
-        <div className="flex flex-col max-h-[50vh] -mx-4 -mb-3">
+        <div className="flex flex-col h-[calc(100vh-11rem)] -mx-4 -mb-3">
           <EventsPanel
             events={displayedEvents}
             filter={eventFilter}
@@ -776,53 +817,67 @@ const ClusterInspector: React.FC<{
 
       <ResourceListModal
         isOpen={appsModal.isOpen}
-        onOpenChange={appsModal.onOpenChange}
+        onOpenChange={appsModal.setOpen}
         title="Applications"
         resources={recon.apps}
+        defaultStatuses={
+          recon.failed > 0
+            ? new Set([ResourceStatus.FAILED])
+            : recon.reconciling > 0
+              ? new Set([ResourceStatus.PENDING, ResourceStatus.WARNING])
+              : undefined
+        }
+      />
+      <ResourceListModal
+        isOpen={podsModal.isOpen}
+        onOpenChange={podsModal.setOpen}
+        title="Pods"
+        resources={podsExpected}
+        defaultStatuses={podsSeed}
       />
       <NodesModal
         isOpen={nodesModal.isOpen}
-        onOpenChange={nodesModal.onOpenChange}
+        onOpenChange={nodesModal.setOpen}
         nodes={nodes}
       />
       <LonghornVolumesModal
         isOpen={longhornModal.isOpen}
-        onOpenChange={longhornModal.onOpenChange}
+        onOpenChange={longhornModal.setOpen}
         volumes={lhVolumes}
       />
       <ResourceListModal
         isOpen={pvModal.isOpen}
-        onOpenChange={pvModal.onOpenChange}
+        onOpenChange={pvModal.setOpen}
         title="Volumes & Claims"
         resources={[...pvcs, ...pvs]}
       />
       <ResourceListModal
         isOpen={routesModal.isOpen}
-        onOpenChange={routesModal.onOpenChange}
+        onOpenChange={routesModal.setOpen}
         title="Routes"
         resources={[...ingresses, ...routes]}
       />
       <ResourceListModal
         isOpen={servicesModal.isOpen}
-        onOpenChange={servicesModal.onOpenChange}
+        onOpenChange={servicesModal.setOpen}
         title="Services without endpoints"
         resources={brokenServices}
       />
       <ResourceListModal
         isOpen={certsModal.isOpen}
-        onOpenChange={certsModal.onOpenChange}
+        onOpenChange={certsModal.setOpen}
         title="Certificates"
         resources={certs}
       />
       <TrivyFindingsModal
         isOpen={cveModal.isOpen}
-        onOpenChange={cveModal.onOpenChange}
+        onOpenChange={cveModal.setOpen}
         title="Vulnerabilities"
         reportUids={summary.cveReportUids}
       />
       <TrivyFindingsModal
         isOpen={otherModal.isOpen}
-        onOpenChange={otherModal.onOpenChange}
+        onOpenChange={otherModal.setOpen}
         title="Misconfigurations"
         reportUids={summary.otherReportUids}
       />
@@ -833,16 +888,16 @@ const ClusterInspector: React.FC<{
 const SeverityRow: React.FC<{ counts: SeverityCounts }> = ({ counts }) => {
   const items: { label: string; value: number; tone: string }[] = [
     { label: "Critical", value: counts.critical, tone: "text-danger" },
-    { label: "High", value: counts.high, tone: "text-danger-400" },
+    { label: "High", value: counts.high, tone: "text-danger" },
     { label: "Medium", value: counts.medium, tone: "text-warning" },
-    { label: "Low", value: counts.low, tone: "text-default-400" },
+    { label: "Low", value: counts.low, tone: "text-muted" },
   ];
   return (
     <div className="flex justify-between w-full">
       {items.map((i) => (
         <div key={i.label} className="flex flex-col">
           <span className={`text-sm font-bold tabular-nums ${i.tone}`}>{i.value}</span>
-          <span className="text-[11px] text-default-400">{i.label}</span>
+          <span className="text-[11px] text-muted">{i.label}</span>
         </div>
       ))}
     </div>
