@@ -8,7 +8,11 @@ import { ROUTES } from "../../routes/routes.enum";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import { ChevronRight, ExternalLink, ShieldAlert } from "lucide-react";
 import StatusChip from "../status-chip/StatusChip";
-import { ResourceFilter, subtreeHasMatch } from "../../shared/resourceFilter";
+import {
+  ResourceFilter,
+  collectMatchingSubtrees,
+  nodeMatchesFilter,
+} from "../../shared/resourceFilter";
 import { statusDotClass } from "../../shared/helpers";
 import { useInjection } from "inversify-react";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
@@ -26,21 +30,18 @@ const severityTextClass: Record<string, string> = {
   default: "text-muted",
 };
 
-function nodeMatchesFilter(node: KubeResource, filter: ResourceFilter): boolean {
-  const statusMatch = filter.statuses.length === 0 || filter.statuses.includes(node.status);
-  const kindMatch = filter.kinds.length === 0 || filter.kinds.includes(node.kind);
-  return statusMatch && kindMatch;
-}
-
 type ResourceTreeProps = {
   resource?: KubeResource;
   level: number;
   onResourceClick: (node: KubeResource) => void;
   filter?: ResourceFilter;
+  // UIDs whose subtree contains a filter match, precomputed once by the root so
+  // pruning is an O(1) membership test per node instead of a per-node subtree walk.
+  matchSet?: Set<string>;
 };
 
 const ResourceTree: React.FC<ResourceTreeProps> = observer(
-  ({ resource, level = 0, onResourceClick, filter }) => {
+  ({ resource, level = 0, onResourceClick, filter, matchSet }) => {
     const isCollapsedByDefault =
       level > 0 &&
       !!resource &&
@@ -65,7 +66,14 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
     }
 
     const hasActiveFilter = filter && (filter.statuses.length > 0 || filter.kinds.length > 0);
-    if (hasActiveFilter && !subtreeHasMatch(resource, filter!)) {
+    // The root computes the match set once (O(n)); descendants inherit it. Recomputed
+    // each render rather than memoized so it stays correct as the observed tree mutates.
+    const activeMatchSet =
+      hasActiveFilter && level === 0
+        ? collectMatchingSubtrees(resource, filter!)
+        : matchSet;
+
+    if (hasActiveFilter && activeMatchSet && !activeMatchSet.has(resource.uid)) {
       return null;
     }
 
@@ -196,6 +204,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
                 level={level + 1}
                 onResourceClick={onResourceClick}
                 filter={filter}
+                matchSet={activeMatchSet}
               />
             ))}
           </div>

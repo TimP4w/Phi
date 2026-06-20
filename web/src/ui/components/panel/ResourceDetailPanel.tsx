@@ -36,9 +36,9 @@ import { METRICS_DEFAULT_RANGE } from "../../../core/metrics/constants/metrics.c
 import {
   SeverityCounts,
   TrivySummary,
+  emptyTrivySummary,
   hasFindings,
   severityColor,
-  subtreeSummary,
   summaryWorstSeverity,
   totalCves,
   totalOther,
@@ -562,7 +562,7 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
   const containerSeverity = worstContainerSeverity(containers);
   const volumeSeverity = worstStatusSeverity(volumes.map((v) => v.status));
 
-  const trivySummary = subtreeSummary(node, fluxTreeStore.trivyIndex);
+  const trivySummary = fluxTreeStore.trivySubtreeIndex.get(node.uid) ?? emptyTrivySummary();
   const chain = fluxTreeStore.findFluxParents(node.uid);
   const dependsOn =
     node instanceof Kustomization

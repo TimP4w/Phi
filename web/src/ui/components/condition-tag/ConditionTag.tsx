@@ -1,5 +1,4 @@
 import { Condition } from "../../../core/fluxTree/models/tree";
-import { useEffect, useState } from "react";
 import { DynamicIcon, IconName } from "lucide-react/dynamic";
 
 import {
@@ -58,14 +57,7 @@ function getConditionDisplay(condition: Condition): {
 const ConditionTag: React.FC<ConditionTagProps> = ({
   condition,
 }: ConditionTagProps) => {
-  const [icon, setIcon] = useState<IconName>(ICONS.INFO);
-  const [color, setColor] = useState<ChipColor>("default");
-
-  useEffect(() => {
-    const { icon, color } = getConditionDisplay(condition);
-    setIcon(icon);
-    setColor(color);
-  }, [condition]);
+  const { icon, color } = getConditionDisplay(condition);
 
   return (
     <Tooltip>

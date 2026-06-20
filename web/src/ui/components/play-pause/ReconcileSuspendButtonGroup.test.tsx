@@ -24,12 +24,14 @@ describe("ReconcileSuspendButtonGroup", () => {
     expect(recon).toHaveBeenCalledWith(ks.uid);
   });
 
-  it("suspends an active resource, then shows Resume", async () => {
+  it("suspends an active resource, then reflects the suspended state", async () => {
     const { c, susp } = containerWith();
     const ks = kustomization({ fluxMetadata: { isReconciling: false, isSuspended: false } }) as unknown as FluxResource;
-    renderWithProviders(<ReconcileSuspendButtonGroup resource={ks} />, { container: c });
+    const { rerender } = renderWithProviders(<ReconcileSuspendButtonGroup resource={ks} />, { container: c });
     await userEvent.click(screen.getByText("Suspend"));
     expect(susp).toHaveBeenCalledWith(ks.uid);
+    const suspended = kustomization({ fluxMetadata: { isReconciling: false, isSuspended: true } }) as unknown as FluxResource;
+    rerender(<ReconcileSuspendButtonGroup resource={suspended} />);
     await waitFor(() => expect(screen.getByText("Resume")).toBeInTheDocument());
   });
 

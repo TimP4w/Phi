@@ -102,7 +102,10 @@ export function severityColor(
   }
 }
 
-function addCounts(dst: SeverityCounts, m: KubeResource["trivyMetadata"]): void {
+function addCounts(
+  dst: SeverityCounts,
+  m: KubeResource["trivyMetadata"],
+): void {
   if (!m) return;
   dst.critical += m.critical ?? 0;
   dst.high += m.high ?? 0;
@@ -166,7 +169,11 @@ export function indexFindingsByTarget(
   for (const report of collectReports(all)) {
     const m = report.trivyMetadata!;
     const uid = lookup.get(
-      targetKey(m.targetKind ?? "", m.targetNamespace ?? "", m.targetName ?? ""),
+      targetKey(
+        m.targetKind ?? "",
+        m.targetNamespace ?? "",
+        m.targetName ?? "",
+      ),
     );
     if (!uid) continue; // dangling target (workload gone / not in store)
     const summary = index.get(uid) ?? emptyTrivySummary();
@@ -185,6 +192,13 @@ export function clusterSummary(
   return summary;
 }
 
+function accumulateSummary(dst: TrivySummary, src: TrivySummary): void {
+  accumulate(dst.cve, src.cve);
+  accumulate(dst.other, src.other);
+  dst.cveReportUids.push(...src.cveReportUids);
+  dst.otherReportUids.push(...src.otherReportUids);
+}
+
 /**
  * Sum of findings for a resource and all its descendants, using a precomputed
  * per-target index. Drives both the per-app rollup and the tree-scoped widget.
@@ -199,14 +213,32 @@ export function subtreeSummary(
     if (visited.has(node.uid)) return;
     visited.add(node.uid);
     const s = index.get(node.uid);
-    if (s) {
-      accumulate(out.cve, s.cve);
-      accumulate(out.other, s.other);
-      out.cveReportUids.push(...s.cveReportUids);
-      out.otherReportUids.push(...s.otherReportUids);
-    }
+    if (s) accumulateSummary(out, s);
     for (const child of node.children ?? []) visit(child);
   };
   visit(root);
   return out;
+}
+
+/**
+ * Memoized aggregated vulnerability (self and descendants) indexed by node UID
+ */
+export function indexSubtreeSummaries(
+  resources: Iterable<KubeResource>,
+  perNode: Map<string, TrivySummary>,
+): Map<string, TrivySummary> {
+  const memo = new Map<string, TrivySummary>();
+  const compute = (node: KubeResource): TrivySummary => {
+    const cached = memo.get(node.uid);
+    if (cached) return cached;
+    const out = emptyTrivySummary();
+    memo.set(node.uid, out); // cache before recursing — guards against any back-edge
+    const own = perNode.get(node.uid);
+    if (own) accumulateSummary(out, own);
+    for (const child of node.children ?? [])
+      accumulateSummary(out, compute(child));
+    return out;
+  };
+  for (const r of resources) compute(r);
+  return memo;
 }

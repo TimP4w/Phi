@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import {
   SeverityCounts,
-  subtreeSummary,
+  emptyTrivySummary,
   hasFindings,
 } from "../../../core/trivy/trivy";
 
@@ -119,7 +119,7 @@ const App: React.FC<AppProps> = observer(({ node }) => {
     node instanceof Kustomization || node instanceof HelmRelease;
   const revisionLabel = node instanceof HelmRelease ? "Version" : "Revision";
 
-  const findings = subtreeSummary(node, fluxTreeStore.trivyIndex);
+  const findings = fluxTreeStore.trivySubtreeIndex.get(node.uid) ?? emptyTrivySummary();
   const showFindings = hasFindings(findings);
 
   return (

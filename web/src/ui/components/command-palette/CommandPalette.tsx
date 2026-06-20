@@ -130,10 +130,10 @@ const CommandPalette: React.FC = observer(() => {
   const parsed = parseInput(input);
   const filters = collectFilters(tokens, parsed);
 
-  const kinds = Array.from(new Set(allResources.map((r) => r.kind).filter(Boolean))).sort();
-  const namespaces = Array.from(
-    new Set(allResources.map((r) => r.namespace).filter((n): n is string => !!n))
-  ).sort();
+  // Cached store computeds — recomputed only when the resource set changes, not
+  // per keystroke. Reading them while closed is cheap (MobX returns the memo).
+  const kinds = isOpen ? fluxTreeStore.kinds : [];
+  const namespaces = isOpen ? fluxTreeStore.namespaces : [];
 
   // While Tab-cycling, suggestions are computed from the original stem so the
   // list stays stable as the applied completion rotates through it.

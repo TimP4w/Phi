@@ -19,7 +19,7 @@ import AppLogo from "../resource-icon/ResourceIcon";
 import StatusChip from "../status-chip/StatusChip";
 import { Handle, NodeProps, Position, Node } from "@xyflow/react";
 import { ROUTES } from "../../routes/routes.enum";
-import { Pause } from "lucide-react";
+import { ExternalLink, Pause } from "lucide-react";
 import UsageChip from "../metrics/UsageChip";
 
 type ResourceProps = NodeProps<Node<VisualizationNodeData>>;
@@ -99,6 +99,7 @@ function getExtraInfo(node: KubeResource): string | null {
 
 function Resource({ data }: ResourceProps) {
   const treeNode = data.treeNode;
+  const isRoot = data.isRoot ?? false;
 
   const extraInfo = useMemo(() => getExtraInfo(treeNode), [treeNode]);
 
@@ -114,8 +115,17 @@ function Resource({ data }: ResourceProps) {
   const hasFooter = !!(failureMessage || extraInfo || isSuspended);
 
   return (
-    <div className="relative">
-      <Handle type="target" position={Position.Left} />
+    <div className="relative group">
+      {!isRoot && <Handle type="target" position={Position.Left} />}
+
+      <Link
+        to={`${ROUTES.RESOURCE}/${treeNode.uid}`}
+        onClick={(e) => e.stopPropagation()}
+        aria-label="Open resource"
+        className="absolute -top-2 -right-2 z-10 p-1 rounded-md bg-surface border border-border text-muted shadow-sm opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-surface-secondary transition-all"
+      >
+        <ExternalLink className="w-3 h-3" />
+      </Link>
 
       <div className="w-[240px] bg-surface border border-border rounded-lg shadow-sm">
         {/* Main row */}
@@ -124,13 +134,9 @@ function Resource({ data }: ResourceProps) {
             <AppLogo groupKind={treeNode.groupKind} />
           </div>
           <div className="flex-1 min-w-0">
-            <Link
-              to={`${ROUTES.RESOURCE}/${treeNode.uid}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-sm font-semibold truncate block hover:text-foreground transition-colors leading-tight"
-            >
+            <span className="text-sm font-semibold truncate block leading-tight">
               {treeNode.name}
-            </Link>
+            </span>
             <p className="text-xs text-muted leading-tight mt-0.5">
               {treeNode.kind}
               {treeNode.namespace ? ` · ${treeNode.namespace}` : ""}

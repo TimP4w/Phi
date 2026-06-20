@@ -16,9 +16,14 @@ import {
   KubeResource,
   Kustomization,
   Node,
+  walkSubtree,
 } from "../models/tree";
 import { RESOURCE_TYPE } from "../constants/resources.const";
-import { indexFindingsByTarget, TrivySummary } from "../../trivy/trivy";
+import {
+  indexFindingsByTarget,
+  indexSubtreeSummaries,
+  TrivySummary,
+} from "../../trivy/trivy";
 import { TreeNodeDto } from "../models/dtos/treeDto";
 import { buildTree } from "../buildTree";
 
@@ -52,9 +57,12 @@ class FluxTreeStore {
       applications: computed,
       repositories: computed,
       dashboardResources: computed,
+      kinds: computed,
+      namespaces: computed,
       nodes: computed,
       resourceCount: computed,
       trivyIndex: computed,
+      trivySubtreeIndex: computed,
       upsertResource: action,
       removeResource: action,
       syncResources: action,
@@ -96,6 +104,14 @@ class FluxTreeStore {
   // Computed once per resource change and shared by every findings widget.
   get trivyIndex(): Map<string, TrivySummary> {
     return indexFindingsByTarget(this.resources.values());
+  }
+
+  // Per-node subtree rollups in one O(n) pass, shared by every dashboard card and
+  // the detail panel (each previously re-walked its own subtree). Reads `_tree` so
+  // it recomputes when the ownership structure is rebuilt, not just on map changes.
+  get trivySubtreeIndex(): Map<string, TrivySummary> {
+    void this._tree;
+    return indexSubtreeSummaries(this.resources.values(), this.trivyIndex);
   }
 
   // --- flat map mutators ---
@@ -153,6 +169,25 @@ class FluxTreeStore {
     return [...this.applications, ...this.repositories];
   }
 
+  // Distinct kinds / namespaces across all resources, sorted. MobX-cached so the
+  // command palette doesn't re-derive them on every keystroke — only when the
+  // resource set changes.
+  get kinds(): string[] {
+    const set = new Set<string>();
+    this.resources.forEach((r) => {
+      if (r.kind) set.add(r.kind);
+    });
+    return [...set].sort();
+  }
+
+  get namespaces(): string[] {
+    const set = new Set<string>();
+    this.resources.forEach((r) => {
+      if (r.namespace) set.add(r.namespace);
+    });
+    return [...set].sort();
+  }
+
   /** Core v1 Nodes (the Longhorn Node CRD is modelled separately). */
   get nodes(): Node[] {
     const result: Node[] = [];
@@ -173,13 +208,9 @@ class FluxTreeStore {
     const root = uid ? this.resources.get(uid) : undefined;
     if (!root) return [];
     const kinds = new Set<string>();
-    const visit = (node: KubeResource, visited: Set<string>) => {
-      if (visited.has(node.uid)) return;
-      visited.add(node.uid);
+    walkSubtree(root, (node) => {
       kinds.add(node.kind);
-      for (const child of node.children ?? []) visit(child, visited);
-    };
-    visit(root, new Set());
+    });
     return Array.from(kinds).sort();
   }
 
@@ -189,13 +220,9 @@ class FluxTreeStore {
     const root = uid ? this.resources.get(uid) : undefined;
     if (!root) return [];
     const uids = new Set<string>();
-    const visit = (node: KubeResource, visited: Set<string>) => {
-      if (visited.has(node.uid)) return;
-      visited.add(node.uid);
+    walkSubtree(root, (node) => {
       if (node.hasMetrics) uids.add(node.uid);
-      for (const child of node.children ?? []) visit(child, visited);
-    };
-    visit(root, new Set());
+    });
     uids.add(root.uid);
     return [...uids].sort();
   }

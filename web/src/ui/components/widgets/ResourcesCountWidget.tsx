@@ -5,6 +5,7 @@ import {
   KubeResource,
   ResourceStatus,
   Tree,
+  walkSubtree,
 } from "../../../core/fluxTree/models/tree";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import Widget from "./Widget";
@@ -79,86 +80,39 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     const tree: Tree = store.tree;
 
     const { isOpen, open: onOpen, setOpen: onOpenChange } = useOverlayState();
-    const [allResources, setAllResources] = useState<KubeResource[]>([]);
     const [activeStatuses, setActiveStatuses] = useState<Set<string>>(
       new Set([ResourceStatus.FAILED]),
     );
     const [query, setQuery] = useState("");
-    const [resourceCounts, setResourceCounts] = useState({
-      total: 0,
-      ready: 0,
-      notReady: 0,
-      suspended: 0,
-      unknown: 0,
-    });
-
-    const allResourcesRef = useRef<KubeResource[]>([]);
-    allResourcesRef.current = allResources;
     const [frozenResources, setFrozenResources] = useState<KubeResource[]>([]);
 
-    useEffect(() => {
-      if (!resource) return;
-
-      const visited = new Set<string>();
+    const { resourceCounts, allResources } = useMemo(() => {
+      const counts = { total: 0, ready: 0, notReady: 0, suspended: 0, unknown: 0 };
       const collected: KubeResource[] = [];
-
-      const countResources = (
-        node: KubeResource | null,
-        depth = 0,
-      ): {
-        total: number;
-        ready: number;
-        notReady: number;
-        suspended: number;
-        unknown: number;
-      } => {
-        if (!node || visited.has(node.uid))
-          return { total: 0, ready: 0, notReady: 0, suspended: 0, unknown: 0 };
-        visited.add(node.uid);
-
-        // Excluded kinds (e.g. Flux objects) don't count toward the totals or the listed resources, but their children still do.
-        const excluded = excludeKinds?.has(node.kind) ?? false;
-        if (!excluded) collected.push(node);
-
-        let total = excluded ? 0 : 1;
-        let ready = !excluded && node.status === ResourceStatus.SUCCESS ? 1 : 0;
-        let suspended =
-          !excluded && node.status === ResourceStatus.SUSPENDED ? 1 : 0;
-        let unknown =
-          !excluded && node.status === ResourceStatus.UNKNOWN ? 1 : 0;
-        let notReady =
-          !excluded &&
-          node.status !== ResourceStatus.SUCCESS &&
-          node.status !== ResourceStatus.UNKNOWN &&
-          node.status !== ResourceStatus.SUSPENDED
-            ? 1
-            : 0;
-
-        // Never stop at an excluded node (e.g. a nested Kustomization): we still need to walk through it to reach its real, countable descendants, otherwise a Kustomization whose children are all Kustomizations would count 0.
-        const skipChildren =
-          !excluded &&
-          depth > 0 &&
-          (node.kind === RESOURCE_TYPE.KUSTOMIZATION ||
-            node.kind === RESOURCE_TYPE.HELM_RELEASE) &&
-          skipGrandChildren;
-
-        if (!skipChildren) {
-          for (const child of node.children || []) {
-            const c = countResources(child, depth + 1);
-            total += c.total;
-            ready += c.ready;
-            notReady += c.notReady;
-            suspended += c.suspended;
-            unknown += c.unknown;
+      if (resource) {
+        walkSubtree(resource, (node, depth) => {
+          // Excluded kinds (e.g. Flux objects) don't count, but their children do.
+          const excluded = excludeKinds?.has(node.kind) ?? false;
+          if (!excluded) {
+            collected.push(node);
+            counts.total++;
+            if (node.status === ResourceStatus.SUCCESS) counts.ready++;
+            else if (node.status === ResourceStatus.SUSPENDED) counts.suspended++;
+            else if (node.status === ResourceStatus.UNKNOWN) counts.unknown++;
+            else counts.notReady++;
           }
-        }
-
-        return { total, ready, notReady, suspended, unknown };
-      };
-
-      const counts = countResources(resource);
-      setResourceCounts(counts);
-      setAllResources(collected);
+          // Never prune at an excluded node: walk through it to reach countable descendants.
+          return (
+            !excluded &&
+            depth > 0 &&
+            (node.kind === RESOURCE_TYPE.KUSTOMIZATION ||
+              node.kind === RESOURCE_TYPE.HELM_RELEASE) &&
+            skipGrandChildren
+          );
+        });
+      }
+      return { resourceCounts: counts, allResources: collected };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [resource, tree, skipGrandChildren, excludeKinds]);
 
     const sortedResources = useMemo(
@@ -261,7 +215,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
           : pendingCount > 0
             ? new Set([ResourceStatus.PENDING, ResourceStatus.WARNING])
             : new Set<string>();
-      setFrozenResources(allResourcesRef.current);
+      setFrozenResources(allResources);
       setActiveStatuses(seed);
       setQuery("");
       onOpen();
