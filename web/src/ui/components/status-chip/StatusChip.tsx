@@ -11,13 +11,13 @@ const StatusChip: React.FC<StatusChipProps> = observer(
   ({ resource }: StatusChipProps) => {
     if (!resource) {
       return (
-        <Chip size="sm" variant="faded" color={"primary"}>
+        <Chip size="sm" variant="tertiary" color={"accent"}>
           Unknown
         </Chip>
       );
     }
     return (
-      <Chip size="sm" variant="faded" color={colorByStatus(resource?.status)}>
+      <Chip size="sm" variant="tertiary" color={colorByStatus(resource?.status)}>
         {statusText(resource?.status)}
       </Chip>
     );

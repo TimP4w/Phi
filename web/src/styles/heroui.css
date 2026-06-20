@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import "@heroui/styles";
+
+/* Dark-only theme; `.dark` is set on <html>. */
+.dark,
+[data-theme="dark"] {
+  --background: #080808;
+  --foreground: #ecedee;
+  --accent: #52525b;
+  --accent-foreground: #ecedee;
+}
+
+@layer base {
+  a,
+  button,
+  [role="button"],
+  summary {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
+@theme {
+  --breakpoint-xxl: 1600px;
+}

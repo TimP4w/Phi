@@ -57,8 +57,7 @@ function RangeSelector({
     <Button
       key={label}
       size="sm"
-      variant={active ? "solid" : "flat"}
-      color={active ? "primary" : "default"}
+      variant={active ? "primary" : "secondary"}
       className="h-7 min-w-0 px-2.5 font-mono text-xs"
       onPress={() => onChange(label)}
     >
@@ -71,17 +70,15 @@ function RangeSelector({
       {PRESETS.map((preset) => rangeButton(preset, value === preset))}
       {!isPreset && rangeButton(value, true)}
       <Input
-        size="sm"
         aria-label="Custom range"
         placeholder="custom"
         value={custom}
-        onValueChange={setCustom}
+        onChange={(e) => setCustom(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") applyCustom();
         }}
         onBlur={applyCustom}
-        className="w-20"
-        classNames={{ inputWrapper: "h-7 min-h-7" }}
+        className="w-20 h-7"
       />
     </div>
   );
@@ -115,7 +112,7 @@ function ChartTooltip({
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-[#3c3c3c] bg-[#0F0F0F] px-2.5 py-1.5 text-xs text-[#e5e5e5]">
-      <div className="mb-1 text-default-400">
+      <div className="mb-1 text-muted">
         {format(new Date((label ?? 0) * 1000), "MMM d HH:mm")}
       </div>
       {payload.map((entry) => (
@@ -139,7 +136,7 @@ function ChartHeader({ def }: { def: ChartDef }) {
     <div className="flex items-baseline gap-3">
       <h3 className="text-sm font-semibold">{def.title}</h3>
       {def.spec && (
-        <span className="text-xs text-default-400 font-mono">
+        <span className="text-xs text-muted font-mono">
           {`requested ${def.spec.requests != null ? def.formatValue(def.spec.requests) : "—"} · limit ${
             def.spec.limits != null ? def.formatValue(def.spec.limits) : "—"
           }`}
@@ -328,40 +325,39 @@ const MetricsTab = observer(
       <div className="flex flex-col gap-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <span className="text-xs font-semibold text-default-400 uppercase tracking-widest">
+            <span className="text-xs font-semibold text-muted uppercase tracking-widest">
               Range
             </span>
             {zoom ? (
               <Button
                 size="sm"
-                variant="flat"
+                variant="secondary"
                 className="h-7 min-w-0 px-2.5 text-xs"
                 onPress={() => setZoom(null)}
               >
                 Reset zoom
               </Button>
             ) : (
-              <span className="text-xs text-default-400">drag a chart to zoom</span>
+              <span className="text-xs text-muted">drag a chart to zoom</span>
             )}
           </div>
           <RangeSelector value={range} onChange={onRangeChange} />
         </div>
         {charts.map((def) => (
           <div key={def.title}>
-            <Skeleton isLoaded={!!metrics} className="rounded-md mb-2 w-fit">
-              <ChartHeader def={def} />
-            </Skeleton>
-            <Skeleton
-              isLoaded={!!metrics}
-              className="rounded-lg w-full select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none [&_*:focus]:outline-none [&_*:focus-visible]:outline-none"
-            >
-              <ChartBody
-                def={def}
-                series={metrics?.series ?? {}}
-                zoom={zoom}
-                onZoom={setZoom}
-              />
-            </Skeleton>
+            <ChartHeader def={def} />
+            {metrics ? (
+              <div className="select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none [&_*:focus]:outline-none [&_*:focus-visible]:outline-none">
+                <ChartBody
+                  def={def}
+                  series={metrics.series ?? {}}
+                  zoom={zoom}
+                  onZoom={setZoom}
+                />
+              </div>
+            ) : (
+              <Skeleton className="rounded-lg w-full h-[220px] mt-2" />
+            )}
           </div>
         ))}
       </div>

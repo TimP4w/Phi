@@ -11,7 +11,11 @@ import {
   ProxyMetadataDto,
   TrivyMetadataDto,
 } from "./dtos/treeDto";
-import { FLUX_NAMESPACE, RESOURCE_TYPE, FluxRole } from "../constants/resources.const";
+import {
+  FLUX_NAMESPACE,
+  RESOURCE_TYPE,
+  FluxRole,
+} from "../constants/resources.const";
 import { GroupKind } from "./groupKind";
 import { lookupCtor } from "../registry";
 
@@ -40,25 +44,21 @@ export class Tree {
     startNode: KubeResource,
     callback: (node: KubeResource, layer: number) => boolean,
   ): void {
-    this.traverseRecursive(startNode, 0, callback, new Set());
+    walkSubtree(startNode, callback);
   }
+}
 
-  private traverseRecursive(
-    node: KubeResource,
-    layer: number,
-    callback: (node: KubeResource, layer: number) => boolean,
-    visited: Set<string>,
-  ): void {
+export function walkSubtree(
+  root: KubeResource,
+  visit: (node: KubeResource, depth: number) => boolean | void,
+): void {
+  const recur = (node: KubeResource, depth: number, visited: Set<string>) => {
     if (visited.has(node.uid)) return;
     visited.add(node.uid);
-    const skip = callback(node, layer);
-    if (skip) {
-      return;
-    }
-    for (const child of node.children) {
-      this.traverseRecursive(child, layer + 1, callback, visited);
-    }
-  }
+    if (visit(node, depth)) return;
+    for (const child of node.children ?? []) recur(child, depth + 1, visited);
+  };
+  recur(root, 0, new Set());
 }
 
 export class KubeResource {
@@ -354,14 +354,12 @@ export function sumRequestedStorage(node: KubeResource): {
 } {
   let requested = 0;
   let pvcCount = 0;
-  const visit = (n: KubeResource) => {
+  walkSubtree(node, (n) => {
     if (n instanceof PersistentVolumeClaim) {
       pvcCount++;
       requested += n.metadata?.requested ?? 0;
     }
-    n.children.forEach(visit);
-  };
-  visit(node);
+  });
   return { requested, pvcCount };
 }
 
@@ -571,4 +569,7 @@ function stringToResourceStatus(status: string): ResourceStatus {
   return ResourceStatus.UNKNOWN;
 }
 
-export type VisualizationNodeData = Record<"treeNode", KubeResource>;
+export type VisualizationNodeData = {
+  treeNode: KubeResource;
+  isRoot?: boolean;
+};

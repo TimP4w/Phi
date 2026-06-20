@@ -9,6 +9,7 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { useState, useMemo, useEffect, useLayoutEffect, useRef } from "react";
+import { useNavigationType } from "react-router-dom";
 import {
   KubeResource,
   VisualizationNodeData,
@@ -34,19 +35,40 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
   filter,
   treeSize,
 }: ConnectedGraphProps) => {
-  const layoutTreeUseCase = useInjection<LayoutTreeUseCase>(TYPES.LayoutTreeUseCase);
+  const layoutTreeUseCase = useInjection<LayoutTreeUseCase>(
+    TYPES.LayoutTreeUseCase,
+  );
   const [rawNodes, setRawNodes] = useState<Node<VisualizationNodeData>[]>([]);
   const [rawEdges, setRawEdges] = useState<Edge[]>([]);
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node<VisualizationNodeData>>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<
+    Node<VisualizationNodeData>
+  >([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   const { fitView } = useReactFlow();
+  const navigationType = useNavigationType();
   const [shouldLayout, setShouldLayout] = useState(false);
 
   const nodeTypes = useMemo(
     () => ({ resource: Resource, deployment: Deployment, pod: Pod }),
-    []
+    [],
   );
+
+  // Signature of the visible subtree's *shape* to avoid trigerring a re-layout on status changes
+  const topologyKey = useMemo(() => {
+    if (!rootResource) return "";
+    const parts: string[] = [];
+    const seen = new Set<string>();
+    const walk = (n: KubeResource, parentUid: string) => {
+      if (seen.has(n.uid)) return;
+      seen.add(n.uid);
+      parts.push(`${n.uid}<${parentUid}`);
+      for (const child of n.children) walk(child, n.uid);
+    };
+    walk(rootResource, "");
+    return parts.sort().join("|");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rootResource, treeSize]);
 
   const previousRootUid = useRef<string | null>(null);
   const prevFilterRef = useRef<ResourceFilter | undefined>(undefined);
@@ -70,6 +92,13 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
     }
   }, [rootResource?.uid, setNodes, setEdges, fitView]);
 
+  useEffect(() => {
+    if (navigationType !== "POP" || !rootResource?.uid) return;
+    fitAfterLayoutRef.current = true;
+    const t = setTimeout(() => fitView({ duration: 300 }), 80);
+    return () => clearTimeout(t);
+  }, [navigationType, rootResource?.uid, fitView]);
+
   // Trigger layout only when rootResource is set and shouldLayout is requested
   useEffect(() => {
     if (rootResource && shouldLayout && !isLayingOut.current) {
@@ -87,7 +116,7 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
     }
   }, [shouldLayout, rootResource, layoutTreeUseCase]);
 
-  // Re-layout when the store's resource count changes (driven by incremental patches).
+  // Re-layout when the visible subtree's shape changes (add/remove/reparent).
   // Throttled: fires at most once per LAYOUT_MAX_WAIT ms so a sustained burst of
   // patches doesn't delay layout indefinitely the way a pure debounce would.
   useEffect(() => {
@@ -107,7 +136,7 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
     return () => {
       if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
     };
-  }, [treeSize, rootResource]);
+  }, [topologyKey, rootResource]);
 
   // Apply filter: re-run ELK on visible subset so layout is tight (no gaps).
   // Bridge edges reconnect visible nodes through removed intermediates.
@@ -121,12 +150,14 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
 
     let fitTimeout: ReturnType<typeof setTimeout> | undefined;
 
-    const hasActiveFilter = filter && (filter.statuses.length > 0 || filter.kinds.length > 0);
+    const hasActiveFilter =
+      filter && (filter.statuses.length > 0 || filter.kinds.length > 0);
 
     if (!hasActiveFilter) {
       setNodes(rawNodes);
       setEdges(rawEdges);
-      if (shouldFitView) fitTimeout = setTimeout(() => fitView({ duration: 300 }), 50);
+      if (shouldFitView)
+        fitTimeout = setTimeout(() => fitView({ duration: 300 }), 50);
       return () => {
         if (fitTimeout) clearTimeout(fitTimeout);
       };
@@ -136,8 +167,10 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
     const visibleIds = new Set<string>();
     for (const n of rawNodes) {
       const res = n.data.treeNode;
-      const statusMatch = filter!.statuses.length === 0 || filter!.statuses.includes(res.status);
-      const kindMatch = filter!.kinds.length === 0 || filter!.kinds.includes(res.kind);
+      const statusMatch =
+        filter!.statuses.length === 0 || filter!.statuses.includes(res.status);
+      const kindMatch =
+        filter!.kinds.length === 0 || filter!.kinds.includes(res.kind);
       if (statusMatch && kindMatch) visibleIds.add(n.id);
     }
     if (rootResource?.uid) visibleIds.add(rootResource.uid);
@@ -180,18 +213,30 @@ const ConnectedGraph: React.FC<ConnectedGraphProps> = ({
     }
 
     let cancelled = false;
-    layoutTreeUseCase.relayout(filteredNodes, bridgedEdges).then(({ nodes: ln, edges: le }) => {
-      if (cancelled) return;
-      setNodes(ln);
-      setEdges(le);
-      if (shouldFitView) fitTimeout = setTimeout(() => fitView({ duration: 300 }), 50);
-    });
+    layoutTreeUseCase
+      .relayout(filteredNodes, bridgedEdges)
+      .then(({ nodes: ln, edges: le }) => {
+        if (cancelled) return;
+        setNodes(ln);
+        setEdges(le);
+        if (shouldFitView)
+          fitTimeout = setTimeout(() => fitView({ duration: 300 }), 50);
+      });
 
     return () => {
       cancelled = true;
       if (fitTimeout) clearTimeout(fitTimeout);
     };
-  }, [rawNodes, rawEdges, filter, rootResource, setNodes, setEdges, fitView, layoutTreeUseCase]);
+  }, [
+    rawNodes,
+    rawEdges,
+    filter,
+    rootResource,
+    setNodes,
+    setEdges,
+    fitView,
+    layoutTreeUseCase,
+  ]);
 
   return (
     <ReactFlow

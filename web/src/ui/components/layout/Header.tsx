@@ -26,7 +26,7 @@ const Header: React.FC<HeaderProps> = observer(
           <div className="flex flex-1 items-center justify-end gap-2">
             {children}
             <a href={env.GIT_URL} target="_blank" rel="noreferrer">
-              <Chip size="sm" variant="flat">
+              <Chip size="md" variant="soft" className="text-sm">
                 <div className="flex items-center gap-2">
                   <span className="footer__version">{env.VERSION}</span>
                   <SiGithub className="h-4 w-4" />

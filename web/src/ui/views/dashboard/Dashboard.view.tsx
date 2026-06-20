@@ -5,7 +5,7 @@ import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
-import { Chip, Input } from "@heroui/react";
+import { Chip, Input, Skeleton } from "@heroui/react";
 import FluxResourceCard from "../../components/flux-resource-card/FluxResourceCard";
 import { useSessionState } from "../../../core/utils/useSessionState";
 import Header from "../../components/layout/Header";
@@ -29,6 +29,28 @@ enum APP_FILTER {
   STATUS,
   SUSPEND,
 }
+
+// Placeholder card shown while the first resource snapshot is still loading.
+const LoadingCard: React.FC = () => (
+  <div className="flex flex-col rounded-xl bg-surface border border-border overflow-hidden">
+    <div className="flex items-center gap-2.5 px-4 pt-4 pb-3">
+      <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+      <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+        <Skeleton className="h-3.5 w-2/3 rounded" />
+        <Skeleton className="h-3 w-1/2 rounded" />
+      </div>
+    </div>
+    <div className="px-4 pb-3 flex gap-2">
+      <Skeleton className="h-3 w-16 rounded" />
+      <Skeleton className="h-3 w-12 rounded" />
+    </div>
+    <div className="border-t border-border flex flex-col gap-2 px-4 py-3">
+      <Skeleton className="h-3 w-full rounded" />
+      <Skeleton className="h-3 w-4/5 rounded" />
+      <Skeleton className="h-3 w-3/5 rounded" />
+    </div>
+  </div>
+);
 
 const AppsView: React.FC = observer(() => {
   const fluxTreeStore = useInjection(FluxTreeStore);
@@ -139,7 +161,7 @@ const AppsView: React.FC = observer(() => {
                 <SiFlux color="#326CE5" className="w-5 h-5 flex-shrink-0" />
                 <div>
                   <h2 className="text-lg font-bold leading-tight">Applications</h2>
-                  <p className="text-xs text-default-400">
+                  <p className="text-xs text-muted">
                     {filtered.length} resource{filtered.length !== 1 ? "s" : ""}
                     {hasActiveFilters ? " matching filters" : " total"}
                   </p>
@@ -147,8 +169,8 @@ const AppsView: React.FC = observer(() => {
                 <button
                   className={`ml-auto flex items-center justify-center w-8 h-8 rounded-lg border transition-colors flex-shrink-0 ${
                     sidebarOpen
-                      ? "border-default-200 bg-content2 text-foreground"
-                      : "border-default-100 bg-content1 hover:bg-content2 text-default-400 hover:text-foreground"
+                      ? "border-border bg-surface-secondary text-foreground"
+                      : "border-border bg-surface hover:bg-surface-secondary text-muted hover:text-foreground"
                   }`}
                   onClick={() => setSidebarOpen((o) => !o)}
                   aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
@@ -162,27 +184,30 @@ const AppsView: React.FC = observer(() => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <Input
-                  ref={searchRef}
-                  className={`transition-all duration-200 ${searchFocused ? "max-w-[340px]" : "max-w-[220px]"}`}
-                  value={searchValue}
-                  placeholder="Search by name…"
-                  radius="md"
-                  size="sm"
-                  type="text"
-                  color={searchFocused ? "primary" : "default"}
-                  startContent={<Search className={`w-3.5 h-3.5 flex-shrink-0 ${searchFocused ? "text-primary" : "text-default-400"}`} />}
-                  onChange={(e) => setSearchValue(e.target.value)}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                />
+                <div
+                  className={`relative transition-all duration-200 ${searchFocused ? "max-w-[340px]" : "max-w-[220px]"}`}
+                >
+                  <Search
+                    className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none ${searchFocused ? "text-foreground" : "text-muted"}`}
+                  />
+                  <Input
+                    ref={searchRef}
+                    className="pl-8 w-full"
+                    value={searchValue}
+                    placeholder="Search by name…"
+                    type="text"
+                    onChange={(e) => setSearchValue(e.target.value)}
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => setSearchFocused(false)}
+                  />
+                </div>
 
                 <div className="flex flex-wrap items-center gap-1">
                   {STATUS_FILTERS.map((f) => (
                     <Chip
                       key={f.key}
                       size="sm"
-                      variant={selectedStatusesToFilter.includes(f.key) ? "solid" : "flat"}
+                      variant={selectedStatusesToFilter.includes(f.key) ? "primary" : "soft"}
                       color={selectedStatusesToFilter.includes(f.key) ? f.color : "default"}
                       className="cursor-pointer"
                       onClick={() => onFilterToggle(f.key, APP_FILTER.STATUS)}
@@ -192,14 +217,14 @@ const AppsView: React.FC = observer(() => {
                   ))}
                 </div>
 
-                <div className="h-4 w-px bg-default-200 hidden sm:block" />
+                <div className="h-4 w-px bg-surface-tertiary hidden sm:block" />
 
                 <div className="flex flex-wrap items-center gap-1">
                   {KIND_FILTERS.map((f) => (
                     <Chip
                       key={f.key}
                       size="sm"
-                      variant={selectedKindsToFilter.includes(f.key) ? "solid" : "flat"}
+                      variant={selectedKindsToFilter.includes(f.key) ? "primary" : "soft"}
                       className="cursor-pointer"
                       onClick={() => onFilterToggle(f.key, APP_FILTER.KIND)}
                     >
@@ -208,14 +233,14 @@ const AppsView: React.FC = observer(() => {
                   ))}
                 </div>
 
-                <div className="h-4 w-px bg-default-200 hidden sm:block" />
+                <div className="h-4 w-px bg-surface-tertiary hidden sm:block" />
 
                 <div className="flex flex-wrap items-center gap-1">
                   {SUSPEND_FILTERS.map((f) => (
                     <Chip
                       key={f.key}
                       size="sm"
-                      variant={selectedSuspendStatusesToFilter.includes(f.key) ? "solid" : "flat"}
+                      variant={selectedSuspendStatusesToFilter.includes(f.key) ? "primary" : "soft"}
                       className="cursor-pointer"
                       onClick={() => onFilterToggle(f.key, APP_FILTER.SUSPEND)}
                     >
@@ -226,7 +251,7 @@ const AppsView: React.FC = observer(() => {
 
                 {hasActiveFilters && (
                   <button
-                    className="flex items-center gap-1 text-xs text-default-400 hover:text-foreground transition-colors"
+                    className="flex items-center gap-1 text-xs text-muted hover:text-foreground transition-colors"
                     onClick={clearFilters}
                   >
                     <X className="w-3 h-3" />
@@ -237,12 +262,14 @@ const AppsView: React.FC = observer(() => {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-8">
-              {filtered.length > 0 ? (
+              {!fluxTreeStore.loaded ? (
+                Array.from({ length: 8 }).map((_, i) => <LoadingCard key={i} />)
+              ) : filtered.length > 0 ? (
                 filtered.map((resource) => (
                   <FluxResourceCard key={resource.uid} node={resource} />
                 ))
               ) : (
-                <div className="col-span-full text-center text-default-400 text-sm py-16">
+                <div className="col-span-full text-center text-muted text-sm py-16">
                   No applications match your filters.
                 </div>
               )}
@@ -253,7 +280,7 @@ const AppsView: React.FC = observer(() => {
 
         {/* Right rail: overlays the content on small screens so it never squeezes the main column off-screen. */}
         <aside
-          className={`flex-shrink-0 border-l border-default-100 overflow-y-auto bg-background transition-all duration-300 absolute inset-y-0 right-0 z-30 lg:static lg:z-auto ${
+          className={`flex-shrink-0 border-l border-border overflow-y-auto bg-background transition-all duration-300 absolute inset-y-0 right-0 z-30 lg:static lg:z-auto ${
             sidebarOpen ? "w-full sm:w-[440px]" : "w-0"
           }`}
         >

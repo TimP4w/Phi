@@ -207,10 +207,12 @@ function statusMatchesResource(r: KubeResource, term: StatusTerm): boolean {
 export function resourceMatches(r: KubeResource, f: ActiveFilters): boolean {
   const includesAny = (haystack: string, needles: string[]) =>
     needles.some((n) => haystack.toLowerCase().includes(n.toLowerCase()));
+  const equalsAny = (value: string, needles: string[]) =>
+    needles.some((n) => value.toLowerCase() === n.toLowerCase());
 
   if (f.ns.length && !includesAny(r.namespace ?? "", f.ns)) return false;
   if (f.uuid.length && !includesAny(r.uid, f.uuid)) return false;
-  if (f.kind.length && !includesAny(r.kind, f.kind)) return false;
+  if (f.kind.length && !equalsAny(r.kind, f.kind)) return false;
 
   if (f.status.length) {
     const ok = f.status.some((raw) => {

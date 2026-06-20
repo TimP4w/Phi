@@ -4,29 +4,48 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import {
+  useParams,
+  useNavigate,
+  useLocation,
+  useSearchParams,
+} from "react-router-dom";
 import {
   FluxResource,
   KubeResource,
   ResourceStatus,
 } from "../../../core/fluxTree/models/tree";
-import {
-  BreadcrumbItem,
-  Breadcrumbs,
-  Button,
-} from "@heroui/react";
+import { Breadcrumbs, Button } from "@heroui/react";
 import AppLogo from "../../components/resource-icon/ResourceIcon";
 import ResourceDetailPanel from "../../components/panel/ResourceDetailPanel";
 import Header from "../../components/layout/Header";
-import { NETWORK_SUBPATH, ROUTES } from "../../routes/routes.enum";
+import {
+  GRAPH_SUBPATH,
+  NETWORK_SUBPATH,
+  TREE_SUBPATH,
+  ROUTES,
+} from "../../routes/routes.enum";
+import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import RenderTreeNode from "../../components/resource-tree/ResourceTree";
 import NetworkGraph from "../../components/network/NetworkGraph";
 import { ReactFlowProvider } from "@xyflow/react";
-import { COLOR_HEALTHY, COLOR_UNHEALTHY } from "../../../core/network/usecases/NetworkTopology.usecase";
+import {
+  COLOR_HEALTHY,
+  COLOR_UNHEALTHY,
+} from "../../../core/network/usecases/NetworkTopology.usecase";
 import { ResourceFilter } from "../../shared/resourceFilter";
 import { statusDotClass } from "../../shared/helpers";
 import ReconcileSuspendButtonGroup from "../../components/play-pause/ReconcileSuspendButtonGroup";
-import { Check, ChevronDown, List, Network, PanelRightClose, PanelRightOpen, Workflow, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  List,
+  Network,
+  PanelRightClose,
+  PanelRightOpen,
+  Workflow,
+  X,
+} from "lucide-react";
 import StatusChip from "../../components/status-chip/StatusChip";
 import ConnectedGraph from "../../components/connected-graph/ConnectedGraph";
 import { TYPES } from "../../../core/shared/types";
@@ -35,10 +54,48 @@ import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatc
 
 type ResourceViewMode = "graph" | "tree" | "network";
 
+const VIEW_BY_SUBPATH: Record<string, ResourceViewMode> = {
+  [GRAPH_SUBPATH]: "graph",
+  [TREE_SUBPATH]: "tree",
+  [NETWORK_SUBPATH]: "network",
+};
+
+// Filters live in the URL query string so they're shareable and survive a reload,
+// e.g. ?filterKind=Pod,Kustomization&filterStatus=warning.
+const FILTER_KIND_PARAM = "filterKind";
+const FILTER_STATUS_PARAM = "filterStatus";
+
+const STATUS_VALUES = new Set<string>(Object.values(ResourceStatus));
+
+function parseStatusParam(raw: string | null): ResourceStatus[] {
+  if (!raw) return [];
+  return raw.split(",").filter((s) => STATUS_VALUES.has(s)) as ResourceStatus[];
+}
+
+function parseKindParam(raw: string | null): string[] {
+  return raw ? raw.split(",").filter(Boolean) : [];
+}
+
 const NETWORK_LEGEND: { color: string; label: string; dash: boolean }[] = [
   { color: COLOR_HEALTHY, label: "Routable", dash: false },
   { color: COLOR_UNHEALTHY, label: "Pending / not ready", dash: true },
 ];
+
+const FLUX_APP_KINDS: string[] = [
+  RESOURCE_TYPE.KUSTOMIZATION,
+  RESOURCE_TYPE.HELM_RELEASE,
+  RESOURCE_TYPE.HELM_REPOSITORY,
+  RESOURCE_TYPE.HELM_CHART,
+];
+
+function hasFluxAppGrandchildren(resource: KubeResource): boolean {
+  for (const child of resource.children) {
+    for (const grandchild of child.children) {
+      if (FLUX_APP_KINDS.includes(grandchild.kind)) return true;
+    }
+  }
+  return false;
+}
 
 const STATUS_FILTER_OPTIONS: { value: ResourceStatus; label: string }[] = [
   { value: ResourceStatus.FAILED, label: "Failed" },
@@ -53,7 +110,11 @@ type KindFilterSelectProps = {
   onChange: (kinds: string[]) => void;
 };
 
-function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilterSelectProps) {
+function KindFilterSelect({
+  availableKinds,
+  selectedKinds,
+  onChange,
+}: KindFilterSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,7 +122,10 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
         setSearch("");
       }
@@ -71,15 +135,18 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
   }, [open]);
 
   const filtered = useMemo(
-    () => availableKinds.filter((k) => k.toLowerCase().includes(search.toLowerCase())),
-    [availableKinds, search]
+    () =>
+      availableKinds.filter((k) =>
+        k.toLowerCase().includes(search.toLowerCase()),
+      ),
+    [availableKinds, search],
   );
 
   const toggle = (kind: string) =>
     onChange(
       selectedKinds.includes(kind)
         ? selectedKinds.filter((k) => k !== kind)
-        : [...selectedKinds, kind]
+        : [...selectedKinds, kind],
     );
 
   return (
@@ -88,8 +155,8 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
         onClick={() => setOpen((v) => !v)}
         className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors ${
           selectedKinds.length > 0
-            ? "bg-content3 text-foreground"
-            : "text-default-400 hover:text-foreground hover:bg-content2"
+            ? "bg-surface-tertiary text-foreground"
+            : "text-muted hover:text-foreground hover:bg-surface-secondary"
         }`}
       >
         {selectedKinds.length > 0 ? `${selectedKinds.length} types` : "Type"}
@@ -97,18 +164,21 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1.5 z-50 w-52 bg-content1 border border-default-200 rounded-lg shadow-xl">
-          <div className="flex items-center gap-1.5 px-2.5 py-2 border-b border-default-100">
+        <div className="absolute top-full left-0 mt-1.5 z-50 w-52 bg-surface border border-border rounded-lg shadow-xl">
+          <div className="flex items-center gap-1.5 px-2.5 py-2 border-b border-border">
             <input
               autoFocus
               type="text"
               placeholder="Search types…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 bg-transparent text-xs outline-none placeholder:text-default-400"
+              className="flex-1 bg-transparent text-xs outline-none placeholder:text-muted"
             />
             {search && (
-              <button onClick={() => setSearch("")} className="text-default-400 hover:text-foreground">
+              <button
+                onClick={() => setSearch("")}
+                className="text-muted hover:text-foreground"
+              >
                 <X className="w-3 h-3" />
               </button>
             )}
@@ -116,7 +186,7 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
 
           <div className="max-h-56 overflow-y-auto p-1">
             {filtered.length === 0 ? (
-              <p className="text-xs text-default-400 px-2 py-2">No matches</p>
+              <p className="text-xs text-muted px-2 py-2">No matches</p>
             ) : (
               filtered.map((kind) => {
                 const selected = selectedKinds.includes(kind);
@@ -124,11 +194,11 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
                   <button
                     key={kind}
                     onClick={() => toggle(kind)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-content2 text-xs text-left transition-colors"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-surface-secondary text-xs text-left transition-colors"
                   >
                     <div
                       className={`w-3.5 h-3.5 rounded-sm border flex-shrink-0 flex items-center justify-center transition-colors ${
-                        selected ? "bg-primary border-primary" : "border-default-400"
+                        selected ? "bg-accent border-accent" : "border-segment"
                       }`}
                     >
                       {selected && <Check className="w-2.5 h-2.5 text-white" />}
@@ -141,10 +211,14 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
           </div>
 
           {selectedKinds.length > 0 && (
-            <div className="border-t border-default-100 p-1">
+            <div className="border-t border-border p-1">
               <button
-                onClick={() => { onChange([]); setOpen(false); setSearch(""); }}
-                className="w-full text-left text-xs text-default-400 hover:text-foreground px-2 py-1.5 rounded-md hover:bg-content2 transition-colors"
+                onClick={() => {
+                  onChange([]);
+                  setOpen(false);
+                  setSearch("");
+                }}
+                className="w-full text-left text-xs text-muted hover:text-foreground px-2 py-1.5 rounded-md hover:bg-surface-secondary transition-colors"
               >
                 Clear selection
               </button>
@@ -156,40 +230,72 @@ function KindFilterSelect({ availableKinds, selectedKinds, onChange }: KindFilte
   );
 }
 
+const VIEW_OPTIONS: {
+  mode: ResourceViewMode;
+  label: string;
+  Icon: typeof Network;
+}[] = [
+  { mode: "graph", label: "Graph", Icon: Network },
+  { mode: "tree", label: "Tree", Icon: List },
+  { mode: "network", label: "Network", Icon: Workflow },
+];
+
+function ViewModeSwitcher({
+  activeView,
+  onSelect,
+}: {
+  activeView: ResourceViewMode;
+  onSelect: (mode: ResourceViewMode) => void;
+}) {
+  return (
+    <>
+      {VIEW_OPTIONS.map(({ mode, label, Icon }) => (
+        <Button
+          key={mode}
+          size="sm"
+          variant={activeView === mode ? "secondary" : "ghost"}
+          className="rounded-md"
+          onPress={() => onSelect(mode)}
+        >
+          <Icon className="w-3.5 h-3.5" />
+          {label}
+        </Button>
+      ))}
+    </>
+  );
+}
+
 const ResourceView: React.FC = observer(() => {
   const { nodeUid, view } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [activeView, setActiveView] = useState<ResourceViewMode>(
-    view === NETWORK_SUBPATH ? "network" : "graph"
-  );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeView: ResourceViewMode = VIEW_BY_SUBPATH[view ?? ""] ?? "graph";
   // Open by default on desktop; closed on mobile, where it's a full-screen overlay.
   const [sidebarOpen, setSidebarOpen] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches,
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 768px)").matches,
   );
-  const [statusFilters, setStatusFilters] = useState<ResourceStatus[]>([]);
-  const [kindFilters, setKindFilters] = useState<string[]>([]);
   const fluxTreeStore = useInjection(FluxTreeStore);
 
   const resource = fluxTreeStore.findResourceByUid(nodeUid ?? "");
 
-  // Keep the active view in sync with the URL; only the network view carries a URL segment.
-  useEffect(() => {
-    if (view === NETWORK_SUBPATH) setActiveView("network");
-    else setActiveView((prev) => (prev === "network" ? "graph" : prev));
-  }, [view]);
-
-  // Switch sub-view, reflecting the network view in the URL for shareability.
+  // Switch sub-view, reflecting it in the URL segment (graph is the default, no segment)
+  // while preserving the active filter query string.
   const selectView = (next: ResourceViewMode) => {
-    setActiveView(next);
     if (!resource) return;
     const base = `${ROUTES.RESOURCE}/${resource.uid}`;
-    const target = next === "network" ? `${base}/${NETWORK_SUBPATH}` : base;
-    if (location.pathname !== target) navigate(target);
+    const target = next === "graph" ? base : `${base}/${next}`;
+    navigate({ pathname: target, search: location.search });
   };
 
-  const watchMetrics = useInjection<WatchMetricsUseCase>(TYPES.WatchMetricsUseCase);
-  const stopWatchMetrics = useInjection<StopWatchMetricsUseCase>(TYPES.StopWatchMetricsUseCase);
+  const watchMetrics = useInjection<WatchMetricsUseCase>(
+    TYPES.WatchMetricsUseCase,
+  );
+  const stopWatchMetrics = useInjection<StopWatchMetricsUseCase>(
+    TYPES.StopWatchMetricsUseCase,
+  );
 
   // Whitelisted UIDs in the visible subtree; joined string keeps the effect dependency stable.
   const metricsUids = useMemo(
@@ -205,13 +311,38 @@ const ResourceView: React.FC = observer(() => {
   }, [metricsUids, watchMetrics, stopWatchMetrics]);
 
   // The docked detail panel follows the selected node, resetting to the root resource on navigation.
-  const [selectedNode, setSelectedNode] = useState<KubeResource | undefined>(undefined);
+  const [selectedNode, setSelectedNode] = useState<KubeResource | undefined>(
+    undefined,
+  );
   useEffect(() => {
     setSelectedNode(resource);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource?.uid]);
 
-  const fullChain = useMemo(() => fluxTreeStore.findFluxParents(resource?.uid), [fluxTreeStore, resource]);
+  // On navigation, default the kind filter to the flux app layer when the subtree is
+  // large (apps nested as grandchildren); otherwise start unfiltered. Decided once per
+  // node — and only once its subtree is populated — so a tree rebuild never clobbers a
+  // user's manual change, but a slow initial load still gets the default applied. A
+  // filter already in the URL (shared link / reload) takes precedence and is left alone.
+  const autoFilteredUid = useRef<string | null>(null);
+  useEffect(() => {
+    const uid = resource?.uid;
+    if (!uid || !fluxTreeStore.loaded || autoFilteredUid.current === uid)
+      return;
+    autoFilteredUid.current = uid;
+    if (
+      searchParams.has(FILTER_KIND_PARAM) ||
+      searchParams.has(FILTER_STATUS_PARAM)
+    )
+      return;
+    if (hasFluxAppGrandchildren(resource)) setKindFilters(FLUX_APP_KINDS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resource, fluxTreeStore.loaded, fluxTreeStore.tree]);
+
+  const fullChain = useMemo(
+    () => fluxTreeStore.findFluxParents(resource?.uid),
+    [fluxTreeStore, resource],
+  );
 
   const availableKinds = useMemo(
     () => fluxTreeStore.kindsInSubtree(resource?.uid),
@@ -219,22 +350,54 @@ const ResourceView: React.FC = observer(() => {
     [resource?.uid, fluxTreeStore.tree],
   );
 
+  const statusFilters = useMemo(
+    () => parseStatusParam(searchParams.get(FILTER_STATUS_PARAM)),
+    [searchParams],
+  );
+  const kindFilters = useMemo(
+    () => parseKindParam(searchParams.get(FILTER_KIND_PARAM)),
+    [searchParams],
+  );
+
+  const updateFilterParam = (key: string, values: string[]) =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (values.length) next.set(key, values.join(","));
+        else next.delete(key);
+        return next;
+      },
+      { replace: true },
+    );
+
+  const setKindFilters = (kinds: string[]) =>
+    updateFilterParam(FILTER_KIND_PARAM, kinds);
+
   const activeFilter: ResourceFilter = useMemo(
     () => ({ statuses: statusFilters, kinds: kindFilters }),
-    [statusFilters, kindFilters]
+    [statusFilters, kindFilters],
   );
 
   const hasActiveFilter = statusFilters.length > 0 || kindFilters.length > 0;
 
   const toggleStatus = (s: ResourceStatus) =>
-    setStatusFilters((prev) =>
-      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    updateFilterParam(
+      FILTER_STATUS_PARAM,
+      statusFilters.includes(s)
+        ? statusFilters.filter((x) => x !== s)
+        : [...statusFilters, s],
     );
 
-  const clearFilters = () => {
-    setStatusFilters([]);
-    setKindFilters([]);
-  };
+  const clearFilters = () =>
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(FILTER_KIND_PARAM);
+        next.delete(FILTER_STATUS_PARAM);
+        return next;
+      },
+      { replace: true },
+    );
 
   const selectNode = (node: KubeResource | undefined) => setSelectedNode(node);
 
@@ -247,23 +410,30 @@ const ResourceView: React.FC = observer(() => {
       </Header>
 
       <main className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <div className="flex-shrink-0 px-6 py-2.5 border-b border-default-100 flex items-end gap-4">
-          <Breadcrumbs size="sm" className="min-w-0">
-            <BreadcrumbItem onPress={() => navigate("/")}>Cluster</BreadcrumbItem>
+        <div className="flex-shrink-0 px-6 py-2.5 border-b border-border flex items-end gap-4">
+          <Breadcrumbs className="min-w-0">
+            <Breadcrumbs.Item onPress={() => navigate("/")}>
+              Cluster
+            </Breadcrumbs.Item>
             {fullChain.map((res) => (
-              <BreadcrumbItem key={res.uid} onPress={() => navigate(`/resource/${res.uid}`)}>
+              <Breadcrumbs.Item
+                key={res.uid}
+                onPress={() => navigate(`/resource/${res.uid}`)}
+              >
                 {res.name}
-              </BreadcrumbItem>
+              </Breadcrumbs.Item>
             ))}
-            <BreadcrumbItem>{resource?.name}</BreadcrumbItem>
+            <Breadcrumbs.Item>{resource?.name}</Breadcrumbs.Item>
           </Breadcrumbs>
 
           <div className="ml-auto flex items-center gap-3 min-w-0">
             <StatusChip resource={resource} />
             <AppLogo groupKind={resource?.groupKind} />
             <div className="min-w-0">
-              <h1 className="text-lg font-bold leading-tight truncate">{resource?.name}</h1>
-              <span className="text-default-400 text-xs">
+              <h1 className="text-lg font-bold leading-tight truncate">
+                {resource?.name}
+              </h1>
+              <span className="text-muted text-xs">
                 {resource?.kind} · {resource?.namespace}
               </span>
             </div>
@@ -271,78 +441,30 @@ const ResourceView: React.FC = observer(() => {
         </div>
 
         {/* Mobile view switcher — separate static row avoids overlap with the floating filter bar. */}
-        <div className="md:hidden flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-default-100">
-          <div className="flex items-center gap-1 bg-content1 rounded-lg p-1 border border-default-200">
-            <Button
-              size="sm"
-              variant={activeView === "graph" ? "solid" : "light"}
-              onPress={() => selectView("graph")}
-              startContent={<Network className="w-3.5 h-3.5" />}
-            >
-              Graph
-            </Button>
-            <Button
-              size="sm"
-              variant={activeView === "tree" ? "solid" : "light"}
-              onPress={() => selectView("tree")}
-              startContent={<List className="w-3.5 h-3.5" />}
-            >
-              Tree
-            </Button>
-            <Button
-              size="sm"
-              variant={activeView === "network" ? "solid" : "light"}
-              onPress={() => selectView("network")}
-              startContent={<Workflow className="w-3.5 h-3.5" />}
-            >
-              Network
-            </Button>
+        <div className="md:hidden flex-shrink-0 flex items-center gap-2 px-3 py-2 border-b border-border">
+          <div className="flex items-center gap-1 bg-surface rounded-lg p-1 border border-border">
+            <ViewModeSwitcher activeView={activeView} onSelect={selectView} />
           </div>
           <Button
             size="sm"
-            variant="flat"
+            variant="secondary"
             className="ml-auto flex-shrink-0"
             onPress={() => setSidebarOpen(true)}
-            startContent={<PanelRightOpen className="w-3.5 h-3.5" />}
           >
+            <PanelRightOpen className="w-3.5 h-3.5" />
             Details
           </Button>
         </div>
 
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
-
           <div className="flex-1 min-w-0 min-h-0 relative">
-
             {/* Floating view controls — desktop only (mobile uses the row above) */}
-            <div className="hidden md:flex absolute top-3 right-4 z-10 items-center gap-1 bg-content1/90 backdrop-blur-sm rounded-lg p-1 border border-default-200 shadow-sm">
+            <div className="hidden md:flex absolute top-3 right-4 z-10 items-center gap-1 bg-surface/90 backdrop-blur-sm rounded-lg p-1 border border-border shadow-sm">
+              <ViewModeSwitcher activeView={activeView} onSelect={selectView} />
+              <div className="w-px h-5 bg-surface-tertiary mx-0.5" />
               <Button
                 size="sm"
-                variant={activeView === "graph" ? "solid" : "light"}
-                onPress={() => selectView("graph")}
-                startContent={<Network className="w-3.5 h-3.5" />}
-              >
-                Graph
-              </Button>
-              <Button
-                size="sm"
-                variant={activeView === "tree" ? "solid" : "light"}
-                onPress={() => selectView("tree")}
-                startContent={<List className="w-3.5 h-3.5" />}
-              >
-                Tree
-              </Button>
-              <Button
-                size="sm"
-                variant={activeView === "network" ? "solid" : "light"}
-                onPress={() => selectView("network")}
-                startContent={<Workflow className="w-3.5 h-3.5" />}
-              >
-                Network
-              </Button>
-              <div className="w-px h-5 bg-default-200 mx-0.5" />
-              <Button
-                size="sm"
-                variant="light"
+                variant="ghost"
                 isIconOnly
                 onPress={() => setSidebarOpen(!sidebarOpen)}
                 aria-label="Toggle details panel"
@@ -357,9 +479,12 @@ const ResourceView: React.FC = observer(() => {
 
             {/* Network legend — replaces filters in network view */}
             {activeView === "network" && (
-              <div className="hidden sm:flex absolute top-3 left-4 z-10 items-center gap-3 bg-content1/90 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-default-200 shadow-sm">
+              <div className="hidden sm:flex absolute top-3 left-4 z-10 items-center gap-3 bg-surface/90 backdrop-blur-sm rounded-lg px-3 py-1.5 border border-border shadow-sm">
                 {NETWORK_LEGEND.map((item) => (
-                  <span key={item.label} className="flex items-center gap-1.5 text-xs text-default-500">
+                  <span
+                    key={item.label}
+                    className="flex items-center gap-1.5 text-xs text-muted"
+                  >
                     <span
                       className="inline-block w-4 h-0.5"
                       style={{
@@ -377,47 +502,49 @@ const ResourceView: React.FC = observer(() => {
 
             {/* Filter bar — wrap instead of overflow scroll, which would clip the Type dropdown. */}
             {activeView !== "network" && (
-            <div className="flex flex-wrap absolute top-3 left-4 z-10 items-center gap-1 bg-content1/90 backdrop-blur-sm rounded-lg px-2 py-1 border border-default-200 shadow-sm max-w-[calc(100%-2rem)] md:max-w-none">
-              {STATUS_FILTER_OPTIONS.map(({ value, label }) => {
-                const active = statusFilters.includes(value);
-                return (
-                  <button
-                    key={value}
-                    onClick={() => toggleStatus(value)}
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors flex-shrink-0 ${
-                      active
-                        ? "bg-content3 text-foreground"
-                        : "text-default-400 hover:text-foreground hover:bg-content2"
-                    }`}
-                  >
-                    <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(value)}`} />
-                    {label}
-                  </button>
-                );
-              })}
-              {availableKinds.length > 0 && (
-                <>
-                  <div className="w-px h-4 bg-default-200 mx-0.5 flex-shrink-0" />
-                  <KindFilterSelect
-                    availableKinds={availableKinds}
-                    selectedKinds={kindFilters}
-                    onChange={setKindFilters}
-                  />
-                </>
-              )}
-              {hasActiveFilter && (
-                <>
-                  <div className="w-px h-4 bg-default-200 mx-0.5 flex-shrink-0" />
-                  <button
-                    onClick={clearFilters}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-default-400 hover:text-foreground hover:bg-content2 transition-colors flex-shrink-0"
-                  >
-                    <X className="w-3 h-3" />
-                    Clear
-                  </button>
-                </>
-              )}
-            </div>
+              <div className="flex flex-wrap absolute top-3 left-4 z-10 items-center gap-1 bg-surface/90 backdrop-blur-sm rounded-lg px-2 py-1 border border-border shadow-sm max-w-[calc(100%-2rem)] md:max-w-none">
+                {STATUS_FILTER_OPTIONS.map(({ value, label }) => {
+                  const active = statusFilters.includes(value);
+                  return (
+                    <button
+                      key={value}
+                      onClick={() => toggleStatus(value)}
+                      className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium transition-colors flex-shrink-0 ${
+                        active
+                          ? "bg-surface-tertiary text-foreground"
+                          : "text-muted hover:text-foreground hover:bg-surface-secondary"
+                      }`}
+                    >
+                      <div
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(value)}`}
+                      />
+                      {label}
+                    </button>
+                  );
+                })}
+                {availableKinds.length > 0 && (
+                  <>
+                    <div className="w-px h-4 bg-surface-tertiary mx-0.5 flex-shrink-0" />
+                    <KindFilterSelect
+                      availableKinds={availableKinds}
+                      selectedKinds={kindFilters}
+                      onChange={setKindFilters}
+                    />
+                  </>
+                )}
+                {hasActiveFilter && (
+                  <>
+                    <div className="w-px h-4 bg-surface-tertiary mx-0.5 flex-shrink-0" />
+                    <button
+                      onClick={clearFilters}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-muted hover:text-foreground hover:bg-surface-secondary transition-colors flex-shrink-0"
+                    >
+                      <X className="w-3 h-3" />
+                      Clear
+                    </button>
+                  </>
+                )}
+              </div>
             )}
 
             <div
@@ -459,7 +586,7 @@ const ResourceView: React.FC = observer(() => {
 
           {/* Detail panel — docked on desktop, full-screen overlay on mobile */}
           <div
-            className={`flex-shrink-0 md:border-l md:border-default-100 md:overflow-hidden md:transition-all md:duration-300 ${
+            className={`flex-shrink-0 md:border-l md:border-border md:overflow-hidden md:transition-all md:duration-300 ${
               sidebarOpen
                 ? "fixed inset-0 z-40 bg-background md:static md:inset-auto md:z-auto md:bg-transparent md:w-[33vw]"
                 : "hidden md:block md:w-0"

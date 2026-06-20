@@ -1,5 +1,4 @@
 import { Condition } from "../../../core/fluxTree/models/tree";
-import { useEffect, useState } from "react";
 import { DynamicIcon, IconName } from "lucide-react/dynamic";
 
 import {
@@ -14,7 +13,7 @@ import { isEnumValue } from "../../../core/shared/enum.utils";
 import { ICONS } from "../../shared/icons";
 import { Chip, Tooltip } from "@heroui/react";
 
-type ChipColor = "default" | "success" | "danger" | "primary" | "warning";
+type ChipColor = "default" | "success" | "danger" | "accent" | "warning";
 
 type ConditionTagProps = {
   condition: Condition;
@@ -58,24 +57,19 @@ function getConditionDisplay(condition: Condition): {
 const ConditionTag: React.FC<ConditionTagProps> = ({
   condition,
 }: ConditionTagProps) => {
-  const [icon, setIcon] = useState<IconName>(ICONS.INFO);
-  const [color, setColor] = useState<ChipColor>("default");
-
-  useEffect(() => {
-    const { icon, color } = getConditionDisplay(condition);
-    setIcon(icon);
-    setColor(color);
-  }, [condition]);
+  const { icon, color } = getConditionDisplay(condition);
 
   return (
-    <Tooltip content={condition.message} className="dark">
-      <Chip
-        color={color}
-        startContent={<DynamicIcon name={icon} size={16} />}
-        variant="faded"
-      >
-        {condition.type}
-      </Chip>
+    <Tooltip>
+      <Tooltip.Trigger>
+        <Chip color={color} variant="tertiary">
+          <span className="flex items-center gap-1">
+            <DynamicIcon name={icon} size={16} />
+            {condition.type}
+          </span>
+        </Chip>
+      </Tooltip.Trigger>
+      <Tooltip.Content>{condition.message}</Tooltip.Content>
     </Tooltip>
   );
 };

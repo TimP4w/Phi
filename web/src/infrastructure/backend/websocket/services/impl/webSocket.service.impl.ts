@@ -4,7 +4,7 @@ import { REALTIME_CONST } from "../../../../../core/realtime/constants/realtime.
 import { env } from "../../../../../core/shared/env";
 import logger from "../../../../../core/shared/logger";
 import { WebSocketService } from "../../../../../core/realtime/services/webSocket.service";
-import { addToast } from "@heroui/react";
+import { connectionStatus } from "../../../../../core/realtime/connectionStatus";
 
 export type Listener = {
   id: string;
@@ -53,10 +53,7 @@ class WebSocketServiceImpl implements WebSocketService {
 
     this.socket.onopen = () => {
       logger.debug("Websocket connection opened");
-      addToast({
-        title: "Websocket connection opened",
-        color: "success",
-      });
+      connectionStatus.markConnected();
       this.retryCount = 0;
       this.startPing();
     };
@@ -82,11 +79,6 @@ class WebSocketServiceImpl implements WebSocketService {
     };
 
     this.socket.onclose = () => {
-      addToast({
-        title: "WebSocket connection closed",
-        color: "danger",
-      });
-
       this.clientId = "";
       this.stopPing();
 
@@ -95,6 +87,7 @@ class WebSocketServiceImpl implements WebSocketService {
         return;
       }
 
+      connectionStatus.markReconnecting(this.retryCount, this.maxRetries);
       this.reconnect();
     };
 
@@ -124,20 +117,13 @@ class WebSocketServiceImpl implements WebSocketService {
     if (this.retryCount < this.maxRetries) {
       this.retryCount++;
       const retryTimeout = Math.min(1000 * Math.pow(2, this.retryCount), 30000);
+      connectionStatus.markReconnecting(this.retryCount, this.maxRetries);
       setTimeout(() => {
         logger.debug(`Reconnection attempt #${this.retryCount}`);
-        addToast({
-          title: `Reconnection attempt #${this.retryCount}`,
-          color: "default",
-        });
-
         this.connect();
       }, retryTimeout);
     } else {
-      addToast({
-        title: `Max reconnection attempts reached.`,
-        color: "danger",
-      });
+      connectionStatus.markFailed();
       logger.debug("Max reconnection attempts reached.");
     }
   }

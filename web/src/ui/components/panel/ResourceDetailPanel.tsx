@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { useInjection } from "inversify-react";
-import { Alert, Chip, Tab, Tabs, Tooltip, useDisclosure } from "@heroui/react";
+import { Alert, Chip, Tabs, Tooltip, useOverlayState } from "@heroui/react";
 import { Link } from "react-router-dom";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import {
@@ -36,9 +36,9 @@ import { METRICS_DEFAULT_RANGE } from "../../../core/metrics/constants/metrics.c
 import {
   SeverityCounts,
   TrivySummary,
+  emptyTrivySummary,
   hasFindings,
   severityColor,
-  subtreeSummary,
   summaryWorstSeverity,
   totalCves,
   totalOther,
@@ -68,12 +68,12 @@ type ResourceDetailPanelProps = {
 /** Small close button shown only on mobile, where the panel is full-screen. */
 const MobileClose = ({ onClose }: { onClose?: () => void }) =>
   onClose ? (
-    <div className="md:hidden flex items-center justify-end px-2 py-1.5 border-b border-default-100 flex-shrink-0">
+    <div className="md:hidden flex items-center justify-end px-2 py-1.5 border-b border-border flex-shrink-0">
       <button
         type="button"
         onClick={onClose}
         aria-label="Close details"
-        className="p-1.5 rounded-md text-default-400 hover:text-foreground hover:bg-content2 transition-colors"
+        className="p-1.5 rounded-md text-muted hover:text-foreground hover:bg-surface-secondary transition-colors"
       >
         <X className="w-4 h-4" />
       </button>
@@ -81,7 +81,7 @@ const MobileClose = ({ onClose }: { onClose?: () => void }) =>
   ) : null;
 
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
-  <p className="text-xs font-semibold text-default-400 uppercase tracking-widest mb-2 px-2">
+  <p className="text-xs font-semibold text-muted uppercase tracking-widest mb-2 px-2">
     {children}
   </p>
 );
@@ -93,7 +93,7 @@ const EmptyState = ({
   icon: React.ComponentType<{ className?: string }>;
   label: string;
 }) => (
-  <div className="flex flex-col items-center justify-center h-full gap-2 text-default-400">
+  <div className="flex flex-col items-center justify-center h-full gap-2 text-muted">
     <Icon className="w-8 h-8 opacity-30" />
     <span className="text-sm">{label}</span>
   </div>
@@ -161,17 +161,17 @@ const Lineage = ({
       <span key={res.uid} className="flex items-center gap-1.5">
         <Link
           to={`${ROUTES.RESOURCE}/${res.uid}`}
-          className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-content2 transition-colors max-w-[160px]"
+          className="flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-surface-secondary transition-colors max-w-[160px]"
         >
           <span
             className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(res.status)}`}
           />
           <span className="text-xs truncate">{res.name}</span>
         </Link>
-        <ChevronRight className="w-3.5 h-3.5 text-default-300 flex-shrink-0" />
+        <ChevronRight className="w-3.5 h-3.5 text-muted flex-shrink-0" />
       </span>
     ))}
-    <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-content2 border border-default-200 max-w-[180px]">
+    <span className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-secondary border border-border max-w-[180px]">
       <span
         className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusDotClass(node.status)}`}
       />
@@ -183,21 +183,16 @@ const Lineage = ({
 const DependsOnPills = ({ deps }: { deps: Kustomization[] }) => (
   <div className="flex flex-wrap gap-1.5">
     {deps.map((dep) => (
-      <Chip
-        key={dep.uid}
-        as={Link}
-        to={`${ROUTES.RESOURCE}/${dep.uid}`}
-        size="sm"
-        variant="flat"
-        className="cursor-pointer"
-        startContent={
-          <span
-            className={`w-1.5 h-1.5 rounded-full ${statusDotClass(dep.status)}`}
-          />
-        }
-      >
-        {dep.name}
-      </Chip>
+      <Link key={dep.uid} to={`${ROUTES.RESOURCE}/${dep.uid}`}>
+        <Chip size="sm" variant="soft" className="cursor-pointer">
+          <span className="flex items-center gap-1">
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${statusDotClass(dep.status)}`}
+            />
+            {dep.name}
+          </span>
+        </Chip>
+      </Link>
     ))}
   </div>
 );
@@ -225,7 +220,7 @@ const InfoPill = ({
 }: Pill) => {
   const body = (
     <>
-      <span className="text-default-400 flex-shrink-0">{label}</span>
+      <span className="text-muted flex-shrink-0">{label}</span>
       <span
         className={`truncate max-w-[220px] ${mono ? "font-mono" : ""} ${
           tone === "warning" ? "text-warning" : ""
@@ -236,27 +231,28 @@ const InfoPill = ({
     </>
   );
   const cls =
-    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-default-200 bg-content1 text-xs max-w-full";
+    "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-border bg-surface text-xs max-w-full";
   const el =
     href && external ? (
       <a
         href={href}
         target="_blank"
         rel="noreferrer"
-        className={`${cls} hover:bg-content2 transition-colors`}
+        className={`${cls} hover:bg-surface-secondary transition-colors`}
       >
         {body}
       </a>
     ) : href ? (
-      <Link to={href} className={`${cls} hover:bg-content2 transition-colors`}>
+      <Link to={href} className={`${cls} hover:bg-surface-secondary transition-colors`}>
         {body}
       </Link>
     ) : (
       <div className={cls}>{body}</div>
     );
   return tooltip ? (
-    <Tooltip content={tooltip} className="dark">
-      {el}
+    <Tooltip>
+      <Tooltip.Trigger>{el}</Tooltip.Trigger>
+      <Tooltip.Content>{tooltip}</Tooltip.Content>
     </Tooltip>
   ) : (
     el
@@ -360,20 +356,23 @@ const ConditionsSection = ({ resource }: { resource: KubeResource }) => {
       <SectionTitle>Conditions</SectionTitle>
       <div className="space-y-1">
         {resource.conditions.map((c) => (
-          <Tooltip key={c.type} content={c.message} className="dark">
-            <div className="flex items-center justify-between gap-2 px-1 py-0.5 rounded hover:bg-default-50">
-              <div className="flex items-center gap-2 min-w-0">
-                <div
-                  className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${conditionDotClass(c)}`}
-                />
-                <span className="text-xs text-default-400 truncate">
-                  {c.type}
+          <Tooltip key={c.type}>
+            <Tooltip.Trigger>
+              <div className="flex items-center justify-between gap-2 px-1 py-0.5 rounded hover:bg-surface">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${conditionDotClass(c)}`}
+                  />
+                  <span className="text-xs text-muted truncate">
+                    {c.type}
+                  </span>
+                </div>
+                <span className="text-xs text-muted truncate max-w-[150px] text-right">
+                  {c.reason}
                 </span>
               </div>
-              <span className="text-xs text-default-500 truncate max-w-[150px] text-right">
-                {c.reason}
-              </span>
-            </div>
+            </Tooltip.Trigger>
+            <Tooltip.Content>{c.message}</Tooltip.Content>
           </Tooltip>
         ))}
       </div>
@@ -388,14 +387,14 @@ const severityStats = (c: SeverityCounts) => [
     color: "text-danger",
     severity: "CRITICAL",
   },
-  { label: "High", value: c.high, color: "text-danger-400", severity: "HIGH" },
+  { label: "High", value: c.high, color: "text-danger", severity: "HIGH" },
   {
     label: "Medium",
     value: c.medium,
     color: "text-warning",
     severity: "MEDIUM",
   },
-  { label: "Low", value: c.low, color: "text-default-400", severity: "LOW" },
+  { label: "Low", value: c.low, color: "text-muted", severity: "LOW" },
 ];
 
 const SeverityBreakdown = ({
@@ -414,25 +413,25 @@ const SeverityBreakdown = ({
         className="flex flex-col items-center hover:opacity-80 transition-opacity"
       >
         <span className={`text-2xl font-bold ${s.color}`}>{s.value}</span>
-        <span className="text-[11px] text-default-400">{s.label}</span>
+        <span className="text-[11px] text-muted">{s.label}</span>
       </button>
     ))}
   </div>
 );
 
 const SecurityPanel = ({ summary }: { summary: TrivySummary }) => {
-  const cveModal = useDisclosure();
-  const otherModal = useDisclosure();
+  const cveModal = useOverlayState();
+  const otherModal = useOverlayState();
   const [cveSeverity, setCveSeverity] = useState<string | undefined>();
   const [otherSeverity, setOtherSeverity] = useState<string | undefined>();
 
   const openCve = (s?: string) => {
     setCveSeverity(s);
-    cveModal.onOpen();
+    cveModal.open();
   };
   const openOther = (s?: string) => {
     setOtherSeverity(s);
-    otherModal.onOpen();
+    otherModal.open();
   };
 
   return (
@@ -451,14 +450,14 @@ const SecurityPanel = ({ summary }: { summary: TrivySummary }) => {
       )}
       <TrivyFindingsModal
         isOpen={cveModal.isOpen}
-        onOpenChange={cveModal.onOpenChange}
+        onOpenChange={cveModal.setOpen}
         title="Vulnerabilities"
         reportUids={summary.cveReportUids}
         initialSeverity={cveSeverity}
       />
       <TrivyFindingsModal
         isOpen={otherModal.isOpen}
-        onOpenChange={otherModal.onOpenChange}
+        onOpenChange={otherModal.setOpen}
         title="Misconfigurations"
         reportUids={summary.otherReportUids}
         initialSeverity={otherSeverity}
@@ -551,7 +550,7 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
     return (
       <div className="h-full flex flex-col">
         <MobileClose onClose={onClose} />
-        <div className="flex-1 flex items-center justify-center text-sm text-default-400 px-6 text-center">
+        <div className="flex-1 flex items-center justify-center text-sm text-muted px-6 text-center">
           Select a resource to see its details.
         </div>
       </div>
@@ -563,7 +562,7 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
   const containerSeverity = worstContainerSeverity(containers);
   const volumeSeverity = worstStatusSeverity(volumes.map((v) => v.status));
 
-  const trivySummary = subtreeSummary(node, fluxTreeStore.trivyIndex);
+  const trivySummary = fluxTreeStore.trivySubtreeIndex.get(node.uid) ?? emptyTrivySummary();
   const chain = fluxTreeStore.findFluxParents(node.uid);
   const dependsOn =
     node instanceof Kustomization
@@ -594,34 +593,86 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
       <MobileClose onClose={onClose} />
       <Tabs
         aria-label="Resource detail"
-        variant="underlined"
+        variant="secondary"
         selectedKey={activeTab}
         onSelectionChange={(k) => setActiveTab(String(k))}
-        classNames={{
-          // w-full + min-w-0 caps the base to the panel width so the tab strip scrolls; scrollbar-default re-shows it.
-          base: "px-4 pt-1 flex-shrink-0 w-full min-w-0",
-          tabList: "w-full scrollbar-default",
-          panel: "flex-1 overflow-y-auto min-h-0 p-0",
-        }}
+        className="flex flex-col min-h-0 flex-1"
       >
-        <Tab key="main" title="Main">
+        {/* w-full + min-w-0 caps the strip to the panel width so it scrolls; scrollbar-default re-shows the bar. ListContainer is required for the secondary (underline) variant styles to apply. */}
+        <Tabs.ListContainer className="px-4 pt-1 flex-shrink-0 w-full min-w-0">
+        <Tabs.List className="w-full min-w-0 scrollbar-default">
+          <Tabs.Tab id="main">Main</Tabs.Tab>
+          {hasFindings(trivySummary) ? (
+            <Tabs.Tab id="security">
+              <TabTitle
+                label="Security"
+                severity={trivyTabSeverity(trivySummary)}
+                badge={
+                  <Chip size="sm" variant="soft" className="h-4 text-xs">
+                    {totalCves(trivySummary)}
+                  </Chip>
+                }
+              />
+            </Tabs.Tab>
+          ) : null}
+          {node instanceof Pod && containers.length > 0 ? (
+            <Tabs.Tab id="containers">
+              <TabTitle label="Containers" severity={containerSeverity} />
+            </Tabs.Tab>
+          ) : null}
+          <Tabs.Tab id="events">
+            <TabTitle
+              label="Events"
+              badge={
+                eventCount > 0 ? (
+                  <Chip
+                    size="sm"
+                    color={warningCount > 0 ? "warning" : "default"}
+                    variant="soft"
+                    className="h-4 text-xs"
+                  >
+                    {eventCount}
+                  </Chip>
+                ) : undefined
+              }
+            />
+          </Tabs.Tab>
+          <Tabs.Tab id="volumes">
+            <TabTitle label="Volumes" severity={volumeSeverity} />
+          </Tabs.Tab>
+          {showMetrics ? <Tabs.Tab id="metrics">Metrics</Tabs.Tab> : null}
+          <Tabs.Tab id="describe">Describe</Tabs.Tab>
+          {isPod ? <Tabs.Tab id="logs">Logs</Tabs.Tab> : null}
+        </Tabs.List>
+        </Tabs.ListContainer>
+
+        <Tabs.Panel
+          id="main"
+          className="flex-1 overflow-y-auto min-h-0 p-0"
+        >
           <div className="p-4 space-y-5">
             {failingCondition?.message && (
               <Alert
-                color={
+                status={
                   node.status === ResourceStatus.FAILED ? "danger" : "warning"
                 }
-                title={failingCondition.reason || "Not ready"}
-                description={failingCondition.message}
-              />
+              >
+                <Alert.Title>
+                  {failingCondition.reason || "Not ready"}
+                </Alert.Title>
+                <Alert.Description>
+                  {failingCondition.message}
+                </Alert.Description>
+              </Alert>
             )}
 
             {drift && (
-              <Alert
-                color="warning"
-                title="Revision drift"
-                description={`Applied ${shortRevision(applied!)} differs from attempted ${shortRevision(attempted!)}`}
-              />
+              <Alert status="warning">
+                <Alert.Title>Revision drift</Alert.Title>
+                <Alert.Description>
+                  {`Applied ${shortRevision(applied!)} differs from attempted ${shortRevision(attempted!)}`}
+                </Alert.Description>
+              </Alert>
             )}
 
             {/* Top-down: what's above (parents), this resource, then below. */}
@@ -630,15 +681,15 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
                 <SectionTitle>Relationships</SectionTitle>
                 {chain.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="text-xs text-default-400 px-1">Managed by</p>
+                    <p className="text-xs text-muted px-1">Managed by</p>
                     <Lineage chain={chain} node={node} />
                   </div>
                 )}
                 {node instanceof Kustomization && (
                   <div className="space-y-1.5">
-                    <p className="text-xs text-default-400 px-1">Depends on</p>
+                    <p className="text-xs text-muted px-1">Depends on</p>
                     {dependsOn.length === 0 ? (
-                      <p className="text-xs text-default-400 px-1">
+                      <p className="text-xs text-muted px-1">
                         No dependencies
                       </p>
                     ) : (
@@ -670,31 +721,21 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
 
             <InfoTab resource={node} hideStorage />
           </div>
-        </Tab>
+        </Tabs.Panel>
 
         {hasFindings(trivySummary) ? (
-          <Tab
-            key="security"
-            title={
-              <TabTitle
-                label="Security"
-                severity={trivyTabSeverity(trivySummary)}
-                badge={
-                  <Chip size="sm" variant="flat" className="h-4 text-xs">
-                    {totalCves(trivySummary)}
-                  </Chip>
-                }
-              />
-            }
+          <Tabs.Panel
+            id="security"
+            className="flex-1 overflow-y-auto min-h-0 p-0"
           >
             <SecurityPanel summary={trivySummary} />
-          </Tab>
+          </Tabs.Panel>
         ) : null}
 
         {node instanceof Pod && containers.length > 0 ? (
-          <Tab
-            key="containers"
-            title={<TabTitle label="Containers" severity={containerSeverity} />}
+          <Tabs.Panel
+            id="containers"
+            className="flex-1 overflow-y-auto min-h-0 p-0"
           >
             <div className="p-4 space-y-0.5">
               {containers.map((c) => (
@@ -704,28 +745,12 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
                 />
               ))}
             </div>
-          </Tab>
+          </Tabs.Panel>
         ) : null}
 
-        <Tab
-          key="events"
-          title={
-            <TabTitle
-              label="Events"
-              badge={
-                eventCount > 0 ? (
-                  <Chip
-                    size="sm"
-                    color={warningCount > 0 ? "warning" : "default"}
-                    variant="flat"
-                    className="h-4 text-xs"
-                  >
-                    {eventCount}
-                  </Chip>
-                ) : undefined
-              }
-            />
-          }
+        <Tabs.Panel
+          id="events"
+          className="flex-1 overflow-y-auto min-h-0 p-0"
         >
           <div className="flex flex-col h-full">
             <EventsPanel
@@ -736,11 +761,11 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
               showCount
             />
           </div>
-        </Tab>
+        </Tabs.Panel>
 
-        <Tab
-          key="volumes"
-          title={<TabTitle label="Volumes" severity={volumeSeverity} />}
+        <Tabs.Panel
+          id="volumes"
+          className="flex-1 overflow-y-auto min-h-0 p-0"
         >
           {volumes.length === 0 ? (
             <EmptyState icon={HardDrive} label="No volumes" />
@@ -754,17 +779,17 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
                     <Link
                       key={v.uid}
                       to={`${ROUTES.RESOURCE}/${v.uid}`}
-                      className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-default-100"
+                      className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-surface-secondary"
                     >
-                      <HardDrive className="w-4 h-4 text-default-400 flex-shrink-0" />
+                      <HardDrive className="w-4 h-4 text-muted flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate leading-tight">
                           {v.name}
                         </p>
-                        <p className="text-xs text-default-400">{v.kind}</p>
+                        <p className="text-xs text-muted">{v.kind}</p>
                       </div>
                       {volumeSize(v) > 0 && (
-                        <span className="text-xs font-mono text-default-400 flex-shrink-0">
+                        <span className="text-xs font-mono text-muted flex-shrink-0">
                           {formatBytes(volumeSize(v))}
                         </span>
                       )}
@@ -775,10 +800,13 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
               </div>
             </div>
           )}
-        </Tab>
+        </Tabs.Panel>
 
         {showMetrics ? (
-          <Tab key="metrics" title="Metrics">
+          <Tabs.Panel
+            id="metrics"
+            className="flex-1 overflow-y-auto min-h-0 p-0"
+          >
             <div className="p-4">
               <MetricsTab
                 uid={node.uid}
@@ -786,17 +814,20 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
                 onRangeChange={setMetricsRange}
               />
             </div>
-          </Tab>
+          </Tabs.Panel>
         ) : null}
 
-        <Tab key="describe" title="Describe">
+        <Tabs.Panel
+          id="describe"
+          className="flex-1 overflow-y-auto min-h-0 p-0"
+        >
           <DescribeTab describe={describe} isLoading={describeLoading} />
-        </Tab>
+        </Tabs.Panel>
 
         {isPod ? (
-          <Tab key="logs" title="Logs">
+          <Tabs.Panel id="logs" className="flex-1 overflow-y-auto min-h-0 p-0">
             <LogsTab />
-          </Tab>
+          </Tabs.Panel>
         ) : null}
       </Tabs>
     </div>

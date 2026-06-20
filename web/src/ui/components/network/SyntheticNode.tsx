@@ -14,12 +14,12 @@ function SyntheticNode({ label, subtitle, icon: Icon }: SyntheticNodeProps) {
   return (
     <div className="relative">
       <Handle type="target" position={Position.Left} />
-      <div className="w-[240px] bg-content2 border border-default-300 rounded-lg shadow-sm">
+      <div className="w-[240px] bg-surface-secondary border border-segment rounded-lg shadow-sm">
         <div className="flex items-center gap-2.5 px-3 py-2.5">
-          <Icon className="w-5 h-5 flex-shrink-0 text-default-500" />
+          <Icon className="w-5 h-5 flex-shrink-0 text-muted" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold truncate leading-tight">{label}</p>
-            <p className="text-xs text-default-500 leading-tight mt-0.5">{subtitle}</p>
+            <p className="text-xs text-muted leading-tight mt-0.5">{subtitle}</p>
           </div>
         </div>
       </div>

@@ -93,9 +93,10 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
 
   private buildNodesAndEdges(nodeId: string): Output {
     const nodes: Node<VisualizationNodeData>[] = [];
-    const edges: Edge[] = [];
+    // Keyed by target UID: a target reached from multiple parents keeps the last
+    // (furthermost) edge, replacing in O(1) instead of scanning/splicing the array.
+    const edgeByTarget = new Map<string, Edge>();
     const visitedIds = new Set<string>();
-    const edgeTargets = new Set<string>();
     const node =
       this.fluxTreeStore.resources.get(nodeId) ?? this.fluxTreeStore.tree.root;
 
@@ -125,32 +126,25 @@ export class LayoutTreeUseCase extends UseCase<Input, Promise<Output>> {
       visitedIds.add(n.uid);
       nodes.push({
         id: n.uid,
-        data: { treeNode: n },
+        data: { treeNode: n, isRoot: n.uid === node.uid },
         type: type,
         position: { x: 0, y: 0 },
       });
 
       for (const child of n.children) {
         if (resourcesToSkip.has(child.kind)) continue;
-
-        if (edgeTargets.has(child.uid)) {
-          // Replace previous edge to this target with the furthermost one
-          const idx = edges.findIndex((e) => e.target === child.uid);
-          if (idx !== -1) edges.splice(idx, 1);
-        }
-        edges.push({
+        edgeByTarget.set(child.uid, {
           id: `${n.uid}-${child.uid}`,
           source: n.uid,
           target: child.uid,
           type: "smoothstep",
           animated: true,
         });
-        edgeTargets.add(child.uid);
       }
 
       return false;
     });
 
-    return { nodes, edges };
+    return { nodes, edges: [...edgeByTarget.values()] };
   }
 }

@@ -13,11 +13,16 @@ const TooltipedDate: React.FC<TooltipedDateProps> = ({ date }) => {
   if (isNaN(parsedDate.getTime())) return <>Invalid date</>;
 
   return (
-    <Tooltip content={parsedDate.toISOString()}>
-      {formatDistance(parsedDate, new Date(), {
-        includeSeconds: true,
-        addSuffix: true,
-      })}
+    <Tooltip>
+      <Tooltip.Trigger>
+        <span>
+          {formatDistance(parsedDate, new Date(), {
+            includeSeconds: true,
+            addSuffix: true,
+          })}
+        </span>
+      </Tooltip.Trigger>
+      <Tooltip.Content>{parsedDate.toISOString()}</Tooltip.Content>
     </Tooltip>
   );
 };

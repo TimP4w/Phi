@@ -56,7 +56,7 @@ export const LogsTab = observer(() => {
 
   if (!fluxTreeStore.selectedResource) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-default-400 py-20">
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-muted py-20">
         <Terminal className="w-10 h-10 opacity-30" />
         <span className="text-sm">No pod selected</span>
       </div>
@@ -65,7 +65,7 @@ export const LogsTab = observer(() => {
 
   if (logs.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-default-400 py-20">
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-muted py-20">
         <Terminal className="w-10 h-10 opacity-30" />
         <span className="text-sm">Waiting for logs…</span>
       </div>
@@ -108,11 +108,11 @@ export const LogsTab = observer(() => {
         <div className="absolute bottom-4 right-4">
           <Button
             size="sm"
-            variant="flat"
-            className="bg-content1/90 backdrop-blur-sm shadow-lg"
+            variant="secondary"
+            className="bg-surface/90 backdrop-blur-sm shadow-lg"
             onPress={scrollToTop}
-            startContent={<ArrowUp className="w-3.5 h-3.5" />}
           >
+            <ArrowUp className="w-3.5 h-3.5" />
             Latest
           </Button>
         </div>

@@ -8,7 +8,11 @@ import { ROUTES } from "../../routes/routes.enum";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import { ChevronRight, ExternalLink, ShieldAlert } from "lucide-react";
 import StatusChip from "../status-chip/StatusChip";
-import { ResourceFilter, subtreeHasMatch } from "../../shared/resourceFilter";
+import {
+  ResourceFilter,
+  collectMatchingSubtrees,
+  nodeMatchesFilter,
+} from "../../shared/resourceFilter";
 import { statusDotClass } from "../../shared/helpers";
 import { useInjection } from "inversify-react";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
@@ -23,24 +27,21 @@ const severityTextClass: Record<string, string> = {
   danger: "text-danger",
   warning: "text-warning",
   success: "text-success",
-  default: "text-default-400",
+  default: "text-muted",
 };
-
-function nodeMatchesFilter(node: KubeResource, filter: ResourceFilter): boolean {
-  const statusMatch = filter.statuses.length === 0 || filter.statuses.includes(node.status);
-  const kindMatch = filter.kinds.length === 0 || filter.kinds.includes(node.kind);
-  return statusMatch && kindMatch;
-}
 
 type ResourceTreeProps = {
   resource?: KubeResource;
   level: number;
   onResourceClick: (node: KubeResource) => void;
   filter?: ResourceFilter;
+  // UIDs whose subtree contains a filter match, precomputed once by the root so
+  // pruning is an O(1) membership test per node instead of a per-node subtree walk.
+  matchSet?: Set<string>;
 };
 
 const ResourceTree: React.FC<ResourceTreeProps> = observer(
-  ({ resource, level = 0, onResourceClick, filter }) => {
+  ({ resource, level = 0, onResourceClick, filter, matchSet }) => {
     const isCollapsedByDefault =
       level > 0 &&
       !!resource &&
@@ -65,7 +66,14 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
     }
 
     const hasActiveFilter = filter && (filter.statuses.length > 0 || filter.kinds.length > 0);
-    if (hasActiveFilter && !subtreeHasMatch(resource, filter!)) {
+    // The root computes the match set once (O(n)); descendants inherit it. Recomputed
+    // each render rather than memoized so it stays correct as the observed tree mutates.
+    const activeMatchSet =
+      hasActiveFilter && level === 0
+        ? collectMatchingSubtrees(resource, filter!)
+        : matchSet;
+
+    if (hasActiveFilter && activeMatchSet && !activeMatchSet.has(resource.uid)) {
       return null;
     }
 
@@ -90,7 +98,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
       <div>
         {/* Node row */}
         <div
-          className={`group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-content2 transition-colors cursor-pointer select-none ${
+          className={`group flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-surface-secondary transition-colors cursor-pointer select-none ${
             dimmed ? "opacity-40" : ""
           }`}
           onClick={() => onResourceClick(resource)}
@@ -98,7 +106,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
           {/* Expand / collapse */}
           {canExpand ? (
             <button
-              className="flex-shrink-0 text-default-400 hover:text-foreground transition-colors"
+              className="flex-shrink-0 text-muted hover:text-foreground transition-colors"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsExpanded((v) => !v);
@@ -128,11 +136,11 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-sm font-semibold truncate">{resource.name}</span>
-              <span className="text-xs text-default-500 flex-shrink-0">
+              <span className="text-xs text-muted flex-shrink-0">
                 {resource.kind}
               </span>
               {resource.namespace && (
-                <span className="text-xs text-default-600 font-mono flex-shrink-0">
+                <span className="text-xs text-foreground font-mono flex-shrink-0">
                   {resource.namespace}
                 </span>
               )}
@@ -146,21 +154,21 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
 
           {/* Trivy findings */}
           {findings && (
-            <Tooltip
-              content={
-                `${totalCves(findings)} CVEs` +
-                (totalOther(findings) > 0
-                  ? `, ${totalOther(findings)} other findings`
-                  : "")
-              }
-              className="dark"
-            >
-              <span
-                className={`flex items-center gap-0.5 flex-shrink-0 text-xs ${severityTextClass[findingsColor]}`}
-              >
-                <ShieldAlert className="w-3.5 h-3.5" />
-                {totalCves(findings) > 0 && totalCves(findings)}
-              </span>
+            <Tooltip>
+              <Tooltip.Trigger>
+                <span
+                  className={`flex items-center gap-0.5 flex-shrink-0 text-xs ${severityTextClass[findingsColor]}`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5" />
+                  {totalCves(findings) > 0 && totalCves(findings)}
+                </span>
+              </Tooltip.Trigger>
+              <Tooltip.Content>
+                {`${totalCves(findings)} CVEs` +
+                  (totalOther(findings) > 0
+                    ? `, ${totalOther(findings)} other findings`
+                    : "")}
+              </Tooltip.Content>
             </Tooltip>
           )}
 
@@ -170,22 +178,25 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
           </div>
 
           {/* Navigate — visible on row hover */}
-          <Tooltip content="Open resource" className="dark">
-            <button
-              className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-default-400 hover:text-foreground p-1 rounded-md hover:bg-default-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                navigate(`${ROUTES.RESOURCE}/${resource.uid}`);
-              }}
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-            </button>
+          <Tooltip>
+            <Tooltip.Trigger>
+              <button
+                className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-muted hover:text-foreground p-1 rounded-md hover:bg-surface-secondary"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`${ROUTES.RESOURCE}/${resource.uid}`);
+                }}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            </Tooltip.Trigger>
+            <Tooltip.Content>Open resource</Tooltip.Content>
           </Tooltip>
         </div>
 
         {/* Children */}
         {shouldShowChildren && (
-          <div className="ml-5 border-l border-default-100 pl-2.5">
+          <div className="ml-5 border-l border-border pl-2.5">
             {resource.children.map((child) => (
               <ResourceTree
                 key={child.uid}
@@ -193,6 +204,7 @@ const ResourceTree: React.FC<ResourceTreeProps> = observer(
                 level={level + 1}
                 onResourceClick={onResourceClick}
                 filter={filter}
+                matchSet={activeMatchSet}
               />
             ))}
           </div>

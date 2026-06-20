@@ -1,10 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
-const addToast = vi.fn();
-vi.mock("@heroui/react", () => ({ addToast: (...a: unknown[]) => addToast(...a) }));
-
 import { WebSocketServiceImpl } from "./webSocket.service.impl";
 import { REALTIME_CONST } from "../../../../../core/realtime/constants/realtime.const";
+import { connectionStatus } from "../../../../../core/realtime/connectionStatus";
 
 class MockWebSocket {
   static OPEN = 1;
@@ -28,7 +26,7 @@ class MockWebSocket {
 describe("WebSocketServiceImpl", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    addToast.mockReset();
+    connectionStatus.markConnected();
     MockWebSocket.instances = [];
     vi.stubGlobal("WebSocket", MockWebSocket);
   });
@@ -45,10 +43,10 @@ describe("WebSocketServiceImpl", () => {
     return { svc, ws };
   };
 
-  it("opens a socket and toasts on open", () => {
+  it("opens a socket and marks the connection live", () => {
     const { ws } = connected();
     expect(ws).toBeDefined();
-    expect(addToast).toHaveBeenCalledWith(expect.objectContaining({ color: "success" }));
+    expect(connectionStatus.phase).toBe("connected");
   });
 
   it("dispatches non-control messages to listeners", () => {
@@ -102,7 +100,7 @@ describe("WebSocketServiceImpl", () => {
   it("reconnects with backoff on an unexpected close", () => {
     const { ws } = connected();
     ws.onclose?.();
-    expect(addToast).toHaveBeenCalledWith(expect.objectContaining({ title: "WebSocket connection closed" }));
+    expect(connectionStatus.phase).toBe("reconnecting");
     vi.advanceTimersByTime(30000);
     // A second socket was created by the reconnect attempt.
     expect(MockWebSocket.instances.length).toBeGreaterThan(1);
@@ -118,14 +116,14 @@ describe("WebSocketServiceImpl", () => {
 
   it("gives up after the maximum number of retries", () => {
     const { ws } = connected();
-    // Force past the retry ceiling.
+    // Force past the retry ceiling: every reconnect attempt closes again without
+    // ever reopening, so the count climbs to maxRetries.
     for (let i = 0; i < 12; i++) {
       const last = MockWebSocket.instances.at(-1)!;
       last.onclose?.();
       vi.advanceTimersByTime(30000);
-      last.onopen?.();
     }
-    expect(addToast).toHaveBeenCalledWith(expect.objectContaining({ title: "Max reconnection attempts reached." }));
+    expect(connectionStatus.phase).toBe("failed");
     expect(ws).toBeDefined();
   });
 });

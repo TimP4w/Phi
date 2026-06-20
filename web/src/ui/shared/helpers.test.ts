@@ -55,7 +55,7 @@ describe("statusDotClass", () => {
     expect(statusDotClass(ResourceStatus.FAILED)).toBe("bg-danger");
     expect(statusDotClass(ResourceStatus.PENDING)).toBe("bg-warning");
     expect(statusDotClass(ResourceStatus.WARNING)).toBe("bg-warning");
-    expect(statusDotClass(ResourceStatus.SUSPENDED)).toBe("bg-default-400");
+    expect(statusDotClass(ResourceStatus.SUSPENDED)).toBe("bg-segment");
   });
 });
 
@@ -103,6 +103,6 @@ describe("conditionDotClass", () => {
   });
 
   it("returns the muted default when nothing matches", () => {
-    expect(conditionDotClass(cond({ type: "Custom", reason: "Whatever" }))).toBe("bg-default-400");
+    expect(conditionDotClass(cond({ type: "Custom", reason: "Whatever" }))).toBe("bg-segment");
   });
 });

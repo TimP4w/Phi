@@ -1,7 +1,6 @@
 import { ReactElement } from "react";
 import { render, RenderOptions } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { HeroUIProvider } from "@heroui/react";
 import { ReactFlowProvider } from "@xyflow/react";
 import { Provider } from "inversify-react";
 import { Container } from "inversify";
@@ -64,10 +63,11 @@ export function renderWithProviders(ui: ReactElement, opts: Options = {}) {
   const { container = makeTestContainer(), route = "/", ...rest } = opts;
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <Provider container={container}>
-      <MemoryRouter initialEntries={[route]}>
-        <HeroUIProvider disableAnimation>
-          <ReactFlowProvider>{children}</ReactFlowProvider>
-        </HeroUIProvider>
+      <MemoryRouter
+        initialEntries={[route]}
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
+        <ReactFlowProvider>{children}</ReactFlowProvider>
       </MemoryRouter>
     </Provider>
   );

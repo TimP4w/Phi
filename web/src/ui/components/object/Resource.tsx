@@ -19,7 +19,7 @@ import AppLogo from "../resource-icon/ResourceIcon";
 import StatusChip from "../status-chip/StatusChip";
 import { Handle, NodeProps, Position, Node } from "@xyflow/react";
 import { ROUTES } from "../../routes/routes.enum";
-import { Pause } from "lucide-react";
+import { ExternalLink, Pause } from "lucide-react";
 import UsageChip from "../metrics/UsageChip";
 
 type ResourceProps = NodeProps<Node<VisualizationNodeData>>;
@@ -99,6 +99,7 @@ function getExtraInfo(node: KubeResource): string | null {
 
 function Resource({ data }: ResourceProps) {
   const treeNode = data.treeNode;
+  const isRoot = data.isRoot ?? false;
 
   const extraInfo = useMemo(() => getExtraInfo(treeNode), [treeNode]);
 
@@ -114,24 +115,29 @@ function Resource({ data }: ResourceProps) {
   const hasFooter = !!(failureMessage || extraInfo || isSuspended);
 
   return (
-    <div className="relative">
-      <Handle type="target" position={Position.Left} />
+    <div className="relative group">
+      {!isRoot && <Handle type="target" position={Position.Left} />}
 
-      <div className="w-[240px] bg-content1 border border-default-200 rounded-lg shadow-sm">
+      <Link
+        to={`${ROUTES.RESOURCE}/${treeNode.uid}`}
+        onClick={(e) => e.stopPropagation()}
+        aria-label="Open resource"
+        className="absolute -top-2 -right-2 z-10 p-1 rounded-md bg-surface border border-border text-muted shadow-sm opacity-0 group-hover:opacity-100 hover:text-foreground hover:bg-surface-secondary transition-all"
+      >
+        <ExternalLink className="w-3 h-3" />
+      </Link>
+
+      <div className="w-[240px] bg-surface border border-border rounded-lg shadow-sm">
         {/* Main row */}
         <div className="flex items-center gap-2.5 px-3 py-2.5">
           <div className="flex-shrink-0">
             <AppLogo groupKind={treeNode.groupKind} />
           </div>
           <div className="flex-1 min-w-0">
-            <Link
-              to={`${ROUTES.RESOURCE}/${treeNode.uid}`}
-              onClick={(e) => e.stopPropagation()}
-              className="text-sm font-semibold truncate block hover:text-primary transition-colors leading-tight"
-            >
+            <span className="text-sm font-semibold truncate block leading-tight">
               {treeNode.name}
-            </Link>
-            <p className="text-xs text-default-500 leading-tight mt-0.5">
+            </span>
+            <p className="text-xs text-muted leading-tight mt-0.5">
               {treeNode.kind}
               {treeNode.namespace ? ` · ${treeNode.namespace}` : ""}
             </p>
@@ -139,7 +145,7 @@ function Resource({ data }: ResourceProps) {
           <div className="flex flex-col items-end gap-1 flex-shrink-0">
             <StatusChip resource={treeNode} />
             {isSuspended && (
-              <span className="flex items-center gap-0.5 text-[10px] text-default-400">
+              <span className="flex items-center gap-0.5 text-[10px] text-muted">
                 <Pause className="w-2.5 h-2.5" />
                 Paused
               </span>
@@ -149,11 +155,11 @@ function Resource({ data }: ResourceProps) {
 
         {/* Footer: type-specific info or failure message */}
         {hasFooter && (
-          <div className="px-3 pb-2 border-t border-default-100 pt-1.5">
+          <div className="px-3 pb-2 border-t border-border pt-1.5">
             {failureMessage ? (
               <p className="text-xs text-danger line-clamp-2 leading-snug">{failureMessage}</p>
             ) : (
-              <p className="text-xs text-default-500 truncate">{extraInfo}</p>
+              <p className="text-xs text-muted truncate">{extraInfo}</p>
             )}
           </div>
         )}

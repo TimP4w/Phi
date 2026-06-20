@@ -5,6 +5,7 @@ import {
   KubeResource,
   ResourceStatus,
   Tree,
+  walkSubtree,
 } from "../../../core/fluxTree/models/tree";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import Widget from "./Widget";
@@ -13,15 +14,17 @@ import {
   Input,
   Modal,
   ModalBody,
-  ModalContent,
   ModalHeader,
   Skeleton,
-  useDisclosure,
+  useOverlayState,
 } from "@heroui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Search } from "lucide-react";
-import { FLUX_KINDS, RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
+import {
+  FLUX_KINDS,
+  RESOURCE_TYPE,
+} from "../../../core/fluxTree/constants/resources.const";
 import HealthButton from "../summary/HealthButton";
 import ResourceRow from "../resource-row/ResourceRow";
 import { statusChipColor } from "../../shared/helpers";
@@ -76,85 +79,40 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     const store = useInjection(FluxTreeStore);
     const tree: Tree = store.tree;
 
-    const { isOpen, onOpen, onOpenChange } = useDisclosure();
-    const [allResources, setAllResources] = useState<KubeResource[]>([]);
+    const { isOpen, open: onOpen, setOpen: onOpenChange } = useOverlayState();
     const [activeStatuses, setActiveStatuses] = useState<Set<string>>(
       new Set([ResourceStatus.FAILED]),
     );
     const [query, setQuery] = useState("");
-    const [resourceCounts, setResourceCounts] = useState({
-      total: 0,
-      ready: 0,
-      notReady: 0,
-      suspended: 0,
-      unknown: 0,
-    });
-
-    const allResourcesRef = useRef<KubeResource[]>([]);
-    allResourcesRef.current = allResources;
     const [frozenResources, setFrozenResources] = useState<KubeResource[]>([]);
 
-    useEffect(() => {
-      if (!resource) return;
-
-      const visited = new Set<string>();
+    const { resourceCounts, allResources } = useMemo(() => {
+      const counts = { total: 0, ready: 0, notReady: 0, suspended: 0, unknown: 0 };
       const collected: KubeResource[] = [];
-
-      const countResources = (
-        node: KubeResource | null,
-        depth = 0,
-      ): {
-        total: number;
-        ready: number;
-        notReady: number;
-        suspended: number;
-        unknown: number;
-      } => {
-        if (!node || visited.has(node.uid))
-          return { total: 0, ready: 0, notReady: 0, suspended: 0, unknown: 0 };
-        visited.add(node.uid);
-
-        // Excluded kinds (e.g. Flux objects) don't count toward the totals or the listed resources, but their children still do.
-        const excluded = excludeKinds?.has(node.kind) ?? false;
-        if (!excluded) collected.push(node);
-
-        let total = excluded ? 0 : 1;
-        let ready = !excluded && node.status === ResourceStatus.SUCCESS ? 1 : 0;
-        let suspended = !excluded && node.status === ResourceStatus.SUSPENDED ? 1 : 0;
-        let unknown = !excluded && node.status === ResourceStatus.UNKNOWN ? 1 : 0;
-        let notReady =
-          !excluded &&
-          node.status !== ResourceStatus.SUCCESS &&
-          node.status !== ResourceStatus.UNKNOWN &&
-          node.status !== ResourceStatus.SUSPENDED
-            ? 1
-            : 0;
-
-        // Never stop at an excluded node (e.g. a nested Kustomization): we still need to walk through it to reach its real, countable descendants, otherwise a Kustomization whose children are all Kustomizations would count 0.
-        const skipChildren =
-          !excluded &&
-          depth > 0 &&
-          (node.kind === RESOURCE_TYPE.KUSTOMIZATION ||
-            node.kind === RESOURCE_TYPE.HELM_RELEASE) &&
-          skipGrandChildren;
-
-        if (!skipChildren) {
-          for (const child of node.children || []) {
-            const c = countResources(child, depth + 1);
-            total += c.total;
-            ready += c.ready;
-            notReady += c.notReady;
-            suspended += c.suspended;
-            unknown += c.unknown;
+      if (resource) {
+        walkSubtree(resource, (node, depth) => {
+          // Excluded kinds (e.g. Flux objects) don't count, but their children do.
+          const excluded = excludeKinds?.has(node.kind) ?? false;
+          if (!excluded) {
+            collected.push(node);
+            counts.total++;
+            if (node.status === ResourceStatus.SUCCESS) counts.ready++;
+            else if (node.status === ResourceStatus.SUSPENDED) counts.suspended++;
+            else if (node.status === ResourceStatus.UNKNOWN) counts.unknown++;
+            else counts.notReady++;
           }
-        }
-
-        return { total, ready, notReady, suspended, unknown };
-      };
-
-      const counts = countResources(resource);
-      setResourceCounts(counts);
-      setAllResources(collected);
+          // Never prune at an excluded node: walk through it to reach countable descendants.
+          return (
+            !excluded &&
+            depth > 0 &&
+            (node.kind === RESOURCE_TYPE.KUSTOMIZATION ||
+              node.kind === RESOURCE_TYPE.HELM_RELEASE) &&
+            skipGrandChildren
+          );
+        });
+      }
+      return { resourceCounts: counts, allResources: collected };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [resource, tree, skipGrandChildren, excludeKinds]);
 
     const sortedResources = useMemo(
@@ -217,13 +175,13 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     const handleOpenChange = () => {
       setActiveStatuses(new Set([ResourceStatus.FAILED]));
       setQuery("");
-      onOpenChange();
+      onOpenChange(false);
     };
 
     if (!resource) {
       return (
         <Skeleton className="rounded-lg">
-          <div className="h-24 rounded-lg bg-default-300" />
+          <div className="h-24 rounded-lg bg-segment" />
         </Skeleton>
       );
     }
@@ -257,7 +215,7 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
           : pendingCount > 0
             ? new Set([ResourceStatus.PENDING, ResourceStatus.WARNING])
             : new Set<string>();
-      setFrozenResources(allResourcesRef.current);
+      setFrozenResources(allResources);
       setActiveStatuses(seed);
       setQuery("");
       onOpen();
@@ -268,111 +226,103 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     );
 
     const modal = (
-      <Modal
-          isOpen={isOpen}
-          onOpenChange={handleOpenChange}
-          size="2xl"
-          className="dark"
-        >
-          <ModalContent>
-            {() => (
-              <>
-                <ModalHeader className="flex items-center gap-2">
-                  Resources
-                  <span className="text-sm font-normal text-default-400 ml-1">
-                    ({filteredResources.length}
-                    {filteredResources.length !== sortedResources.length
-                      ? ` / ${sortedResources.length}`
-                      : ""}
-                    )
-                  </span>
-                </ModalHeader>
-                <ModalBody className="px-0 py-0 gap-0">
-                  {/* Filters */}
-                  <div className="flex flex-col gap-2 px-4 py-3 border-b border-default-100">
-                    <Input
-                      size="sm"
-                      placeholder="Filter resources…"
-                      value={query}
-                      onValueChange={setQuery}
-                      startContent={
-                        <Search className="w-3.5 h-3.5 text-default-400" />
-                      }
-                      isClearable
-                      onClear={() => setQuery("")}
-                    />
-                    {presentStatuses.length > 1 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {presentStatuses.map((status) => {
-                          const active = activeStatuses.has(status);
-                          return (
-                            <Chip
-                              key={status}
-                              size="sm"
-                              variant={active ? "solid" : "flat"}
-                              color={statusChipColor(status)}
-                              className="cursor-pointer"
-                              onClick={() => toggleStatus(status)}
-                            >
-                              {STATUS_LABEL[status] ?? status}
-                            </Chip>
-                          );
-                        })}
-                      </div>
-                    )}
+      <Modal.Backdrop isOpen={isOpen} onOpenChange={handleOpenChange}>
+        <Modal.Container size="lg">
+          <Modal.Dialog className="!max-w-3xl w-full">
+            <Modal.CloseTrigger className="absolute right-3 top-3 z-10" />
+            <ModalHeader className="flex items-center gap-2">
+              Resources
+              <span className="text-sm font-normal text-muted ml-1">
+                ({filteredResources.length}
+                {filteredResources.length !== sortedResources.length
+                  ? ` / ${sortedResources.length}`
+                  : ""}
+                )
+              </span>
+            </ModalHeader>
+            <ModalBody className="px-0 py-0 gap-0">
+              {/* Filters */}
+              <div className="flex flex-col gap-2 px-4 py-3 border-b border-border">
+                <div className="relative w-full">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted pointer-events-none" />
+                  <Input
+                    className="pl-8"
+                    placeholder="Filter resources…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                </div>
+                {presentStatuses.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {presentStatuses.map((status) => {
+                      const active = activeStatuses.has(status);
+                      return (
+                        <Chip
+                          key={status}
+                          size="sm"
+                          variant={active ? "primary" : "soft"}
+                          color={statusChipColor(status)}
+                          className="cursor-pointer"
+                          onClick={() => toggleStatus(status)}
+                        >
+                          {STATUS_LABEL[status] ?? status}
+                        </Chip>
+                      );
+                    })}
                   </div>
+                )}
+              </div>
 
-                  {/* List */}
-                  {filteredResources.length === 0 ? (
-                    <div className="text-center text-default-400 text-sm py-10">
-                      No resources.
-                    </div>
-                  ) : (
-                    <div
-                      ref={scrollRef}
-                      className="overflow-y-auto"
-                      style={{ height: "60vh" }}
-                    >
-                      <div
-                        style={{
-                          height: `${virtualizer.getTotalSize()}px`,
-                          position: "relative",
-                          width: "100%",
-                        }}
-                      >
-                        {virtualizer.getVirtualItems().map((vItem) => {
-                          const res = filteredResources[vItem.index];
-                          return (
-                            <div
-                              key={vItem.key}
-                              className="absolute top-0 left-0 w-full border-b border-default-100 overflow-hidden"
-                              style={{
-                                height: `${ROW_HEIGHT}px`,
-                                transform: `translateY(${vItem.start}px)`,
-                              }}
-                            >
-                              <ResourceRow
-                                resource={res}
-                                className="rounded-none px-4 h-full"
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-                </ModalBody>
-              </>
-            )}
-          </ModalContent>
-        </Modal>
+              {/* List */}
+              {filteredResources.length === 0 ? (
+                <div className="text-center text-muted text-sm py-10">
+                  No resources.
+                </div>
+              ) : (
+                <div
+                  ref={scrollRef}
+                  className="overflow-y-auto"
+                  style={{ height: "60vh" }}
+                >
+                  <div
+                    style={{
+                      height: `${virtualizer.getTotalSize()}px`,
+                      position: "relative",
+                      width: "100%",
+                    }}
+                  >
+                    {virtualizer.getVirtualItems().map((vItem) => {
+                      const res = filteredResources[vItem.index];
+                      return (
+                        <div
+                          key={vItem.key}
+                          className="absolute top-0 left-0 w-full border-b border-border overflow-hidden"
+                          style={{
+                            height: `${ROW_HEIGHT}px`,
+                            transform: `translateY(${vItem.start}px)`,
+                          }}
+                        >
+                          <ResourceRow
+                            resource={res}
+                            className="rounded-none px-4 h-full"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </ModalBody>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
     );
 
     if (bare) {
       return (
         <div className="space-y-2">
           {title && (
-            <p className="text-xs font-semibold text-default-400 uppercase tracking-widest mb-2 px-2">
+            <p className="text-xs font-semibold text-muted uppercase tracking-widest mb-2 px-2">
               {resourceCounts.total} {title}
             </p>
           )}
@@ -383,27 +333,42 @@ const ResourceCountWidget: React.FC<ResourceCountWidgetProps> = observer(
     }
 
     return (
-      <Widget span={1} title="Resources" subtitle="Status of all resources" compact={compact}>
+      <Widget
+        span={1}
+        title="Resources"
+        subtitle="Status of all resources"
+        compact={compact}
+      >
         <div className="space-y-1.5 text-sm">
           <div className="flex justify-between items-center">
-            <span className="text-default-400">Total</span>
-            <span className="text-foreground font-medium">{resourceCounts.total}</span>
+            <span className="text-muted">Total</span>
+            <span className="text-foreground font-medium">
+              {resourceCounts.total}
+            </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-default-400">Ready</span>
-            <span className="text-success font-medium">{resourceCounts.ready}</span>
+            <span className="text-muted">Ready</span>
+            <span className="text-success font-medium">
+              {resourceCounts.ready}
+            </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-default-400">Not Ready</span>
-            <span className="text-danger font-medium">{resourceCounts.notReady}</span>
+            <span className="text-muted">Not Ready</span>
+            <span className="text-danger font-medium">
+              {resourceCounts.notReady}
+            </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-default-400">Suspended</span>
-            <span className="text-default-400 font-medium">{resourceCounts.suspended}</span>
+            <span className="text-muted">Suspended</span>
+            <span className="text-muted font-medium">
+              {resourceCounts.suspended}
+            </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-default-400">Unknown</span>
-            <span className="text-default-500 font-medium">{resourceCounts.unknown}</span>
+            <span className="text-muted">Unknown</span>
+            <span className="text-muted font-medium">
+              {resourceCounts.unknown}
+            </span>
           </div>
         </div>
 

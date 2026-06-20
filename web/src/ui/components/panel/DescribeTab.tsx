@@ -35,7 +35,7 @@ export const DescribeTab = observer(({ describe, isLoading }: DescribeTabProps) 
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full gap-3 text-default-400 py-20">
+      <div className="flex items-center justify-center h-full gap-3 text-muted py-20">
         <Loader2 className="w-5 h-5 animate-spin" />
         <span className="text-sm">Loading resource definition…</span>
       </div>
@@ -44,7 +44,7 @@ export const DescribeTab = observer(({ describe, isLoading }: DescribeTabProps) 
 
   if (!describe) {
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-2 text-default-400">
+      <div className="flex flex-col items-center justify-center h-full gap-2 text-muted">
         <FileText className="w-8 h-8 opacity-30" />
         <span className="text-sm">No resource definition</span>
       </div>
@@ -55,17 +55,15 @@ export const DescribeTab = observer(({ describe, isLoading }: DescribeTabProps) 
     <div className="relative h-full">
       <Button
         size="sm"
-        variant="flat"
+        variant="secondary"
         className="absolute top-3 right-4 z-10"
         onPress={handleCopy}
-        startContent={
-          copied ? (
-            <Check className="w-3.5 h-3.5 text-success" />
-          ) : (
-            <Copy className="w-3.5 h-3.5" />
-          )
-        }
       >
+        {copied ? (
+          <Check className="w-3.5 h-3.5 text-success" />
+        ) : (
+          <Copy className="w-3.5 h-3.5" />
+        )}
         {copied ? "Copied!" : "Copy"}
       </Button>
       <CodeBlock
