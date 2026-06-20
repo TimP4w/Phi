@@ -21,6 +21,7 @@ import InternetNode from "./InternetNode";
 import ExternalIpNode from "./ExternalIpNode";
 import EntrypointNode from "./EntrypointNode";
 import MiddlewareWallNode from "./MiddlewareWallNode";
+import PolicyPeerNode from "./PolicyPeerNode";
 
 type NetworkGraphProps = {
   rootResource?: KubeResource;
@@ -28,9 +29,8 @@ type NetworkGraphProps = {
   treeSize?: number;
 };
 
-// forwardClosure returns the clicked node plus everything reachable downstream
-// (traffic direction) from it, and the ids of the edges along those paths.
-function forwardClosure(
+// forwardClosure returns the clicked node plus everything reachable downstream, and the edges along those paths.
+export function forwardClosure(
   startId: string,
   edges: Edge[],
 ): { nodes: Set<string>; edges: Set<string> } {
@@ -78,6 +78,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
       externalIp: ExternalIpNode,
       entrypoint: EntrypointNode,
       middlewareWall: MiddlewareWallNode,
+      policyPeer: PolicyPeerNode,
     }),
     [],
   );
@@ -95,6 +96,7 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
       return;
     }
     let cancelled = false;
+    let fitTimeout: ReturnType<typeof setTimeout> | undefined;
     networkUseCase
       .execute({ nodeId: rootResource.uid })
       .then(({ nodes: layoutedNodes, edges: layoutedEdges }) => {
@@ -103,11 +105,12 @@ const NetworkGraph: React.FC<NetworkGraphProps> = ({
         setEdges(layoutedEdges);
         if (fitAfterLayout.current) {
           fitAfterLayout.current = false;
-          setTimeout(() => fitView({ duration: 300 }), 50);
+          fitTimeout = setTimeout(() => fitView({ duration: 300 }), 50);
         }
       });
     return () => {
       cancelled = true;
+      if (fitTimeout) clearTimeout(fitTimeout);
     };
   }, [rootResource?.uid, treeSize, networkUseCase, setNodes, setEdges, fitView]);
 

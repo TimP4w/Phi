@@ -5,6 +5,8 @@ import { WebSocketServiceImpl } from "../../infrastructure/backend/websocket/ser
 import { WebSocketService } from "../realtime/services/webSocket.service";
 import { HttpService } from "../http/services/http.service";
 import { HttpServiceImpl } from "../../infrastructure/backend/http/services/impl/http.service.impl";
+import { Notifier } from "../shared/notifier";
+import { ToastNotifier } from "../../infrastructure/notifier/toastNotifier.impl";
 import { TreeService } from '../fluxTree/services/tree.service';
 import { TreeServiceImpl } from '../fluxTree/services/impl/tree.service.impl';
 import { ResourceService } from '../resource/services/resource.service';
@@ -24,8 +26,16 @@ import { HandleWsMessageUseCase } from "../realtime/usecases/handleWsMessage.use
 import { MetricsStore } from "../metrics/stores/metrics.store";
 import { WatchMetricsUseCase } from "../metrics/usecases/watchMetrics.usecase";
 import { StopWatchMetricsUseCase } from "../metrics/usecases/stopWatchMetrics.usecase";
+import { GetTrivyFindingsUseCase } from "../trivy/usecases/getTrivyFindings.usecase";
 
 const container = new Container();
+
+// Binding-token convention:
+//   - Concrete classes (the stores below) bind to themselves by class token.
+//     The class is a real runtime value, so it doubles as a type-safe key and
+//     callers get inference for free: `useInjection(FluxTreeStore)`.
+//   - Interfaces (services, infra, notifier) have no runtime value, so they
+//     bind under a TYPES symbol: `useInjection<HttpService>(TYPES.Http)`.
 
 /* Stores */
 container.bind(FluxTreeStore).toSelf().inSingletonScope();
@@ -40,6 +50,7 @@ container.bind<TrivyService>(TYPES.TrivyService).to(TrivyServiceImpl).inSingleto
 /* Infra */
 container.bind<WebSocketService>(TYPES.WebSocket).to(WebSocketServiceImpl).inSingletonScope();
 container.bind<HttpService>(TYPES.Http).to(HttpServiceImpl).inSingletonScope();
+container.bind<Notifier>(TYPES.Notifier).to(ToastNotifier).inSingletonScope();
 
 /* Use cases */
 container.bind(TYPES.ReconcileUseCase).to(ReconcileUseCase).inSingletonScope();
@@ -53,5 +64,6 @@ container.bind(TYPES.NetworkTopologyUseCase).to(NetworkTopologyUseCase).inSingle
 container.bind(TYPES.HandleWsMessageUseCase).to(HandleWsMessageUseCase).inSingletonScope();
 container.bind(TYPES.WatchMetricsUseCase).to(WatchMetricsUseCase).inSingletonScope();
 container.bind(TYPES.StopWatchMetricsUseCase).to(StopWatchMetricsUseCase).inSingletonScope();
+container.bind(TYPES.GetTrivyFindingsUseCase).to(GetTrivyFindingsUseCase).inSingletonScope();
 
 export { container };

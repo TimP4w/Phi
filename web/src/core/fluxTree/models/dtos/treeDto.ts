@@ -50,9 +50,7 @@ export type TreeNodeDto = {
   trivyMetadata?: TrivyMetadataDto;
 };
 
-// TrivyMetadataDto is the per-report summary streamed on Trivy Operator report
-// resources. The full findings arrays are fetched on demand via the Trivy
-// findings endpoint, not carried here.
+// TrivyMetadataDto is the per-report summary streamed on Trivy Operator report resources.
 export type TrivyMetadataDto = {
   reportType?: "vulnerability" | "configAudit" | "exposedSecret" | "rbacAssessment";
   critical?: number;
@@ -117,11 +115,30 @@ export type CertificateMetadataDto = {
   dnsNames?: string[];
 };
 
+export type NetworkPolicyPortDto = {
+  protocol?: string;
+  port?: string;
+  endPort?: number;
+};
+
+export type NetworkPolicyPeerDto = {
+  podSelector?: Record<string, string>;
+  namespaceSelector?: Record<string, string>;
+  ipBlock?: string;
+};
+
+export type NetworkPolicyRuleDto = {
+  peers?: NetworkPolicyPeerDto[];
+  ports?: NetworkPolicyPortDto[];
+};
+
 export type NetworkPolicyMetadataDto = {
   podSelector?: Record<string, string>;
   policyTypes?: string[];
   ingressRules?: number;
   egressRules?: number;
+  ingress?: NetworkPolicyRuleDto[];
+  egress?: NetworkPolicyRuleDto[];
 };
 
 export type ProxyMetadataDto = {

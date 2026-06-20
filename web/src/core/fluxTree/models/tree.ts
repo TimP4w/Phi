@@ -77,7 +77,6 @@ export class KubeResource {
   parentIDs: string[];
   status: ResourceStatus;
   conditions: Condition[] = [];
-  logs: PodLog[] = [];
   isFluxManaged: boolean = false;
   isReconcilable: boolean = false;
   // Classification facts from the backend GroupKind registry (see treeDto).

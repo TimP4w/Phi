@@ -19,20 +19,20 @@ const Header: React.FC<HeaderProps> = observer(
             <Link to="/" className="mr-6 flex items-center space-x-2">
               <span className="text-5xl text-white">Φ</span>{" "}
               <span className="text-3xl font-bold text-white">Phi</span>
-              <a href={env.GIT_URL} target="_blank" rel="noreferrer">
-                <Chip size="sm" variant="flat">
-                  <div className="flex items-center gap-2">
-                    <span className="footer__version">{env.VERSION}</span>
-                    <SiGithub className="h-4 w-4" />
-                  </div>
-                </Chip>
-              </a>
             </Link>
 
             <FluxControllersHeader />
           </div>
-          <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">
+          <div className="flex flex-1 items-center justify-end gap-2">
             {children}
+            <a href={env.GIT_URL} target="_blank" rel="noreferrer">
+              <Chip size="sm" variant="flat">
+                <div className="flex items-center gap-2">
+                  <span className="footer__version">{env.VERSION}</span>
+                  <SiGithub className="h-4 w-4" />
+                </div>
+              </Chip>
+            </a>
           </div>
         </div>
       </header>

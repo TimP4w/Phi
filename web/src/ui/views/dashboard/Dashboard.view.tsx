@@ -4,54 +4,25 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { observer } from "mobx-react-lite";
 import { FluxTreeStore } from "../../../core/fluxTree/stores/fluxTree.store";
 import { useInjection } from "inversify-react";
-import { FluxResource } from "../../../core/fluxTree/models/tree";
-import { FLUX_KINDS, RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
+import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
 import { Chip, Input } from "@heroui/react";
 import FluxResourceCard from "../../components/flux-resource-card/FluxResourceCard";
-import FluxApplicationsWidget from "../../components/widgets/FluxApplicationsWidget";
-import FluxControllersWidget from "../../components/widgets/FluxControllersWidget";
-import FluxKindsWidget from "../../components/widgets/FluxKindsWidget";
 import { useSessionState } from "../../../core/utils/useSessionState";
 import Header from "../../components/layout/Header";
 import { SiFlux } from "@icons-pack/react-simple-icons";
-import ResourceCountWidget from "../../components/widgets/ResourcesCountWidget";
-import { EventsStore } from "../../../core/fluxTree/stores/events.store";
-import { Bell, Search, X } from "lucide-react";
+import { PanelRightClose, PanelRightOpen, Search, X } from "lucide-react";
 import { TYPES } from "../../../core/shared/types";
 import { WatchMetricsUseCase } from "../../../core/metrics/usecases/watchMetrics.usecase";
 import { StopWatchMetricsUseCase } from "../../../core/metrics/usecases/stopWatchMetrics.usecase";
-import NodeUsageWidget from "../../components/widgets/NodeUsageWidget";
-import LonghornVolumesWidget from "../../components/widgets/LonghornVolumesWidget";
-import TrivyFindingsWidget from "../../components/widgets/TrivyFindingsWidget";
-import { clusterSummary } from "../../../core/trivy/trivy";
-import EventsPanel, { EventFilter } from "../../components/events/EventsPanel";
-import { STATUS_BUCKETS } from "../../shared/helpers";
-
-const kindsFilter = FLUX_KINDS.map((kind) => ({
-  label: kind,
-  key: kind,
-  filter: (r: FluxResource) => r.kind === kind,
-}));
-
-const statusFilter = STATUS_BUCKETS.map((bucket) => ({
-  label: bucket.label,
-  key: bucket.status,
-  color: bucket.color,
-  filter: (r: FluxResource) => bucket.matches(r.status),
-}));
-
-const suspendedFilter = [
-  {
-    label: "Suspended",
-    key: "suspended",
-    filter: (r: FluxResource) => !!r.isSuspended,
-  },
-  {
-    label: "Active",
-    key: "resumed",
-    filter: (r: FluxResource) => !r.isSuspended,
-  },
-];
+import ClusterInspector from "../../components/summary/ClusterInspector";
+import {
+  ApplicationFilter,
+  KIND_FILTERS,
+  STATUS_FILTERS,
+  SUSPEND_FILTERS,
+  applicationMatchesFilter,
+  hasActiveApplicationFilter,
+} from "../../shared/applicationFilter";
 
 enum APP_FILTER {
   KIND,
@@ -61,7 +32,6 @@ enum APP_FILTER {
 
 const AppsView: React.FC = observer(() => {
   const fluxTreeStore = useInjection(FluxTreeStore);
-  const eventsStore = useInjection(EventsStore);
   const watchMetrics = useInjection<WatchMetricsUseCase>(TYPES.WatchMetricsUseCase);
   const stopWatchMetrics = useInjection<StopWatchMetricsUseCase>(TYPES.StopWatchMetricsUseCase);
 
@@ -88,8 +58,10 @@ const AppsView: React.FC = observer(() => {
   const [selectedStatusesToFilter, setSelectedStatusesToFilter] = useSessionState<string[]>("StatusesFilter", []);
   const [selectedSuspendStatusesToFilter, setSelectedSuspendStatusesToFilter] = useSessionState<string[]>("SuspendFilter", []);
   const [searchValue, setSearchValue] = useSessionState<string>("SearchValueFilter", "");
-  const [eventFilter, setEventFilter] = useState<EventFilter>("all");
-  const [eventSidebarOpen, setEventSidebarOpen] = useState(true);
+  // Open by default on desktop, closed on the full-screen mobile overlay.
+  const [sidebarOpen, setSidebarOpen] = useState(
+    () => typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches,
+  );
   const searchRef = useRef<HTMLInputElement>(null);
   const [searchFocused, setSearchFocused] = useState(false);
 
@@ -134,41 +106,18 @@ const AppsView: React.FC = observer(() => {
     }
   };
 
-  const filterFunction = (resource: FluxResource) => {
-    // Search: must match if search value is set
-    if (searchValue && !resource.name.toLowerCase().includes(searchValue.toLowerCase())) return false;
-
-    // Kinds: if any kinds selected, resource must match at least one (OR within group)
-    if (selectedKindsToFilter.length > 0) {
-      const ok = kindsFilter.some(f => selectedKindsToFilter.includes(f.key) && f.filter(resource));
-      if (!ok) return false;
-    }
-
-    // Statuses: if any statuses selected, resource must match at least one (OR within group)
-    if (selectedStatusesToFilter.length > 0) {
-      const ok = statusFilter.some(f => selectedStatusesToFilter.includes(f.key) && f.filter(resource));
-      if (!ok) return false;
-    }
-
-    // Suspend status: if any suspend statuses selected, resource must match at least one (OR within group)
-    if (selectedSuspendStatusesToFilter.length > 0) {
-      const ok = suspendedFilter.some(f => selectedSuspendStatusesToFilter.includes(f.key) && f.filter(resource));
-      if (!ok) return false;
-    }
-
-    return true;
+  const filter: ApplicationFilter = {
+    search: searchValue,
+    kinds: selectedKindsToFilter,
+    statuses: selectedStatusesToFilter,
+    suspend: selectedSuspendStatusesToFilter,
   };
 
-  const filtered = [
-    ...fluxTreeStore.applications,
-    ...fluxTreeStore.repositories,
-  ].filter(filterFunction);
+  const filtered = fluxTreeStore.dashboardResources.filter((r) =>
+    applicationMatchesFilter(r, filter),
+  );
 
-  const hasActiveFilters =
-    selectedKindsToFilter.length > 0 ||
-    selectedStatusesToFilter.length > 0 ||
-    selectedSuspendStatusesToFilter.length > 0 ||
-    searchValue.length > 0;
+  const hasActiveFilters = hasActiveApplicationFilter(filter);
 
   const clearFilters = () => {
     setSelectedKindsToFilter([]);
@@ -177,63 +126,14 @@ const AppsView: React.FC = observer(() => {
     setSearchValue("");
   };
 
-  const displayedEvents = eventsStore.events
-    .filter((e) => eventFilter === "all" || e.type === eventFilter)
-    .slice()
-    .sort((a, b) => b.lastObserved.getTime() - a.lastObserved.getTime());
-
-  const warningCount = eventsStore.events.filter((e) => e.type === "Warning").length;
-
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
-      <Header>
-        <button
-          className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0 ${
-            eventSidebarOpen
-              ? "border-default-200 bg-content2 text-foreground"
-              : "border-default-100 bg-content1 hover:bg-content2 text-default-400 hover:text-foreground"
-          }`}
-          onClick={() => setEventSidebarOpen((o) => !o)}
-        >
-          <Bell className="w-3.5 h-3.5" />
-          Events
-          {warningCount > 0 && (
-            <Chip size="sm" color="warning" variant="flat" className="h-4 text-xs">
-              {warningCount}
-            </Chip>
-          )}
-        </button>
-      </Header>
+      <Header />
 
-      <div className="flex-1 flex overflow-hidden min-h-0">
-        {/* Main content */}
+      <div className="flex-1 flex overflow-hidden min-h-0 relative">
         <main className="flex-1 overflow-y-auto">
           <div className="px-8 py-6 flex flex-col gap-6">
 
-            {/* Widgets row */}
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              {/* Controllers live in the header on lg+; surface the widget on
-                  smaller screens where the header pills are hidden. */}
-              <div className="lg:hidden">
-                <FluxControllersWidget />
-              </div>
-              <FluxApplicationsWidget
-                filters={selectedStatusesToFilter}
-                toggleStatusFilter={(status) => onFilterToggle(status, APP_FILTER.STATUS)}
-              />
-              <FluxKindsWidget
-                filters={selectedKindsToFilter}
-                toggleKindsFilter={(kind) => onFilterToggle(kind, APP_FILTER.KIND)}
-              />
-              <ResourceCountWidget resource={fluxTreeStore.root} />
-              <NodeUsageWidget />
-              <LonghornVolumesWidget />
-              <TrivyFindingsWidget
-                summary={clusterSummary(fluxTreeStore.resources.values())}
-              />
-            </div>
-
-            {/* Section header */}
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-3">
                 <SiFlux color="#326CE5" className="w-5 h-5 flex-shrink-0" />
@@ -244,9 +144,23 @@ const AppsView: React.FC = observer(() => {
                     {hasActiveFilters ? " matching filters" : " total"}
                   </p>
                 </div>
+                <button
+                  className={`ml-auto flex items-center justify-center w-8 h-8 rounded-lg border transition-colors flex-shrink-0 ${
+                    sidebarOpen
+                      ? "border-default-200 bg-content2 text-foreground"
+                      : "border-default-100 bg-content1 hover:bg-content2 text-default-400 hover:text-foreground"
+                  }`}
+                  onClick={() => setSidebarOpen((o) => !o)}
+                  aria-label={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+                >
+                  {sidebarOpen ? (
+                    <PanelRightClose className="w-4 h-4" />
+                  ) : (
+                    <PanelRightOpen className="w-4 h-4" />
+                  )}
+                </button>
               </div>
 
-              {/* Filter bar */}
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   ref={searchRef}
@@ -264,7 +178,7 @@ const AppsView: React.FC = observer(() => {
                 />
 
                 <div className="flex flex-wrap items-center gap-1">
-                  {statusFilter.map((f) => (
+                  {STATUS_FILTERS.map((f) => (
                     <Chip
                       key={f.key}
                       size="sm"
@@ -281,7 +195,7 @@ const AppsView: React.FC = observer(() => {
                 <div className="h-4 w-px bg-default-200 hidden sm:block" />
 
                 <div className="flex flex-wrap items-center gap-1">
-                  {kindsFilter.map((f) => (
+                  {KIND_FILTERS.map((f) => (
                     <Chip
                       key={f.key}
                       size="sm"
@@ -297,7 +211,7 @@ const AppsView: React.FC = observer(() => {
                 <div className="h-4 w-px bg-default-200 hidden sm:block" />
 
                 <div className="flex flex-wrap items-center gap-1">
-                  {suspendedFilter.map((f) => (
+                  {SUSPEND_FILTERS.map((f) => (
                     <Chip
                       key={f.key}
                       size="sm"
@@ -322,7 +236,6 @@ const AppsView: React.FC = observer(() => {
               </div>
             </div>
 
-            {/* Resource grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-8">
               {filtered.length > 0 ? (
                 filtered.map((resource) => (
@@ -338,35 +251,17 @@ const AppsView: React.FC = observer(() => {
           </div>
         </main>
 
-        {/* Events sidebar */}
+        {/* Right rail: overlays the content on small screens so it never squeezes the main column off-screen. */}
         <aside
-          className={`flex-shrink-0 border-l border-default-100 flex flex-col overflow-hidden transition-all duration-300 ${
-            eventSidebarOpen ? "w-[480px]" : "w-0"
+          className={`flex-shrink-0 border-l border-default-100 overflow-y-auto bg-background transition-all duration-300 absolute inset-y-0 right-0 z-30 lg:static lg:z-auto ${
+            sidebarOpen ? "w-full sm:w-[440px]" : "w-0"
           }`}
         >
-          {/* Sidebar header */}
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-default-100 flex-shrink-0">
-            <span className="text-sm font-semibold">Events</span>
-            {warningCount > 0 && (
-              <Chip size="sm" color="warning" variant="flat" className="text-xs h-5">
-                {warningCount}
-              </Chip>
-            )}
-            <button
-              className="ml-auto p-1 rounded-md text-default-400 hover:text-foreground hover:bg-content2 transition-colors"
-              onClick={() => setEventSidebarOpen(false)}
-              aria-label="Close events sidebar"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {eventSidebarOpen && (
-            <EventsPanel
-              events={displayedEvents}
-              filter={eventFilter}
-              onFilterChange={setEventFilter}
-              linkLabel={(event) => `${event.kind}/${event.name}`}
+          {sidebarOpen && (
+            <ClusterInspector
+              onClose={() => setSidebarOpen(false)}
+              selectedKinds={selectedKindsToFilter}
+              onToggleKind={(kind) => onFilterToggle(kind, APP_FILTER.KIND)}
             />
           )}
         </aside>

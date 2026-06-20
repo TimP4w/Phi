@@ -10,6 +10,7 @@ import {
   ChevronRight,
   GitCommitHorizontal,
   HardDrive,
+  X,
 } from "lucide-react";
 
 import {
@@ -19,9 +20,6 @@ import {
   HelmRelease,
   KubeResource,
   Kustomization,
-  LonghornVolume,
-  PersistentVolume,
-  PersistentVolumeClaim,
   Pod,
   ResourceStatus,
 } from "../../../core/fluxTree/models/tree";
@@ -45,7 +43,8 @@ import {
   totalCves,
   totalOther,
 } from "../../../core/trivy/trivy";
-import { formatBytes } from "../../shared/format";
+import { formatBytes, gitCommitUrl, shortRevision } from "../../shared/format";
+import { collectVolumes, volumeSize } from "../../shared/volumes";
 import { ROUTES } from "../../routes/routes.enum";
 
 import StatusChip from "../status-chip/StatusChip";
@@ -58,36 +57,28 @@ import { LogsTab } from "./LogsTab";
 import MetricsTab from "./MetricsTab";
 import TrivyFindingsModal from "../widgets/TrivyFindingsModal";
 import ResourceCountWidget from "../widgets/ResourcesCountWidget";
+import ReconciliationSection from "../summary/Reconciliation";
 
 type ResourceDetailPanelProps = {
   node?: KubeResource;
+  // Mobile-only close handler (the panel is a full-screen overlay on mobile).
+  onClose?: () => void;
 };
 
-type VolumeNode = PersistentVolumeClaim | PersistentVolume | LonghornVolume;
-
-const isVolume = (n: KubeResource): n is VolumeNode =>
-  n instanceof PersistentVolumeClaim ||
-  n instanceof PersistentVolume ||
-  n instanceof LonghornVolume;
-
-const volumeSize = (n: VolumeNode): number => {
-  if (n instanceof PersistentVolumeClaim) return n.metadata?.requested ?? 0;
-  if (n instanceof PersistentVolume) return n.metadata?.capacity ?? 0;
-  return n.metadata?.size ?? 0;
-};
-
-function collectVolumes(root: KubeResource): VolumeNode[] {
-  const out: VolumeNode[] = [];
-  const visited = new Set<string>();
-  const visit = (n: KubeResource) => {
-    if (visited.has(n.uid)) return;
-    visited.add(n.uid);
-    if (isVolume(n)) out.push(n);
-    n.children.forEach(visit);
-  };
-  visit(root);
-  return out;
-}
+/** Small close button shown only on mobile, where the panel is full-screen. */
+const MobileClose = ({ onClose }: { onClose?: () => void }) =>
+  onClose ? (
+    <div className="md:hidden flex items-center justify-end px-2 py-1.5 border-b border-default-100 flex-shrink-0">
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close details"
+        className="p-1.5 rounded-md text-default-400 hover:text-foreground hover:bg-content2 transition-colors"
+      >
+        <X className="w-4 h-4" />
+      </button>
+    </div>
+  ) : null;
 
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
   <p className="text-xs font-semibold text-default-400 uppercase tracking-widest mb-2 px-2">
@@ -210,23 +201,6 @@ const DependsOnPills = ({ deps }: { deps: Kustomization[] }) => (
     ))}
   </div>
 );
-
-// Last path segment of a flux revision (e.g. "main@sha1:abcdef" → "abcdef").
-const shortRevision = (rev: string): string => {
-  const tail = rev.split(/[:@]/).pop() ?? rev;
-  return tail.length > 12 ? tail.slice(0, 12) : tail;
-};
-
-// Web URL for a commit, derived from a git remote (https or git@ssh form).
-const gitCommitUrl = (repoUrl: string, sha: string): string => {
-  const host = repoUrl
-    .replace(/^https?:\/\//, "")
-    .replace(/^ssh:\/\//, "")
-    .replace(/^git@/, "")
-    .replace(/\.git$/, "")
-    .replace(":", "/");
-  return `https://${host}/commit/${sha}`;
-};
 
 type Pill = {
   label: string;
@@ -495,6 +469,7 @@ const SecurityPanel = ({ summary }: { summary: TrivySummary }) => {
 
 const ResourceDetailPanel = observer(function ResourceDetailPanel({
   node,
+  onClose,
 }: ResourceDetailPanelProps) {
   const fluxTreeStore = useInjection(FluxTreeStore);
   const eventsStore = useInjection(EventsStore);
@@ -558,12 +533,12 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
     }
   }, [node, metricsEligible, watchMetrics, stopWatchMetrics, metricsRange]);
 
-  const allEvents = node ? eventsStore.eventsForResource(node.uid) : [];
-  const warningCount = allEvents.filter((e) => e.type === "Warning").length;
-  const displayedEvents = allEvents
-    .filter((e) => eventFilter === "all" || e.type === eventFilter)
-    .slice()
-    .sort((a, b) => b.lastObserved.getTime() - a.lastObserved.getTime());
+  const sortedEvents = node ? eventsStore.sortedEventsForResource(node.uid) : [];
+  const eventCount = sortedEvents.length;
+  const warningCount = node ? eventsStore.warningCountForResource(node.uid) : 0;
+  const displayedEvents = sortedEvents.filter(
+    (e) => eventFilter === "all" || e.type === eventFilter,
+  );
 
   const volumes = useMemo(
     () => (node ? collectVolumes(node) : []),
@@ -574,8 +549,11 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
 
   if (!node) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-default-400 px-6 text-center">
-        Select a resource to see its details.
+      <div className="h-full flex flex-col">
+        <MobileClose onClose={onClose} />
+        <div className="flex-1 flex items-center justify-center text-sm text-default-400 px-6 text-center">
+          Select a resource to see its details.
+        </div>
       </div>
     );
   }
@@ -613,13 +591,16 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
 
   return (
     <div className="flex flex-col h-full">
+      <MobileClose onClose={onClose} />
       <Tabs
         aria-label="Resource detail"
         variant="underlined"
         selectedKey={activeTab}
         onSelectionChange={(k) => setActiveTab(String(k))}
         classNames={{
-          base: "px-4 pt-1 flex-shrink-0",
+          // w-full + min-w-0 caps the base to the panel width so the tab strip scrolls; scrollbar-default re-shows it.
+          base: "px-4 pt-1 flex-shrink-0 w-full min-w-0",
+          tabList: "w-full scrollbar-default",
           panel: "flex-1 overflow-y-auto min-h-0 p-0",
         }}
       >
@@ -678,10 +659,14 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
               </div>
             )}
 
-            <div className="space-y-2">
-              <SectionTitle>Subresources</SectionTitle>
-              <ResourceCountWidget resource={node} skipGrandChildren bare />
-            </div>
+            <ReconciliationSection root={node} />
+
+            <ResourceCountWidget
+              resource={node}
+              skipGrandChildren
+              bare
+              title="Subresources"
+            />
 
             <InfoTab resource={node} hideStorage />
           </div>
@@ -728,14 +713,14 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
             <TabTitle
               label="Events"
               badge={
-                allEvents.length > 0 ? (
+                eventCount > 0 ? (
                   <Chip
                     size="sm"
                     color={warningCount > 0 ? "warning" : "default"}
                     variant="flat"
                     className="h-4 text-xs"
                   >
-                    {allEvents.length}
+                    {eventCount}
                   </Chip>
                 ) : undefined
               }
@@ -747,7 +732,7 @@ const ResourceDetailPanel = observer(function ResourceDetailPanel({
               events={displayedEvents}
               filter={eventFilter}
               onFilterChange={setEventFilter}
-              totalEventCount={allEvents.length}
+              totalEventCount={eventCount}
               showCount
             />
           </div>

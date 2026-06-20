@@ -40,6 +40,10 @@ test-be:
 	@echo "Running backend tests..."
 	cd $(BACKEND_DIR) && CGO_ENABLED=0 $(GOTEST) -v ./...
 
+test-fe:
+	@echo "Running frontend tests..."
+	cd $(FRONTEND_DIR) && yarn test
+
 test-be-coverage:
 	@echo "Running backend tests with coverage..."
 	cd $(BACKEND_DIR) && CGO_ENABLED=0 $(GOTEST) -v -coverprofile=coverage.out ./...
@@ -75,7 +79,7 @@ swagger:
 
 build: deps-be deps-fe build-fe build-be
 
-test: test-be
+test: test-be test-fe
 
 
-.PHONY: build-be run-be clean-be test-be deps-be deps-fe build-fe clean-fe build clean test swagger
+.PHONY: build-be run-be clean-be test-be test-fe deps-be deps-fe build-fe clean-fe build clean test swagger

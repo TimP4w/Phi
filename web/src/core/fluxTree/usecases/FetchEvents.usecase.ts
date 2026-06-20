@@ -4,13 +4,14 @@ import UseCase from "../../shared/usecase";
 import type { TreeService } from "../services/tree.service";
 import { KubeEvent } from "../models/kubeEvent";
 import { EventsStore } from "../stores/events.store";
-import { addToast } from "@heroui/react";
+import type { Notifier } from "../../shared/notifier";
 
 @injectable()
 export class FetchEventsUseCase extends UseCase<void, Promise<KubeEvent[]>> {
   constructor(
     @inject(EventsStore) private readonly eventsStore: EventsStore,
     @inject(TYPES.TreeService) private readonly treeService: TreeService,
+    @inject(TYPES.Notifier) private readonly notifier: Notifier,
   ) {
     super();
   }
@@ -21,10 +22,7 @@ export class FetchEventsUseCase extends UseCase<void, Promise<KubeEvent[]>> {
       this.eventsStore.setEvents(events);
       return Promise.resolve(events);
     } catch (error) {
-      addToast({
-        title: "Failed to fetch events",
-        color: "danger",
-      });
+      this.notifier.error("Failed to fetch events");
       console.error('Failed to fetch events:', error);
       return Promise.reject(error);
     }

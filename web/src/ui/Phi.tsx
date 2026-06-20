@@ -10,7 +10,12 @@ export default function Phi() {
   const navigate = useNavigate();
 
   return (
-    <HeroUIProvider navigate={navigate} useHref={useHref}>
+    <HeroUIProvider
+      navigate={navigate}
+      useHref={useHref}
+      // jsdom tears down before framer-motion's async feature load resolves; skip it under test.
+      disableAnimation={import.meta.env.MODE === "test"}
+    >
       <ToastProvider
         placement="bottom-right"
         toastProps={{

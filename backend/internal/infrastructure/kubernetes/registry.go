@@ -4,13 +4,12 @@ import (
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // mapperFunc enriches a Resource with kind-specific metadata from the object.
 type mapperFunc func(el *kube.Resource, obj unstructured.Unstructured)
 
-func gkOf(group, kind string) schema.GroupKind { return schema.GroupKind{Group: group, Kind: kind} }
+func gkOf(group, kind string) kube.GroupKind { return kube.GroupKind{Group: group, Kind: kind} }
 
 // Well-known API groups used as registry keys.
 const (
@@ -34,8 +33,8 @@ var traefikGroups = []string{"traefik.io", "traefik.containo.us"}
 // mapperRegistry dispatches a resource to its metadata mapper by GroupKind; absent kinds use mapGenericData.
 var mapperRegistry = buildMapperRegistry()
 
-func buildMapperRegistry() map[schema.GroupKind]mapperFunc {
-	r := map[schema.GroupKind]mapperFunc{
+func buildMapperRegistry() map[kube.GroupKind]mapperFunc {
+	r := map[kube.GroupKind]mapperFunc{
 		gkOf(groupFluxKustom, "Kustomization"):  mapKustomizationData,
 		gkOf(groupFluxHelm, "HelmRelease"):      mapHelmReleaseData,
 		gkOf(groupFluxSource, "GitRepository"):  mapGitRepositoryData,

@@ -45,6 +45,17 @@ class EventsStore {
     return this.events.filter(e => e.resourceUID === resourceUID);
   }
 
+  // Events for a resource, newest first — what the detail panel renders.
+  sortedEventsForResource(resourceUID: string): KubeEvent[] {
+    return this.eventsForResource(resourceUID)
+      .slice()
+      .sort((a, b) => b.lastObserved.getTime() - a.lastObserved.getTime());
+  }
+
+  warningCountForResource(resourceUID: string): number {
+    return this.eventsForResource(resourceUID).filter(e => e.type === "Warning").length;
+  }
+
   clearEventsHint() {
     this.hasNewEvents = false;
     this.hasNewWarnings = false;

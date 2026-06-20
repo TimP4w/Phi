@@ -5,13 +5,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func TestGroupKind(t *testing.T) {
-	assert.Equal(t, schema.GroupKind{Group: "", Kind: "Pod"}, (&Resource{Kind: "Pod"}).GroupKind())
+	assert.Equal(t, GroupKind{Group: "", Kind: "Pod"}, (&Resource{Kind: "Pod"}).GroupKind())
 	assert.Equal(t,
-		schema.GroupKind{Group: "apps", Kind: "Deployment"},
+		GroupKind{Group: "apps", Kind: "Deployment"},
 		(&Resource{Kind: "Deployment", Group: "apps"}).GroupKind())
 }
 
@@ -44,7 +43,7 @@ func TestClassificationIsGroupAware(t *testing.T) {
 }
 
 func TestClassificationForUnknownIsZero(t *testing.T) {
-	assert.Equal(t, Classification{}, ClassificationFor(schema.GroupKind{Kind: "Widget", Group: "example.com"}))
+	assert.Equal(t, Classification{}, ClassificationFor(GroupKind{Kind: "Widget", Group: "example.com"}))
 }
 
 func TestMarshalJSONEmitsClassification(t *testing.T) {

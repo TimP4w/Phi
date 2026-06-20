@@ -2,7 +2,6 @@ package logging
 
 import (
 	"fmt"
-	"os"
 	"sync"
 
 	"go.uber.org/zap"
@@ -132,47 +131,6 @@ func getLogger() *zap.SugaredLogger {
 		Init(DefaultConfig())
 	}
 	return globalLogger
-}
-
-// Debug logs a message at debug level with optional fields
-func Debug(msg string, args ...interface{}) {
-	getLogger().Debugf(msg, args...)
-}
-
-// Info logs a message at info level with optional fields
-func Info(msg string, args ...interface{}) {
-	getLogger().Infof(msg, args...)
-}
-
-// Warn logs a message at warn level with optional fields
-func Warn(msg string, args ...interface{}) {
-	getLogger().Warnf(msg, args...)
-}
-
-// Fatal logs a message at fatal level with optional fields and then exits
-func Fatal(msg string, args ...interface{}) {
-	getLogger().Fatalf(msg, args...)
-	// Zap's Fatal already calls os.Exit(1), but we'll add it here for clarity
-	os.Exit(1)
-}
-
-// With creates a child logger with additional structured context
-func With(fields map[string]interface{}) *zap.SugaredLogger {
-	args := make([]interface{}, 0, len(fields)*2)
-	for k, v := range fields {
-		args = append(args, k, v)
-	}
-	return getLogger().With(args...)
-}
-
-// GetSugaredLogger returns the underlying sugared logger for more advanced usage
-func GetSugaredLogger() *zap.SugaredLogger {
-	return getLogger()
-}
-
-// GetZapLogger returns the underlying zap logger for more advanced usage
-func GetZapLogger() *zap.Logger {
-	return getLogger().Desugar()
 }
 
 // Sync flushes any buffered log entries. Applications should take care to call

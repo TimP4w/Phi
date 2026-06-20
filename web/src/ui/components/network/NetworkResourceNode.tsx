@@ -1,11 +1,15 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { Handle, NodeProps, Position, Node } from "@xyflow/react";
-import { Lock } from "lucide-react";
+import { Lock, ShieldAlert } from "lucide-react";
 import { Popover, PopoverTrigger, PopoverContent } from "@heroui/react";
 import { KubeResource } from "../../../core/fluxTree/models/tree";
 import { RESOURCE_TYPE } from "../../../core/fluxTree/constants/resources.const";
-import { NetworkNodeData, NetworkTLSInfo } from "../../../core/network/usecases/NetworkTopology.usecase";
+import {
+  NetworkNodeData,
+  NetworkTLSInfo,
+  PolicyConstraints,
+} from "../../../core/network/usecases/NetworkTopology.usecase";
 import AppLogo from "../resource-icon/ResourceIcon";
 import StatusChip from "../status-chip/StatusChip";
 import { NETWORK_SUBPATH, ROUTES } from "../../routes/routes.enum";
@@ -13,12 +17,12 @@ import { NETWORK_SUBPATH, ROUTES } from "../../routes/routes.enum";
 type NetworkResourceNodeProps = NodeProps<Node<NetworkNodeData>>;
 
 // Whole days from now until an ISO timestamp; null when unparseable.
-function daysUntil(iso: string): number | null {
+export function daysUntil(iso: string): number | null {
   const days = Math.round((new Date(iso).getTime() - Date.now()) / 86_400_000);
   return Number.isNaN(days) ? null : days;
 }
 
-function networkDetail(node: KubeResource): string | null {
+export function networkDetail(node: KubeResource): string | null {
   if (node.kind === RESOURCE_TYPE.SERVICE && node.serviceMetadata) {
     const meta = node.serviceMetadata;
     const type = meta.type ?? "";
@@ -27,7 +31,10 @@ function networkDetail(node: KubeResource): string | null {
     const ports = (meta.ports ?? [])
       .map((p) => {
         const proto = p.protocol ?? "TCP";
-        const tp = p.targetPort && p.targetPort !== String(p.port) ? `→${p.targetPort}` : "";
+        const tp =
+          p.targetPort && p.targetPort !== String(p.port)
+            ? `→${p.targetPort}`
+            : "";
         const np = p.nodePort ? ` (node ${p.nodePort})` : "";
         return `${proto} ${p.port}${tp}${np}`;
       })
@@ -82,12 +89,17 @@ function TLSLockPopover({ tls }: { tls: NetworkTLSInfo }) {
           {tls.certName ? (
             <p>
               Certificate:{" "}
-              <Link to={`${ROUTES.RESOURCE}/${tls.certUid}`} className="text-primary hover:underline">
+              <Link
+                to={`${ROUTES.RESOURCE}/${tls.certUid}`}
+                className="text-primary hover:underline"
+              >
                 {tls.certName}
               </Link>
             </p>
           ) : (
-            <p className="text-default-400">No cert-manager Certificate found</p>
+            <p className="text-default-400">
+              No cert-manager Certificate found
+            </p>
           )}
           {tls.issuer && <p>Issuer: {tls.issuer}</p>}
           {tls.notAfter && (
@@ -105,7 +117,10 @@ function TLSLockPopover({ tls }: { tls: NetworkTLSInfo }) {
             <p>
               Secret:{" "}
               {tls.secretUid ? (
-                <Link to={`${ROUTES.RESOURCE}/${tls.secretUid}`} className="text-primary hover:underline">
+                <Link
+                  to={`${ROUTES.RESOURCE}/${tls.secretUid}`}
+                  className="text-primary hover:underline"
+                >
                   {tls.secretName}
                 </Link>
               ) : (
@@ -122,12 +137,76 @@ function TLSLockPopover({ tls }: { tls: NetworkTLSInfo }) {
   );
 }
 
+// PolicyConstraintsPopover flags that NetworkPolicies gate a pod
+function PolicyConstraintsPopover({ policy }: { policy: PolicyConstraints }) {
+  return (
+    <Popover placement="top" showArrow>
+      <PopoverTrigger>
+        <button
+          aria-label="Network policy constraints"
+          onClick={(e) => e.stopPropagation()}
+          className="flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-secondary-500 hover:text-secondary-400 hover:bg-secondary-500/10 transition-colors cursor-pointer flex-shrink-0"
+        >
+          <ShieldAlert className="w-3.5 h-3.5" />
+          {policy.policies.length}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent>
+        <div className="px-1 py-2 text-xs space-y-2 max-w-[280px]">
+          <p className="text-sm font-semibold">Network policies in effect</p>
+          <div className="space-y-0.5">
+            {policy.policies.map((p) => (
+              <p key={p.uid}>
+                <Link
+                  to={`${ROUTES.RESOURCE}/${p.uid}`}
+                  className="text-primary hover:underline break-words"
+                >
+                  {p.name}
+                </Link>
+              </p>
+            ))}
+          </div>
+          {policy.ingress.length > 0 && (
+            <div className="space-y-1 border-t border-default-100 pt-1.5">
+              <p className="font-semibold">Allowed ingress</p>
+              {policy.ingress.map((rule, i) => (
+                <div key={i} className="space-y-0.5">
+                  <p className="text-default-400">
+                    {rule.ports ? rule.ports : "all ports"}
+                  </p>
+                  {rule.sources.map((src, j) => (
+                    <p key={j} className="break-words pl-2">
+                      ⇤ {src}
+                    </p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="text-default-400 border-t border-default-100 pt-1.5">
+            Egress shown as edges →
+          </p>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function NetworkResourceNode({ data }: NetworkResourceNodeProps) {
-  const d = data as { treeNode?: KubeResource; tls?: NetworkTLSInfo };
+  const d = data as {
+    treeNode?: KubeResource;
+    tls?: NetworkTLSInfo;
+    policy?: PolicyConstraints;
+  };
   const treeNode = d.treeNode;
-  const detail = useMemo(() => (treeNode ? networkDetail(treeNode) : null), [treeNode]);
+  const detail = useMemo(
+    () => (treeNode ? networkDetail(treeNode) : null),
+    [treeNode],
+  );
 
   if (!treeNode) return null;
+
+  const policy = d.policy;
 
   return (
     <div className="relative">
@@ -151,13 +230,16 @@ function NetworkResourceNode({ data }: NetworkResourceNodeProps) {
             </p>
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
+            {policy && <PolicyConstraintsPopover policy={policy} />}
             <StatusChip resource={treeNode} />
           </div>
         </div>
         {(detail || d.tls) && (
           <div className="px-3 pb-2 border-t border-default-100 pt-1.5 flex items-center gap-1.5">
             {detail && (
-              <p className="text-xs text-default-500 truncate flex-1 min-w-0">{detail}</p>
+              <p className="text-xs text-default-500 truncate flex-1 min-w-0">
+                {detail}
+              </p>
             )}
             {d.tls && (
               <div className={detail ? "flex-shrink-0" : "ml-auto"}>

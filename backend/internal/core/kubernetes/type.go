@@ -7,8 +7,6 @@ import (
 	"reflect"
 	"slices"
 	"time"
-
-	"k8s.io/apimachinery/pkg/types"
 )
 
 var ErrNotFound = errors.New("resource not found")
@@ -144,8 +142,6 @@ func (e *Resource) IsDeepEqual(other Resource) bool {
 }
 
 // ServiceMetadata carries the networking-relevant fields of a core/v1 Service.
-// ExternalIPs are sourced from status.loadBalancer.ingress (e.g. the address
-// MetalLB assigns to a type=LoadBalancer Service).
 type ServiceMetadata struct {
 	Type        string            `json:"type,omitempty"`
 	ClusterIPs  []string          `json:"clusterIPs,omitempty"`
@@ -162,8 +158,7 @@ type ServicePort struct {
 	NodePort   int32  `json:"nodePort,omitempty"`
 }
 
-// clone returns a deep copy so a stored Resource never shares the underlying
-// slices/map with the snapshot it was copied from.
+// clone returns a deep copy so a stored Resource never shares backing storage.
 func (s ServiceMetadata) clone() ServiceMetadata {
 	out := ServiceMetadata{Type: s.Type}
 	out.ClusterIPs = append([]string(nil), s.ClusterIPs...)
@@ -176,34 +171,21 @@ func (s ServiceMetadata) clone() ServiceMetadata {
 	return out
 }
 
-// RouteMetadata is the kind-agnostic representation of anything that routes
-// external traffic to a backend: Ingress, Traefik IngressRoute, or a Gateway API
-// *Route. Class is the ingressClassName / gatewayClassName. ParentRefs are the
-// Gateways a Gateway API route attaches to (empty for plain Ingress).
+// RouteMetadata is the kind-agnostic representation of anything that routes external traffic to a backend (Ingress, Traefik IngressRoute, or a Gateway API *Route).
 type RouteMetadata struct {
 	Class       string           `json:"class,omitempty"`
 	Hostnames   []string         `json:"hostnames,omitempty"`
 	BackendRefs []BackendRef     `json:"backendRefs,omitempty"`
 	ParentRefs  []RouteParentRef `json:"routeParentRefs,omitempty"`
-	// Addresses are the route's own external addresses (Ingress
-	// status.loadBalancer.ingress). They match the external IP of the ingress
-	// controller's LoadBalancer Service, letting the network view link a route
-	// to its real entrypoint (e.g. Internet → Traefik LB → Ingress).
+	// Route's own external addresses; match the ingress controller's LoadBalancer Service.
 	Addresses []string `json:"addresses,omitempty"`
-	// TLSSecretRefs are canonical "namespace/name" refs to the TLS secrets this
-	// route terminates with (Ingress spec.tls, IngressRoute spec.tls.secretName).
+	// Canonical "namespace/name" refs to the TLS secrets this route terminates with.
 	TLSSecretRefs []string `json:"tlsSecretRefs,omitempty"`
-	// MiddlewareRefs are canonical "namespace/name" refs to Traefik Middlewares
-	// applied to this route, in order (the "walls" traffic passes through).
+	// Canonical "namespace/name" refs to the Traefik Middlewares applied, in order.
 	MiddlewareRefs []string `json:"middlewareRefs,omitempty"`
-	// TLSEnabled is true when the route terminates TLS, even if it names no
-	// secret (e.g. an Ingress with a tls block but no secretName, where the proxy
-	// supplies a default/wildcard certificate).
+	// True when the route terminates TLS, even if it names no secret (default/wildcard cert).
 	TLSEnabled bool `json:"tlsEnabled,omitempty"`
-	// EntryPoints are the named Traefik entrypoints this route is exposed on
-	// (e.g. web, websecure, websecure-ext), from the IngressRoute spec or the
-	// traefik.ingress.kubernetes.io/router.entrypoints annotation on an Ingress.
-	// They distinguish internal vs external exposure of otherwise identical routes.
+	// Named Traefik entrypoints the route is exposed on; distinguish internal vs external.
 	EntryPoints []string `json:"entryPoints,omitempty"`
 }
 
@@ -239,10 +221,7 @@ func (r RouteMetadata) clone() RouteMetadata {
 	}
 }
 
-// EndpointSliceMetadata carries the Service→Pod backing of a
-// discovery.k8s.io/v1 EndpointSlice. ServiceName is the Service this slice backs
-// (same namespace), from the kubernetes.io/service-name label. Each endpoint
-// targets a Pod, letting the network view connect a Service to its ready Pods.
+// EndpointSliceMetadata carries the Service→Pod backing of a discovery.k8s.io/v1 EndpointSlice.
 type EndpointSliceMetadata struct {
 	ServiceName string           `json:"serviceName,omitempty"`
 	Endpoints   []EndpointTarget `json:"endpoints,omitempty"`
@@ -262,15 +241,12 @@ func (e EndpointSliceMetadata) clone() EndpointSliceMetadata {
 	}
 }
 
-// GatewayMetadata carries the entrypoint-relevant fields of a Gateway API
-// Gateway. GatewayClassName binds it to its GatewayClass; Addresses are the
-// external addresses an implementation assigns (status.addresses).
+// GatewayMetadata carries the entrypoint-relevant fields of a Gateway API Gateway.
 type GatewayMetadata struct {
 	GatewayClassName string            `json:"gatewayClassName,omitempty"`
 	Addresses        []string          `json:"addresses,omitempty"`
 	Listeners        []GatewayListener `json:"listeners,omitempty"`
-	// TLSSecretRefs are canonical "namespace/name" refs to the certificate
-	// secrets referenced by the gateway's listeners (tls.certificateRefs).
+	// Canonical "namespace/name" refs to the certificate secrets the listeners reference.
 	TLSSecretRefs []string `json:"tlsSecretRefs,omitempty"`
 }
 
@@ -290,13 +266,56 @@ func (g GatewayMetadata) clone() GatewayMetadata {
 	}
 }
 
-// NetworkPolicyMetadata carries the selector and rule shape of a NetworkPolicy,
-// so the network view can show which pods it gates and in which directions.
+// NetworkPolicyPort is a single port (or port range) a NetworkPolicy rule allows.
+type NetworkPolicyPort struct {
+	Protocol string `json:"protocol,omitempty"`
+	Port     string `json:"port,omitempty"`    // numeric or named
+	EndPort  int32  `json:"endPort,omitempty"` // range upper bound, if set
+}
+
+// NetworkPolicyPeer is one allowed peer of a NetworkPolicy rule (one shape set).
+type NetworkPolicyPeer struct {
+	PodSelector       map[string]string `json:"podSelector,omitempty"`
+	NamespaceSelector map[string]string `json:"namespaceSelector,omitempty"`
+	IPBlock           string            `json:"ipBlock,omitempty"` // CIDR
+}
+
+// NetworkPolicyRule is one ingress or egress rule; empty Peers means "anywhere", empty Ports "all ports".
+type NetworkPolicyRule struct {
+	Peers []NetworkPolicyPeer `json:"peers,omitempty"`
+	Ports []NetworkPolicyPort `json:"ports,omitempty"`
+}
+
+func (r NetworkPolicyRule) clone() NetworkPolicyRule {
+	out := NetworkPolicyRule{
+		Ports: append([]NetworkPolicyPort(nil), r.Ports...),
+	}
+	if r.Peers != nil {
+		out.Peers = make([]NetworkPolicyPeer, len(r.Peers))
+		for i, p := range r.Peers {
+			cp := NetworkPolicyPeer{IPBlock: p.IPBlock}
+			if p.PodSelector != nil {
+				cp.PodSelector = make(map[string]string, len(p.PodSelector))
+				maps.Copy(cp.PodSelector, p.PodSelector)
+			}
+			if p.NamespaceSelector != nil {
+				cp.NamespaceSelector = make(map[string]string, len(p.NamespaceSelector))
+				maps.Copy(cp.NamespaceSelector, p.NamespaceSelector)
+			}
+			out.Peers[i] = cp
+		}
+	}
+	return out
+}
+
+// NetworkPolicyMetadata carries the selector and rule shape of a NetworkPolicy, so the network view can show which pods it gates and in which directions.
 type NetworkPolicyMetadata struct {
-	PodSelector  map[string]string `json:"podSelector,omitempty"`
-	PolicyTypes  []string          `json:"policyTypes,omitempty"`
-	IngressRules int               `json:"ingressRules,omitempty"`
-	EgressRules  int               `json:"egressRules,omitempty"`
+	PodSelector  map[string]string   `json:"podSelector,omitempty"`
+	PolicyTypes  []string            `json:"policyTypes,omitempty"`
+	IngressRules int                 `json:"ingressRules,omitempty"`
+	EgressRules  int                 `json:"egressRules,omitempty"`
+	Ingress      []NetworkPolicyRule `json:"ingress,omitempty"`
+	Egress       []NetworkPolicyRule `json:"egress,omitempty"`
 }
 
 func (n NetworkPolicyMetadata) clone() NetworkPolicyMetadata {
@@ -309,14 +328,22 @@ func (n NetworkPolicyMetadata) clone() NetworkPolicyMetadata {
 		out.PodSelector = make(map[string]string, len(n.PodSelector))
 		maps.Copy(out.PodSelector, n.PodSelector)
 	}
+	if n.Ingress != nil {
+		out.Ingress = make([]NetworkPolicyRule, len(n.Ingress))
+		for i, r := range n.Ingress {
+			out.Ingress[i] = r.clone()
+		}
+	}
+	if n.Egress != nil {
+		out.Egress = make([]NetworkPolicyRule, len(n.Egress))
+		for i, r := range n.Egress {
+			out.Egress[i] = r.clone()
+		}
+	}
 	return out
 }
 
-// ProxyMetadata carries ingress-controller ("proxy") configuration that has no
-// first-class Kubernetes object — currently the middlewares/filters applied at
-// each named entrypoint. Populated by controller-specific providers (e.g. the
-// Traefik provider parses them from the proxy workload's args); left empty for
-// controllers that have no such concept.
+// ProxyMetadata carries ingress-controller config with no first-class object: the middlewares per entrypoint.
 type ProxyMetadata struct {
 	EntrypointMiddlewares map[string][]string `json:"entrypointMiddlewares,omitempty"`
 }
@@ -332,9 +359,7 @@ func (p ProxyMetadata) clone() ProxyMetadata {
 	return ProxyMetadata{EntrypointMiddlewares: out}
 }
 
-// CertificateMetadata carries the debugging-relevant status of a cert-manager
-// Certificate: the secret it writes, whether it is Ready, when it expires, and
-// its issuer.
+// CertificateMetadata carries the debugging-relevant status of a cert-manager Certificate.
 type CertificateMetadata struct {
 	SecretName string   `json:"secretName,omitempty"`
 	Ready      bool     `json:"ready,omitempty"`
@@ -350,7 +375,7 @@ func (c CertificateMetadata) clone() CertificateMetadata {
 }
 
 type Event struct {
-	UID           types.UID `json:"uid"`
+	UID           string    `json:"uid"`
 	Kind          string    `json:"kind"`
 	Name          string    `json:"name"`
 	Namespace     string    `json:"namespace"`
@@ -377,8 +402,7 @@ type PodMetadata struct {
 	Containers []Container `json:"containers,omitempty"`
 }
 
-// Container is the per-container status of a pod, covering both init and regular
-// containers so the UI can show which container is failing and why.
+// Container is the per-container status of a pod (init and regular).
 type Container struct {
 	Name         string `json:"name"`
 	Image        string `json:"image"`
@@ -392,8 +416,7 @@ type Container struct {
 	IsInit       bool   `json:"isInit,omitempty"`
 }
 
-// clone returns a deep copy so a stored Resource never shares the underlying
-// Containers slice with the snapshot it was copied from.
+// clone returns a deep copy so a stored Resource never shares backing storage.
 func (p PodMetadata) clone() PodMetadata {
 	out := PodMetadata{Phase: p.Phase, Image: p.Image}
 	out.Containers = append([]Container(nil), p.Containers...)
@@ -441,9 +464,7 @@ type PVCMetadata struct {
 	AccessModes  []string          `json:"accessModes,omitempty"`
 	Capacity     map[string]string `json:"capacity,omitempty"`
 	Phase        string            `json:"phase,omitempty"`
-	// Requested is spec.resources.requests.storage in bytes — the size the claim
-	// asked for, as opposed to status.capacity (the size actually provisioned).
-	Requested int64 `json:"requested,omitempty"`
+	Requested    int64             `json:"requested,omitempty"` // spec.resources.requests.storage, bytes
 }
 
 func (p PVCMetadata) clone() PVCMetadata {
@@ -453,11 +474,7 @@ func (p PVCMetadata) clone() PVCMetadata {
 	return out
 }
 
-// PVMetadata carries the provisioning-relevant fields of a core/v1
-// PersistentVolume. Capacity is spec.capacity.storage in bytes (mirroring the
-// Longhorn byte counts) so the frontend can sum it without parsing quantities.
-// Driver is spec.csi.driver; NFSServer/NFSShare are populated by the csi
-// provider only for nfs.csi.k8s.io volumes.
+// PVMetadata carries the provisioning-relevant fields of a core/v1 PersistentVolume.
 type PVMetadata struct {
 	Capacity      int64    `json:"capacity,omitempty"`      // spec.capacity.storage, bytes
 	StorageClass  string   `json:"storageClass,omitempty"`  // spec.storageClassName
@@ -476,14 +493,7 @@ func (p PVMetadata) clone() PVMetadata {
 	return out
 }
 
-// LonghornNodeMetadata carries the aggregated disk capacity of a
-// Node.longhorn.io object, summed across all of the node's disks. Byte counts
-// mirror the Longhorn dashboard, where an enabled disk's capacity partitions
-// into Reserved + Used + Schedulable: Used is the space scheduled to replicas
-// (storageScheduled), Reserved the admin-reserved space, Schedulable the room
-// left for new replicas, and Disabled the capacity of disks closed to
-// scheduling. All fields are comparable so equality uses a plain struct
-// comparison.
+// LonghornNodeMetadata carries the aggregated disk capacity of a Node.longhorn.io object.
 type LonghornNodeMetadata struct {
 	Ready              bool  `json:"ready"`
 	Schedulable        bool  `json:"schedulable"`
@@ -513,10 +523,7 @@ func (n NodeMetadata) clone() NodeMetadata {
 	return out
 }
 
-// LonghornVolumeMetadata carries the Longhorn-specific status of a
-// Volume.longhorn.io object. Size and ActualSize are byte counts: Size is the
-// provisioned (spec) capacity, ActualSize the space currently consumed on disk.
-// All fields are comparable so equality uses a plain struct comparison.
+// LonghornVolumeMetadata carries the Longhorn-specific status of a Volume.longhorn.io object.
 type LonghornVolumeMetadata struct {
 	State            string `json:"state,omitempty"`            // attached / detached
 	Robustness       string `json:"robustness,omitempty"`       // healthy / degraded / faulted / unknown
@@ -528,13 +535,7 @@ type LonghornVolumeMetadata struct {
 	AccessMode       string `json:"accessMode,omitempty"`       // rwo / rwx
 }
 
-// TrivyMetadata carries the summary of a single Trivy Operator report
-// (aquasecurity.github.io). Only the small severity counts and the target
-// workload reference are kept here — the full vulnerability/check arrays stay in
-// the report object and are fetched on demand via the Trivy findings endpoint.
-// ReportType is one of: vulnerability, configAudit, exposedSecret,
-// rbacAssessment. For non-vulnerability reports the counts come from the same
-// critical/high/medium/low summary the operator emits.
+// TrivyMetadata carries the severity-count summary of a single Trivy Operator report.
 type TrivyMetadata struct {
 	ReportType      string `json:"reportType,omitempty"`
 	Critical        int    `json:"critical,omitempty"`

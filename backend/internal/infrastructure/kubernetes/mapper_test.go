@@ -4,14 +4,13 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 )
-
-// metadata helpers
 
 func setUID(obj map[string]interface{}, uid string) {
 	obj["metadata"].(map[string]interface{})["uid"] = uid
@@ -36,8 +35,6 @@ func setAnnotations(obj map[string]interface{}, ann map[string]interface{}) {
 func setOwnerRefs(obj map[string]interface{}, refs []interface{}) {
 	obj["metadata"].(map[string]interface{})["ownerReferences"] = refs
 }
-
-// ── Basic field mapping ───────────────────────────────────────────────────────
 
 func TestToResource_BasicFields(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -95,8 +92,6 @@ func TestToResource_DeletionTimestamp(t *testing.T) {
 
 	assert.False(t, res.DeletedAt.IsZero())
 }
-
-// ── Pod ───────────────────────────────────────────────────────────────────────
 
 func TestToResource_Pod_WithContainers(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -158,8 +153,7 @@ func TestToResource_Pod_Status_CrashLoopBackOff(t *testing.T) {
 	obj.Object["spec"] = map[string]interface{}{
 		"containers": []interface{}{map[string]interface{}{"name": "c"}},
 	}
-	// A crashing pod is reported by Kubernetes as Phase==Pending with a
-	// ContainersNotReady condition; it must surface as a failure, not pending.
+	// A crashing pod (Phase==Pending + ContainersNotReady) must surface as a failure, not pending.
 	obj.Object["status"] = map[string]interface{}{
 		"phase": "Pending",
 		"conditions": []interface{}{
@@ -211,8 +205,7 @@ func TestToResource_Pod_Status_PodInitializing(t *testing.T) {
 	obj.Object["spec"] = map[string]interface{}{
 		"containers": []interface{}{map[string]interface{}{"name": "c"}},
 	}
-	// PodInitializing / ContainerCreating are normal startup states and must
-	// remain pending rather than being treated as failures.
+	// PodInitializing / ContainerCreating are normal startup states and must remain pending.
 	obj.Object["status"] = map[string]interface{}{
 		"phase": "Pending",
 		"containerStatuses": []interface{}{
@@ -263,8 +256,6 @@ func TestToResource_Pod_Conditions(t *testing.T) {
 	assert.Len(t, res.Conditions, 1)
 	assert.Equal(t, "Ready", res.Conditions[0].Type)
 }
-
-// ── PVC ───────────────────────────────────────────────────────────────────────
 
 func TestToResource_PVC_Happy(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -329,8 +320,6 @@ func TestToResource_PVC_Status_Lost(t *testing.T) {
 	res := mapper.ToResource(*obj, "persistentvolumeclaims")
 	assert.Equal(t, kube.StatusFailed, res.Status)
 }
-
-// ── PV ────────────────────────────────────────────────────────────────────────
 
 func TestToResource_PV_Bound(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -448,8 +437,6 @@ func TestToResource_PV_NFSCSI(t *testing.T) {
 	assert.Equal(t, "10.0.0.5", res.PVMetadata.NFSServer)
 	assert.Equal(t, "/export/media", res.PVMetadata.NFSShare)
 }
-
-// ── Longhorn Volume ───────────────────────────────────────────────────────────
 
 func newLonghornVolume(name string) *unstructured.Unstructured {
 	return newUnstructuredResource("Volume", "longhorn.io/v1beta2", name, "longhorn-system")
@@ -570,8 +557,6 @@ func TestToResource_LonghornVolume_Empty(t *testing.T) {
 	})
 }
 
-// ── Longhorn Node ─────────────────────────────────────────────────────────────
-
 func TestToResource_LonghornNode_DiskAggregation(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("Node", "longhorn.io/v1beta2", "node-1", "longhorn-system")
@@ -636,8 +621,7 @@ func TestToResource_LonghornNode_NotReady(t *testing.T) {
 
 func TestToResource_CoreNode(t *testing.T) {
 	mapper := NewKubeMapper()
-	// A core v1 Node must not be treated as a Longhorn node, and its host
-	// facts should be surfaced in NodeMetadata.
+	// A core v1 Node must not be treated as a Longhorn node; its host facts go to NodeMetadata.
 	obj := newUnstructuredResource("Node", "v1", "worker-1", "")
 	obj.Object["metadata"].(map[string]interface{})["labels"] = map[string]interface{}{
 		"node-role.kubernetes.io/control-plane": "",
@@ -683,8 +667,7 @@ func TestToResource_CoreNode(t *testing.T) {
 	assert.Equal(t, []string{"control-plane", "worker"}, meta.Roles)
 }
 
-// The Node name collides between core/v1 and longhorn.io: each must dispatch to
-// its own mapper purely on group.
+// The Node name collides between core/v1 and longhorn.io: each must dispatch on group.
 func TestToResource_NodeKindCollision(t *testing.T) {
 	mapper := NewKubeMapper()
 
@@ -696,8 +679,6 @@ func TestToResource_NodeKindCollision(t *testing.T) {
 	assert.NotNil(t, lh.LonghornNodeMetadata)
 	assert.Nil(t, lh.NodeMetadata)
 }
-
-// ── Kustomization ─────────────────────────────────────────────────────────────
 
 func TestToResource_Kustomization(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -755,8 +736,6 @@ func TestToResource_Kustomization_Failed(t *testing.T) {
 	assert.Equal(t, kube.StatusFailed, res.Status)
 }
 
-// ── HelmRelease ───────────────────────────────────────────────────────────────
-
 func TestToResource_HelmRelease_NoHistory(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("HelmRelease", "helm.toolkit.fluxcd.io/v2", "my-hr", "default")
@@ -791,8 +770,6 @@ func TestToResource_HelmRelease_NoHistory(t *testing.T) {
 	assert.Equal(t, "HelmRepository", res.HelmReleaseMetadata.SourceRef.Kind)
 }
 
-// ── GitRepository ─────────────────────────────────────────────────────────────
-
 func TestToResource_GitRepository(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("GitRepository", "source.toolkit.fluxcd.io/v1", "my-repo", "flux-system")
@@ -821,8 +798,6 @@ func TestToResource_GitRepository(t *testing.T) {
 	assert.Equal(t, "https://github.com/org/repo", res.GitRepositoryMetadata.URL)
 	assert.Equal(t, "main", res.GitRepositoryMetadata.Branch)
 }
-
-// ── Deployment ────────────────────────────────────────────────────────────────
 
 func TestToResource_Deployment_Ready(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -891,8 +866,6 @@ func TestToResource_Deployment_Unavailable(t *testing.T) {
 	assert.Equal(t, kube.StatusWarning, res.Status)
 }
 
-// ── Ingress ───────────────────────────────────────────────────────────────────
-
 func TestToResource_Ingress_NoLB(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("Ingress", "networking.k8s.io/v1", "my-ing", "default")
@@ -918,8 +891,6 @@ func TestToResource_Ingress_WithLB(t *testing.T) {
 	res := mapper.ToResource(*obj, "ingresses")
 	assert.Equal(t, kube.StatusSuccess, res.Status)
 }
-
-// ── Service ───────────────────────────────────────────────────────────────────
 
 func TestToResource_Service_LoadBalancer(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -1132,8 +1103,6 @@ func TestToResource_Ingress_TLS(t *testing.T) {
 	assert.Equal(t, []string{"default/web-tls"}, res.RouteMetadata.TLSSecretRefs)
 }
 
-// ── cert-manager Certificate ──────────────────────────────────────────────────────
-
 func TestToResource_Certificate_Ready(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("Certificate", "cert-manager.io/v1", "web-cert", "default")
@@ -1185,8 +1154,6 @@ func TestToResource_Certificate_Issuing(t *testing.T) {
 	assert.False(t, res.CertificateMetadata.Ready)
 	assert.Equal(t, kube.StatusPending, res.Status)
 }
-
-// ── Traefik IngressRoute ────────────────────────────────────────────────────────
 
 func TestToResource_TraefikIngressRoute(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -1262,8 +1229,6 @@ func TestToResource_TraefikIngressRoute_NoHost(t *testing.T) {
 	})
 }
 
-// ── EndpointSlice ───────────────────────────────────────────────────────────────
-
 func TestToResource_EndpointSlice(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("EndpointSlice", "discovery.k8s.io/v1", "web-abc", "default")
@@ -1310,8 +1275,6 @@ func TestToResource_EndpointSlice_NoServiceLabel(t *testing.T) {
 	})
 }
 
-// ── NetworkPolicy ─────────────────────────────────────────────────────────────────
-
 func TestToResource_NetworkPolicy(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("NetworkPolicy", "networking.k8s.io/v1", "deny-web", "default")
@@ -1323,16 +1286,45 @@ func TestToResource_NetworkPolicy(t *testing.T) {
 		"ingress": []interface{}{
 			map[string]interface{}{"from": []interface{}{}},
 		},
+		"egress": []interface{}{
+			map[string]interface{}{
+				"to": []interface{}{
+					map[string]interface{}{
+						"podSelector": map[string]interface{}{
+							"matchLabels": map[string]interface{}{"app": "db"},
+						},
+					},
+					map[string]interface{}{
+						"ipBlock": map[string]interface{}{"cidr": "10.0.0.0/8"},
+					},
+				},
+				"ports": []interface{}{
+					map[string]interface{}{"protocol": "TCP", "port": int64(5432)},
+				},
+			},
+		},
 	}
 
 	res := mapper.ToResource(*obj, "networkpolicies")
 	assert.Equal(t, map[string]string{"app": "web"}, res.NetworkPolicyMetadata.PodSelector)
 	assert.Equal(t, []string{"Ingress", "Egress"}, res.NetworkPolicyMetadata.PolicyTypes)
 	assert.Equal(t, 1, res.NetworkPolicyMetadata.IngressRules)
-	assert.Equal(t, 0, res.NetworkPolicyMetadata.EgressRules)
-}
+	assert.Equal(t, 1, res.NetworkPolicyMetadata.EgressRules)
 
-// ── Gateway API ─────────────────────────────────────────────────────────────────
+	// Ingress rule with an empty `from` carries no peers (= allow from anywhere).
+	require.Len(t, res.NetworkPolicyMetadata.Ingress, 1)
+	assert.Empty(t, res.NetworkPolicyMetadata.Ingress[0].Peers)
+
+	// Egress rule resolves both a podSelector peer and an ipBlock peer, plus ports.
+	require.Len(t, res.NetworkPolicyMetadata.Egress, 1)
+	egress := res.NetworkPolicyMetadata.Egress[0]
+	require.Len(t, egress.Peers, 2)
+	assert.Equal(t, map[string]string{"app": "db"}, egress.Peers[0].PodSelector)
+	assert.Equal(t, "10.0.0.0/8", egress.Peers[1].IPBlock)
+	require.Len(t, egress.Ports, 1)
+	assert.Equal(t, "TCP", egress.Ports[0].Protocol)
+	assert.Equal(t, "5432", egress.Ports[0].Port)
+}
 
 func TestToResource_Gateway(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -1409,8 +1401,6 @@ func TestToResource_HTTPRoute_ParentDefaultNamespace(t *testing.T) {
 	})
 }
 
-// ── StatefulSet ───────────────────────────────────────────────────────────────
-
 func TestToResource_StatefulSet_Ready(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("StatefulSet", "apps/v1", "my-ss", "default")
@@ -1425,8 +1415,6 @@ func TestToResource_StatefulSet_Ready(t *testing.T) {
 	res := mapper.ToResource(*obj, "statefulsets")
 	assert.Equal(t, kube.StatusSuccess, res.Status)
 }
-
-// ── HelmChart / HelmRepository / OCIRepository ────────────────────────────────
 
 func TestToResource_HelmChart(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -1497,8 +1485,6 @@ func TestToResource_OCIRepository(t *testing.T) {
 	assert.Equal(t, "latest", res.OCIRepositoryMetadata.Tag)
 }
 
-// ── LonghornVolume ───────────────────────────────────────────────────────────
-
 func TestToResource_LonghornVolume(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("Volume", "longhorn.io/v1beta2", "data-vol", "longhorn-system")
@@ -1509,8 +1495,6 @@ func TestToResource_LonghornVolume(t *testing.T) {
 	assert.Contains(t, res.ParentRefs[0], "PersistentVolume")
 }
 
-// ── Unknown kind ─────────────────────────────────────────────────────────────
-
 func TestToResource_UnknownKind(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("CronJob", "batch/v1", "my-job", "default")
@@ -1520,8 +1504,6 @@ func TestToResource_UnknownKind(t *testing.T) {
 	assert.Equal(t, "CronJob", res.Kind)
 	assert.Equal(t, kube.StatusUnknown, res.Status)
 }
-
-// ── ToEvent ───────────────────────────────────────────────────────────────────
 
 func TestToEvent(t *testing.T) {
 	mapper := NewKubeMapper()
@@ -1544,7 +1526,7 @@ func TestToEvent(t *testing.T) {
 
 	event := mapper.ToEvent(k8event)
 
-	assert.Equal(t, types.UID("event-uid-1"), event.UID)
+	assert.Equal(t, "event-uid-1", event.UID)
 	assert.Equal(t, "Pod", event.Kind)
 	assert.Equal(t, "my-pod", event.Name)
 	assert.Equal(t, "default", event.Namespace)
@@ -1555,8 +1537,6 @@ func TestToEvent(t *testing.T) {
 	assert.Equal(t, "Normal", event.Type)
 	assert.Equal(t, int32(5), event.Count)
 }
-
-// ── SplitAPIVersion / makeRef ────────────────────────────────────────────────
 
 func TestRefGroupAndVersion_CoreGroup(t *testing.T) {
 	group, version := kube.SplitAPIVersion("v1")
@@ -1767,8 +1747,6 @@ func TestToResource_FluxResource_IsReconcilingFromCondition(t *testing.T) {
 	assert.True(t, res.FluxMetadata.IsReconciling)
 }
 
-// ── New Flux resource types ───────────────────────────────────────────────────
-
 func TestToResource_Alert_NoConditions_IsSuccess(t *testing.T) {
 	mapper := NewKubeMapper()
 	obj := newUnstructuredResource("Alert", "notification.toolkit.fluxcd.io/v1beta3", "my-alert", "flux-system")
@@ -1921,8 +1899,6 @@ func TestToResource_ImageUpdateAutomation_DependencyNotReady_IsPending(t *testin
 	res := mapper.ToResource(*obj, "imageupdateautomations")
 	assert.Equal(t, kube.StatusPending, res.Status)
 }
-
-// ── Generic status fallback for kinds without a dedicated mapper ───────────────
 
 func TestToResource_StaticKindsAreSuccess(t *testing.T) {
 	mapper := NewKubeMapper()

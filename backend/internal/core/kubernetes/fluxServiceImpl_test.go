@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	mocks "github.com/timp4w/phi/internal/testing/testdata"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 func reconcilableResource() kube.Resource {
@@ -195,7 +194,7 @@ func TestFluxService_Resume_PatchFailed(t *testing.T) {
 
 func TestReconcilePatch_PatchType(t *testing.T) {
 	p := kube.ReconcilePatch{Resource: reconcilableResource()}
-	assert.Equal(t, types.MergePatchType, p.PatchType())
+	assert.Equal(t, kube.MergePatchType, p.PatchType())
 }
 
 func TestReconcilePatch_PatchJSON_ContainsAnnotation(t *testing.T) {
@@ -228,7 +227,7 @@ func TestSuspendPatch_PatchJSON(t *testing.T) {
 }
 
 func TestSuspendPatch_PatchType(t *testing.T) {
-	assert.Equal(t, types.MergePatchType, kube.SuspendPatch{}.PatchType())
+	assert.Equal(t, kube.MergePatchType, kube.SuspendPatch{}.PatchType())
 }
 
 func TestResumePatch_PatchJSON(t *testing.T) {
@@ -243,5 +242,5 @@ func TestResumePatch_PatchJSON(t *testing.T) {
 }
 
 func TestResumePatch_PatchType(t *testing.T) {
-	assert.Equal(t, types.MergePatchType, kube.ResumePatch{}.PatchType())
+	assert.Equal(t, kube.MergePatchType, kube.ResumePatch{}.PatchType())
 }

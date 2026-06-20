@@ -29,7 +29,7 @@ const containerColor = (name: string): string => {
 
 export const LogsTab = observer(() => {
   const fluxTreeStore = useInjection(FluxTreeStore);
-  const logs = fluxTreeStore.selectedResource?.logs ?? [];
+  const logs = fluxTreeStore.logsFor(fluxTreeStore.selectedResource?.uid);
   const displayedLogs = [...logs].reverse();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);

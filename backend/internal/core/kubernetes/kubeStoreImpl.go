@@ -232,7 +232,10 @@ func (k *KubeStoreImpl) GetResourceByUID(uid string) *Resource {
 		logging.Logger().WithField("resource_uid", uid).Debug("Resource not found by UID")
 		return nil
 	}
-	return resource
+	// Return a deep copy: the stored pointer is mutated in place by UpdateResource
+	// under the lock, so handing it out would race with concurrent writers.
+	snapshot := resource.Clone()
+	return &snapshot
 }
 
 func (k *KubeStoreImpl) GetResources() map[string]*Resource {
@@ -240,7 +243,10 @@ func (k *KubeStoreImpl) GetResources() map[string]*Resource {
 	defer k.mu.RUnlock()
 	result := make(map[string]*Resource, len(k.resources))
 	for key, value := range k.resources {
-		result[key] = value
+		// Deep copy each resource; the stored pointers are mutated in place under
+		// the lock, so callers must receive snapshots that share no backing storage.
+		snapshot := value.Clone()
+		result[key] = &snapshot
 	}
 	logging.Logger().WithField("resource_count", len(result)).Debug("Returning resources map")
 	return result

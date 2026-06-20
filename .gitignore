@@ -4,3 +4,8 @@ dist
 backend/internal/api/http/frontend
 superpowers
 web/tsconfig.app.tsbuildinfo
+
+# Go coverage output
+*.out
+coverage.txt
+coverage.html
