@@ -4,7 +4,6 @@ import { observer } from "mobx-react-lite";
 import { env } from "../../../core/shared/env";
 import { ReactNode } from "react";
 import { SiGithub } from "@icons-pack/react-simple-icons";
-import FluxControllersHeader from "./FluxControllersHeader";
 
 type HeaderProps = {
   children?: ReactNode;
@@ -16,12 +15,10 @@ const Header: React.FC<HeaderProps> = observer(
       <header className="backdrop-blur-sm">
         <div className="relative py-3 px-8 flex h-14 items-center">
           <div className="mr-4 flex items-center">
-            <Link to="/" className="mr-6 flex items-center space-x-2">
+            <Link to="/" className="flex items-center space-x-2">
               <span className="text-5xl text-white">Φ</span>{" "}
               <span className="text-3xl font-bold text-white">Phi</span>
             </Link>
-
-            <FluxControllersHeader />
           </div>
           <div className="flex flex-1 items-center justify-end gap-2">
             {children}

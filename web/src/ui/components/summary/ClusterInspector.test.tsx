@@ -48,7 +48,27 @@ const richStore = () => {
   return c;
 };
 
+const fluxControllersStore = () => {
+  const c = makeTestContainer();
+  c.get(FluxTreeStore).syncResources([
+    dto({ uid: "root", kind: "Kustomization", group: "kustomize.toolkit.fluxcd.io", name: FLUX_NAMESPACE, namespace: FLUX_NAMESPACE, fluxRole: "application" }),
+    dto({ uid: "src", kind: "Deployment", name: "source-controller", namespace: FLUX_NAMESPACE, parentIDs: ["root"], labels: { "app.kubernetes.io/version": "v2.3.0" }, status: "success" }),
+    dto({ uid: "kus", kind: "Deployment", name: "kustomize-controller", namespace: FLUX_NAMESPACE, parentIDs: ["root"], labels: { "app.kubernetes.io/version": "v2.3.0" }, status: "failed" }),
+  ]);
+  return c;
+};
+
 describe("ClusterInspector", () => {
+  it("surfaces the Flux controllers in a FluxCD section", async () => {
+    renderWithProviders(<ClusterInspector />, { container: fluxControllersStore() });
+    expect(screen.getByText("FluxCD")).toBeInTheDocument();
+    expect(screen.getByText("1 down")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("FluxCD"));
+    expect(screen.getByText("source")).toBeInTheDocument();
+    expect(screen.getByText("kustomize")).toBeInTheDocument();
+    expect(screen.getAllByText("v2.3.0")).toHaveLength(2);
+  });
+
   it("renders all the section headers for a populated cluster", () => {
     renderWithProviders(<ClusterInspector />, { container: richStore() });
     expect(screen.getByText("Cluster")).toBeInTheDocument();

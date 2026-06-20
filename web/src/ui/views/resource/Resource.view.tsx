@@ -15,8 +15,9 @@ import {
   KubeResource,
   ResourceStatus,
 } from "../../../core/fluxTree/models/tree";
-import { Breadcrumbs, Button } from "@heroui/react";
+import { Button } from "@heroui/react";
 import AppLogo from "../../components/resource-icon/ResourceIcon";
+import ResourceBreadcrumbs from "../../components/layout/ResourceBreadcrumbs";
 import ResourceDetailPanel from "../../components/panel/ResourceDetailPanel";
 import Header from "../../components/layout/Header";
 import {
@@ -410,23 +411,20 @@ const ResourceView: React.FC = observer(() => {
       </Header>
 
       <main className="flex-1 flex flex-col overflow-hidden min-h-0">
-        <div className="flex-shrink-0 px-6 py-2.5 border-b border-border flex items-end gap-4">
-          <Breadcrumbs className="min-w-0">
-            <Breadcrumbs.Item onPress={() => navigate("/")}>
-              Cluster
-            </Breadcrumbs.Item>
-            {fullChain.map((res) => (
-              <Breadcrumbs.Item
-                key={res.uid}
-                onPress={() => navigate(`/resource/${res.uid}`)}
-              >
-                {res.name}
-              </Breadcrumbs.Item>
-            ))}
-            <Breadcrumbs.Item>{resource?.name}</Breadcrumbs.Item>
-          </Breadcrumbs>
+        <div className="flex-shrink-0 px-6 py-2.5 border-b border-border flex flex-col items-start gap-2 md:flex-row md:items-end md:gap-4">
+          <ResourceBreadcrumbs
+            items={[
+              { key: "cluster", label: "Cluster", onPress: () => navigate("/") },
+              ...fullChain.map((res) => ({
+                key: res.uid,
+                label: res.name,
+                onPress: () => navigate(`/resource/${res.uid}`),
+              })),
+              { key: resource?.uid ?? "current", label: resource?.name ?? "" },
+            ]}
+          />
 
-          <div className="ml-auto flex items-center gap-3 min-w-0">
+          <div className="md:ml-auto flex items-center gap-3 min-w-0 max-w-full">
             <StatusChip resource={resource} />
             <AppLogo groupKind={resource?.groupKind} />
             <div className="min-w-0">
@@ -445,15 +443,21 @@ const ResourceView: React.FC = observer(() => {
           <div className="flex items-center gap-1 bg-surface rounded-lg p-1 border border-border">
             <ViewModeSwitcher activeView={activeView} onSelect={selectView} />
           </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            className="ml-auto flex-shrink-0"
-            onPress={() => setSidebarOpen(true)}
+          <button
+            className={`ml-auto flex items-center justify-center w-8 h-8 rounded-lg border transition-colors flex-shrink-0 ${
+              sidebarOpen
+                ? "border-border bg-surface-secondary text-foreground"
+                : "border-border bg-surface hover:bg-surface-secondary text-muted hover:text-foreground"
+            }`}
+            onClick={() => setSidebarOpen((o) => !o)}
+            aria-label={sidebarOpen ? "Close details panel" : "Open details panel"}
           >
-            <PanelRightOpen className="w-3.5 h-3.5" />
-            Details
-          </Button>
+            {sidebarOpen ? (
+              <PanelRightClose className="w-4 h-4" />
+            ) : (
+              <PanelRightOpen className="w-4 h-4" />
+            )}
+          </button>
         </div>
 
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden min-h-0">
@@ -560,7 +564,7 @@ const ResourceView: React.FC = observer(() => {
             </div>
 
             {activeView === "tree" && (
-              <div className="absolute inset-0 overflow-y-auto px-6 pb-6 pt-4 md:pt-16">
+              <div className="absolute inset-0 overflow-y-auto px-6 pb-6 pt-20 md:pt-16">
                 <RenderTreeNode
                   resource={resource}
                   level={0}
@@ -588,7 +592,7 @@ const ResourceView: React.FC = observer(() => {
           <div
             className={`flex-shrink-0 md:border-l md:border-border md:overflow-hidden md:transition-all md:duration-300 ${
               sidebarOpen
-                ? "fixed inset-0 z-40 bg-background md:static md:inset-auto md:z-auto md:bg-transparent md:w-[33vw]"
+                ? "fixed inset-0 z-40 bg-background animate-slide-in-right md:animate-none md:static md:inset-auto md:z-auto md:bg-transparent md:w-[33vw]"
                 : "hidden md:block md:w-0"
             }`}
           >
