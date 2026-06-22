@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"github.com/timp4w/phi/internal/core/logging"
 	kubernetesusecases "github.com/timp4w/phi/internal/core/kubernetes/usecases"
 	"github.com/timp4w/phi/internal/core/realtime"
 	shared "github.com/timp4w/phi/internal/core/shared"
@@ -27,9 +28,15 @@ func NewResourceWSController(
 }
 
 func (rc *ResourceWSController) HandleWatchLogs(message realtime.Message) {
-	input := kubernetesusecases.WatchLogsUseCaseInput{
-		ClientID:   message.ClientId,
-		ResourceID: message.Message.(string),
+	resourceID, ok := message.Message.(string)
+	if !ok || resourceID == "" {
+		logging.Logger().
+			WithField("client_id", message.ClientId).
+			Warn("Ignoring watch-logs message with invalid payload")
+		return
 	}
-	rc.watchLogsUseCase.Execute(input)
+	rc.watchLogsUseCase.Execute(kubernetesusecases.WatchLogsUseCaseInput{
+		ClientID:   message.ClientId,
+		ResourceID: resourceID,
+	})
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,7 +14,6 @@ import (
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/timp4w/phi/internal/core/logging"
 	"github.com/timp4w/phi/internal/core/shared"
-	"github.com/timp4w/phi/internal/core/utils"
 
 	"gopkg.in/yaml.v2"
 
@@ -528,7 +528,7 @@ func hasEndpointSlices(resList []*metav1.APIResourceList) bool {
 			continue
 		}
 		for _, apiRes := range group.APIResources {
-			if apiRes.Name == "endpointslices" && utils.Contains(apiRes.Verbs, "list") && utils.Contains(apiRes.Verbs, "watch") {
+			if apiRes.Name == "endpointslices" && slices.Contains(apiRes.Verbs, "list") && slices.Contains(apiRes.Verbs, "watch") {
 				return true
 			}
 		}
@@ -561,7 +561,7 @@ func (k *KubeServiceImpl) DiscoverApis() ([]kube.ApiResource, error) {
 		}
 
 		for _, apiRes := range group.APIResources {
-			if !utils.Contains(apiRes.Verbs, "list") || !utils.Contains(apiRes.Verbs, "watch") { // Skip resources that cannot be listed or watched
+			if !slices.Contains(apiRes.Verbs, "list") || !slices.Contains(apiRes.Verbs, "watch") { // Skip resources that cannot be listed or watched
 				continue
 			}
 			if skipCoreEndpoints && gv.Group == "" && apiRes.Name == "endpoints" {

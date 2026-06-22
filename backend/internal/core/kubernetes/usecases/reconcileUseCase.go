@@ -38,7 +38,7 @@ func (uc *ReconcileUseCase) Execute(in ReconcileInput) (struct{}, error) {
 	_, err := uc.fluxService.Reconcile(*el)
 	if err != nil {
 		logger.WithError(err).Warn("Failed to reconcile resource")
-		return struct{}{}, fmt.Errorf("failed to reconcile resource: %v", err)
+		return struct{}{}, fmt.Errorf("failed to reconcile resource: %w", err)
 	}
 
 	// Optimistically update resource state under the store lock to avoid a data

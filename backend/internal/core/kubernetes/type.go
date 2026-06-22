@@ -116,11 +116,6 @@ func (e *Resource) GetRef() string {
 	}.String()
 }
 
-func (e *Resource) GetRefVersion() string {
-	_, version := SplitAPIVersion(e.Version)
-	return version
-}
-
 // MarshalJSON adds the registry-computed classification facts; alias strips methods to avoid recursion.
 func (e Resource) MarshalJSON() ([]byte, error) {
 	type alias Resource

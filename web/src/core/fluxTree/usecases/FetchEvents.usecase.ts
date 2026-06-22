@@ -20,11 +20,11 @@ export class FetchEventsUseCase extends UseCase<void, Promise<KubeEvent[]>> {
     try {
       const events = await this.treeService.getEvents();
       this.eventsStore.setEvents(events);
-      return Promise.resolve(events);
+      return events;
     } catch (error) {
       this.notifier.error("Failed to fetch events");
       console.error('Failed to fetch events:', error);
-      return Promise.reject(error);
+      throw error;
     }
   }
 }

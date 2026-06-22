@@ -1,7 +1,6 @@
 package kubernetesusecases
 
 import (
-	"github.com/timp4w/phi/internal/core/kubernetes"
 	kube "github.com/timp4w/phi/internal/core/kubernetes"
 	"github.com/timp4w/phi/internal/core/logging"
 	shared "github.com/timp4w/phi/internal/core/shared"
@@ -10,11 +9,11 @@ import (
 type GetEventsInput struct{}
 
 type GetEventsUseCase struct {
-	kubeService kubernetes.KubeService
+	kubeService kube.KubeService
 	logger      logging.PhiLogger
 }
 
-func NewGetEventsUseCase(KubeService kubernetes.KubeService) shared.UseCase[GetEventsInput, []kube.Event] {
+func NewGetEventsUseCase(KubeService kube.KubeService) shared.UseCase[GetEventsInput, []kube.Event] {
 	return &GetEventsUseCase{
 		kubeService: KubeService,
 		logger:      *logging.Logger(),
