@@ -203,15 +203,14 @@ func mapGitRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	el.Status = mapFluxResourceStatusForCondition(gitRepository.Status.Conditions, false)
 	mapFluxMetadata(el, gitRepository.GetAnnotations(), gitRepository.Status.LastHandledReconcileAt, gitRepository.Spec.Suspend, gitRepository.Status.Conditions)
 
-	el.GitRepositoryMetadata = &kube.GitRepositoryMetadata{
-		URL:    gitRepository.Spec.URL,
-		Branch: gitRepository.Spec.Reference.Branch,
-		Tag:    gitRepository.Spec.Reference.Tag,
-		Semver: gitRepository.Spec.Reference.SemVer,
-		Name:   gitRepository.Spec.Reference.Name,
-		Commit: gitRepository.Spec.Reference.Commit,
+	el.GitRepositoryMetadata = &kube.GitRepositoryMetadata{URL: gitRepository.Spec.URL}
+	if ref := gitRepository.Spec.Reference; ref != nil {
+		el.GitRepositoryMetadata.Branch = ref.Branch
+		el.GitRepositoryMetadata.Tag = ref.Tag
+		el.GitRepositoryMetadata.Semver = ref.SemVer
+		el.GitRepositoryMetadata.Name = ref.Name
+		el.GitRepositoryMetadata.Commit = ref.Commit
 	}
-
 }
 
 // mapFluxResourceStatusForCondition derives a Flux resource's status from its Ready condition.
@@ -250,14 +249,13 @@ func mapOciRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {
 	el.Status = mapFluxResourceStatusForCondition(ociRepository.Status.Conditions, false)
 	mapFluxMetadata(el, ociRepository.GetAnnotations(), ociRepository.Status.LastHandledReconcileAt, ociRepository.Spec.Suspend, ociRepository.Status.Conditions)
 
-	el.OCIRepositoryMetadata = &kube.OCIRepositoryMetadata{
-		URL:          ociRepository.Spec.URL,
-		Digest:       ociRepository.Spec.Reference.Digest,
-		Tag:          ociRepository.Spec.Reference.Tag,
-		Semver:       ociRepository.Spec.Reference.SemVer,
-		SemverFilter: ociRepository.Spec.Reference.SemverFilter,
+	el.OCIRepositoryMetadata = &kube.OCIRepositoryMetadata{URL: ociRepository.Spec.URL}
+	if ref := ociRepository.Spec.Reference; ref != nil {
+		el.OCIRepositoryMetadata.Digest = ref.Digest
+		el.OCIRepositoryMetadata.Tag = ref.Tag
+		el.OCIRepositoryMetadata.Semver = ref.SemVer
+		el.OCIRepositoryMetadata.SemverFilter = ref.SemverFilter
 	}
-
 }
 
 func mapHelmRepositoryData(el *kube.Resource, obj unstructured.Unstructured) {

@@ -82,7 +82,7 @@ func (k *FluxServiceImpl) Suspend(resource Resource) (*Resource, error) {
 	patch := SuspendPatch{Resource: resource}
 	res, err := k.kubeService.PatchResource(patch)
 	if err != nil {
-		return nil, fmt.Errorf("failed to suspend resource: %v", err)
+		return nil, fmt.Errorf("failed to suspend resource: %w", err)
 	}
 	return res, nil
 }
@@ -98,7 +98,7 @@ func (k *FluxServiceImpl) Resume(resource Resource) (*Resource, error) {
 	patch := ResumePatch{Resource: resource}
 	res, err := k.kubeService.PatchResource(patch)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resume resource: %v", err)
+		return nil, fmt.Errorf("failed to resume resource: %w", err)
 	}
 	return res, nil
 }

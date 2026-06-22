@@ -20,7 +20,7 @@ const (
 	readTimeout      = 90 * time.Second
 	writeTimeout     = 10 * time.Second
 	writeChannelSize = 64
-	// cap message size to prevend DoS
+	// cap message size to prevent DoS
 	maxMessageSize = 1 << 20 // 1 MiB
 )
 
