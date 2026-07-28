@@ -22,7 +22,7 @@
     "elkjs": "^0.9.3",
     "inversify": "^6.2.2",
     "inversify-react": "^1.1.1",
-    "js-yaml": "^4.2.0",
+    "js-yaml": "^4.3.0",
     "lucide-react": "^0.523.0",
     "mobx": "^6.16.0",
     "mobx-react-lite": "^4.1.1",
